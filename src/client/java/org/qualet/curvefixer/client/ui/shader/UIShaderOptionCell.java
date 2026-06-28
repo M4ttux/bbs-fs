@@ -40,7 +40,6 @@ public class UIShaderOptionCell extends UIElement
 
     private static final int MIN_VALUE_WIDTH = 44;
     private static final int LABEL_PADDING = 6;
-    private static final float DARK_TEXT_FACTOR = 0.35F;
 
     /**
      * Whether the {@code refreshedui} addon is present. When so, the cell skin is drawn with its
@@ -268,7 +267,7 @@ public class UIShaderOptionCell extends UIElement
 
             valueWidth = font.getWidth(arrow) + LABEL_PADDING;
 
-            batcher.text(arrow, a.ex() - LABEL_PADDING - font.getWidth(arrow), textY, this.textColor(true, false), true);
+            batcher.text(arrow, a.ex() - LABEL_PADDING - font.getWidth(arrow), textY, this.textColor(false), true);
         }
 
         int labelWidth = a.w - LABEL_PADDING * 2 - valueWidth;
@@ -277,21 +276,16 @@ public class UIShaderOptionCell extends UIElement
         {
             boolean nonCurvableOption = this.cell.type == ShaderMenu.CellType.OPTION && !this.cell.curvable;
 
-            batcher.text(font.limitToWidth(this.label, labelWidth), a.x + LABEL_PADDING, textY, this.textColor(lightBackground, nonCurvableOption), true);
+            batcher.text(font.limitToWidth(this.label, labelWidth), a.x + LABEL_PADDING, textY, this.textColor(nonCurvableOption), true);
         }
     }
 
     /**
-     * Label/arrow color. On a light (primary) button we darken the primary colour for legibility
-     * instead of using white; on the neutral background we keep white (or grey for non-curvable).
+     * Label/arrow color: white everywhere (the text shadow keeps it legible on the primary-tinted
+     * buttons, so it is no longer darkened there), grey for a non-curvable option to mute it.
      */
-    private int textColor(boolean lightBackground, boolean nonCurvableOption)
+    private int textColor(boolean nonCurvableOption)
     {
-        if (lightBackground)
-        {
-            return Colors.mulRGB(BBSSettings.primaryColor.get() | Colors.A100, DARK_TEXT_FACTOR);
-        }
-
         return nonCurvableOption ? Colors.GRAY : Colors.WHITE;
     }
 }
