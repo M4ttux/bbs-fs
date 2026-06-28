@@ -10,6 +10,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
+import net.fabricmc.loader.api.FabricLoader;
 import org.lwjgl.glfw.GLFW;
 import org.qualet.curvefixer.iris.ShaderMenu;
 
@@ -17,7 +18,9 @@ import java.util.function.Consumer;
 
 /**
  * A single cell of the shader-options grid, mirroring the layout of the Iris shader-options menu but
- * built from stock BBS controls/skins (plain boxes + outline — no refreshed-UI rounded primitives).
+ * built from stock BBS controls/skins. Backgrounds and value boxes are drawn with plain stock boxes +
+ * outline, or — when the {@code refreshedui} addon is present — with its rounded-rect primitives (see
+ * {@link RoundedCellSkin}) so the picker matches the refreshed theme.
  *
  * <p>Value display by option kind:</p>
  * <ul>
@@ -33,11 +36,20 @@ import java.util.function.Consumer;
  */
 public class UIShaderOptionCell extends UIElement
 {
-    public static final int CELL_HEIGHT = 18;
+    public static final int CELL_HEIGHT = 20;
 
     private static final int MIN_VALUE_WIDTH = 44;
     private static final int LABEL_PADDING = 6;
     private static final float DARK_TEXT_FACTOR = 0.35F;
+
+    /**
+     * Whether the {@code refreshedui} addon is present. When so, the cell skin is drawn with its
+     * rounded-rect primitives (via {@link RoundedCellSkin}) to match the refreshed theme; otherwise plain
+     * stock boxes + outline are used. Resolved here — in a class that does not reference refreshedui — so
+     * {@link RoundedCellSkin} is only linked when refreshedui is actually loaded (same isolation pattern
+     * {@code CurveFixerIris} uses for Iris).
+     */
+    private static final boolean ROUNDED = FabricLoader.getInstance().isModLoaded("refreshedui");
 
     public final ShaderMenu.Cell cell;
 
@@ -202,11 +214,18 @@ public class UIShaderOptionCell extends UIElement
             fill = Colors.mulRGB(fill, 0.85F);
         }
 
-        batcher.box(a.x, a.y, a.ex(), a.ey(), fill);
-
-        if (this.added)
+        if (ROUNDED)
         {
-            batcher.outline(a.x, a.y, a.ex(), a.ey(), Colors.GREEN, 2);
+            RoundedCellSkin.background(batcher, a, fill, this.added);
+        }
+        else
+        {
+            batcher.box(a.x, a.y, a.ex(), a.ey(), fill);
+
+            if (this.added)
+            {
+                batcher.outline(a.x, a.y, a.ex(), a.ey(), Colors.GREEN, 2);
+            }
         }
 
         /* Boolean cells delegate label + value entirely to the embedded (locked) toggle. */
@@ -230,11 +249,18 @@ public class UIShaderOptionCell extends UIElement
             /* Numeric sliders read out on a chrome surface box; other string/enum options keep a plain box. */
             int boxColor = this.cell.slider && this.numericValue != null ? BBSSettings.chromeSurface() : Colors.A50;
 
-            batcher.box(vx, vy, vx + valueWidth, vy + vh, boxColor);
+            if (ROUNDED)
+            {
+                RoundedCellSkin.valueBox(batcher, vx, vy, valueWidth, vh, boxColor);
+            }
+            else
+            {
+                batcher.box(vx, vy, vx + valueWidth, vy + vh, boxColor);
+            }
 
             int tx = vx + (valueWidth - font.getWidth(this.value)) / 2;
 
-            batcher.text(this.value, tx, textY, Colors.WHITE);
+            batcher.text(this.value, tx, textY, Colors.WHITE, true);
         }
         else if (this.cell.type == ShaderMenu.CellType.LINK)
         {
@@ -242,7 +268,7 @@ public class UIShaderOptionCell extends UIElement
 
             valueWidth = font.getWidth(arrow) + LABEL_PADDING;
 
-            batcher.text(arrow, a.ex() - LABEL_PADDING - font.getWidth(arrow), textY, this.textColor(true, false));
+            batcher.text(arrow, a.ex() - LABEL_PADDING - font.getWidth(arrow), textY, this.textColor(true, false), true);
         }
 
         int labelWidth = a.w - LABEL_PADDING * 2 - valueWidth;
@@ -251,7 +277,7 @@ public class UIShaderOptionCell extends UIElement
         {
             boolean nonCurvableOption = this.cell.type == ShaderMenu.CellType.OPTION && !this.cell.curvable;
 
-            batcher.text(font.limitToWidth(this.label, labelWidth), a.x + LABEL_PADDING, textY, this.textColor(lightBackground, nonCurvableOption));
+            batcher.text(font.limitToWidth(this.label, labelWidth), a.x + LABEL_PADDING, textY, this.textColor(lightBackground, nonCurvableOption), true);
         }
     }
 

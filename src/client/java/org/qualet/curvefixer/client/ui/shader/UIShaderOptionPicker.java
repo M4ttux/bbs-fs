@@ -32,10 +32,10 @@ public class UIShaderOptionPicker extends UIOverlayPanel
 {
     private static final int GRID_MARGIN = 4;
     private static final int GRID_PADDING = 6;
-    private static final int COLUMN_WIDTH = 150;
+    private static final int COLUMN_WIDTH = 210;
     private static final int ICONS_WIDTH = 20;
     private static final int TITLE_HEIGHT = 20;
-    private static final int MAX_WIDTH = 500;
+    private static final int MAX_WIDTH = 680;
     private static final int MAX_CONTENT_HEIGHT = 300;
 
     private final ShaderMenu menu;
