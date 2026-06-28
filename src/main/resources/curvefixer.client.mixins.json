@@ -4,6 +4,8 @@
     "package": "org.qualet.curvefixer.mixin.client",
     "compatibilityLevel": "JAVA_17",
     "client": [
+        "ShaderCurvesMixin",
+        "UICurveClipMixin"
     ],
     "injectors": {
         "defaultRequire": 1
