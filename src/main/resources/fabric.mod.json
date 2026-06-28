@@ -1,0 +1,30 @@
+{
+	"schemaVersion": 1,
+	"id": "curvefixer",
+	"version": "${version}",
+	"name": "BBS Curve Fixer",
+	"description": "BBS addon: Curve Fixer, injected via mixins to keep base BBS clean.",
+	"authors": ["qualet"],
+	"license": "MIT",
+	"icon": "assets/curvefixer/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"client": ["org.qualet.curvefixer.client.CurveFixerClient"],
+		"bbs-addon": ["org.qualet.curvefixer.CurveFixerAddon"]
+	},
+	"mixins": [
+		"curvefixer.mixins.json",
+		{
+			"config": "curvefixer.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"accessWidener": "curvefixer.accesswidener",
+	"depends": {
+		"fabricloader": ">=0.15.0",
+		"minecraft": "${mc_pin}",
+		"java": ">=17",
+		"fabric-api": "*",
+		"bbs": "*"
+	}
+}
