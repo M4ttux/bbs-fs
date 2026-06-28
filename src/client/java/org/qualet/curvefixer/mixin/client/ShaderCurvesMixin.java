@@ -73,7 +73,20 @@ public abstract class ShaderCurvesMixin
             {
                 String substr = source.substring(index, newLine);
 
-                if (substr.startsWith("#if") || substr.startsWith("#elif"))
+                /*
+                 * Only value-conditionals (#if / #elif EXPR) force a variable to stay a compile-time
+                 * constant — the preprocessor evaluates the expression before the uniform exists.
+                 *
+                 * #ifdef / #ifndef test whether the macro is DEFINED, not its value. Turning a define's
+                 * value into a uniform keeps the `#define NAME value` line (so #ifdef stays true), so a
+                 * variable referenced only in an existence check is still safe to curve. Excluding them
+                 * is what makes e.g. Complementary's DOF_FOCUS_DISTANCE (guarded by `#ifdef
+                 * DOF_FOCUS_DISTANCE` in irl_dof_focus.glsl) actually drivable from a curve.
+                 */
+                boolean valueConditional = (substr.startsWith("#if") && !substr.startsWith("#ifdef") && !substr.startsWith("#ifndef"))
+                    || substr.startsWith("#elif");
+
+                if (valueConditional)
                 {
                     variables.values().removeIf((v) -> curvefixer$containsIdentifier(substr, v.name));
                 }
