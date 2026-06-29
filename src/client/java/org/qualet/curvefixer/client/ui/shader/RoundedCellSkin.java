@@ -2,7 +2,6 @@ package org.qualet.curvefixer.client.ui.shader;
 
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.utils.Area;
-import mchorse.bbs_mod.utils.colors.Colors;
 import org.qualet.refreshedui.client.batcher.IRoundedBatcher;
 import org.qualet.refreshedui.client.ui.UICornerRadii;
 
@@ -24,18 +23,27 @@ public final class RoundedCellSkin
     private RoundedCellSkin()
     {}
 
+    /** Border ring thickness (px) for an animated/added cell. */
+    private static final float ADDED_BORDER_INSET = 2F;
+
     /**
-     * Cell background: a rounded primary/neutral fill. Already-animated cells draw a green border ring
-     * (rounded frame, 2px) over the same fill in one batch, replacing the stock {@code box + outline}.
+     * Cell background: a rounded primary/neutral fill. An already-animated cell gets a {@code borderColor}
+     * ring drawn as TWO rounded boxes — a full border box, then the fill inset on top. This is deliberate:
+     * a thin {@code roundedFrame} ring is eaten by the corner anti-aliasing (the ring "doesn't render"),
+     * whereas two solid boxes always paint a visible ring. Same technique as refreshedui's
+     * {@code RoundedAreas.renderField}.
      */
-    public static void background(Batcher2D batcher, Area a, int fill, boolean added)
+    public static void background(Batcher2D batcher, Area a, int fill, boolean added, int borderColor)
     {
         IRoundedBatcher rounded = (IRoundedBatcher) batcher;
         float radius = Math.max(0.5F, UICornerRadii.buttonsAndTrackpads());
 
         if (added)
         {
-            rounded.roundedFrame(a.x, a.y, a.w, a.h, radius, 2F, Colors.GREEN, fill);
+            float inset = ADDED_BORDER_INSET;
+
+            rounded.roundedBox(a.x, a.y, a.w, a.h, radius, borderColor);
+            rounded.roundedBox(a.x + inset, a.y + inset, a.w - inset * 2F, a.h - inset * 2F, Math.max(0.5F, radius - inset), fill);
         }
         else
         {

@@ -40,6 +40,7 @@ public class UIShaderOptionCell extends UIElement
 
     private static final int MIN_VALUE_WIDTH = 44;
     private static final int LABEL_PADDING = 6;
+    private static final float ADDED_BORDER_LIGHTEN = 0.4F;
 
     /**
      * Whether the {@code refreshedui} addon is present. When so, the cell skin is drawn with its
@@ -215,7 +216,7 @@ public class UIShaderOptionCell extends UIElement
 
         if (ROUNDED)
         {
-            RoundedCellSkin.background(batcher, a, fill, this.added);
+            RoundedCellSkin.background(batcher, a, fill, this.added, this.added ? addedBorderColor() : 0);
         }
         else
         {
@@ -223,7 +224,7 @@ public class UIShaderOptionCell extends UIElement
 
             if (this.added)
             {
-                batcher.outline(a.x, a.y, a.ex(), a.ey(), Colors.GREEN, 2);
+                batcher.outline(a.x, a.y, a.ex(), a.ey(), addedBorderColor(), 2);
             }
         }
 
@@ -278,6 +279,12 @@ public class UIShaderOptionCell extends UIElement
 
             batcher.text(font.limitToWidth(this.label, labelWidth), a.x + LABEL_PADDING, textY, this.textColor(nonCurvableOption), true);
         }
+    }
+
+    /** Selected/added ring color: the user's BBS primary colour, lightened ~40% toward white. */
+    private static int addedBorderColor()
+    {
+        return Colors.lerp(BBSSettings.primaryColor.get() | Colors.A100, Colors.opaque(Colors.WHITE), ADDED_BORDER_LIGHTEN);
     }
 
     /**
