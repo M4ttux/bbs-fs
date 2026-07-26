@@ -4,10 +4,10 @@
 
 **A Fabric addon that makes shaders fully animatable in the [BBS](https://www.mchorse.com/) machinima mod — on _stock_ BBS, no fork required.**
 
-[![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1%20%E2%80%93%201.20.4-brightgreen)](#-requirements)
+[![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1%20%C2%B7%201.20.4%20%C2%B7%201.21.1-brightgreen)](#-requirements)
 [![Loader](https://img.shields.io/badge/Loader-Fabric-1976d2)](https://fabricmc.net/)
 [![Java](https://img.shields.io/badge/Java-17-e76f00)](https://adoptium.net/)
-[![BBS](https://img.shields.io/badge/BBS-2.3.1-7e57c2)](https://www.mchorse.com/)
+[![BBS](https://img.shields.io/badge/BBS-2.4-7e57c2)](https://www.mchorse.com/)
 [![License](https://img.shields.io/badge/License-MIT-f5c518)](LICENSE)
 
 </div>
@@ -43,18 +43,19 @@ Everything lives in the addon — **base BBS is never modified** (mixins + event
 
 | | |
 |---|---|
-| **Minecraft** | 1.20.1 or 1.20.4 |
+| **Minecraft** | 1.20.1 · 1.20.4 · 1.21.1 |
 | **Loader** | Fabric |
-| **Java** | 17+ |
-| **Required** | BBS `2.3.1`, Fabric API |
-| **Optional** | **Iris** — enables the shader-options picker (and is what loads shaders in the first place) · **RefreshedUI** — rounds the picker's cells to match the refreshed theme |
+| **Java** | 17+ (21+ on MC 1.21.1, which requires it anyway) |
+| **Required** | BBS `2.4`, Fabric API |
+| **Optional** | **Iris** — enables the shader-options picker (and is what loads shaders in the first place) · **RefreshedUI** — rounds the picker's cells to match the refreshed theme (1.20.x only) |
 
 ---
 
 ## 🚀 Install
 
 1. Install **Fabric** + **Fabric API**.
-2. Drop **BBS 2.3.1** and `curvefixer-<version>-<mc>.jar` into your `mods/` folder.
+2. Drop **BBS 2.4** and `curvefixer-<version>-<mc>.jar` into your `mods/` folder — or the single
+   `curvefixer-<version>-universal.jar`, which covers all three Minecraft versions.
 3. *(Recommended)* add **Iris** (for the picker) and **RefreshedUI** (for rounded cells).
 4. In BBS: open a film, add a **Curve** clip, and hit **add curve** — the shader-options picker opens.
 
@@ -62,17 +63,24 @@ Everything lives in the addon — **base BBS is never modified** (mixins + event
 
 ## 🛠️ Build
 
-One source tree, two Minecraft targets — pick the target per build:
+One source tree, three Minecraft targets — pick the target per build:
 
 ```sh
-./gradlew build                  # MC 1.20.1 (default)    -> build/libs/curvefixer-0.2.0-1.20.1.jar
-./gradlew build -Pmc=1.20.4      # MC 1.20.4              -> build/libs/curvefixer-0.2.0-1.20.4.jar
-./gradlew build -Pmc=universal   # one jar, 1.20.1–1.20.4 -> build/libs/curvefixer-0.2.0-1.20.x.jar
+./gradlew build                  # MC 1.20.1 (default)    -> build/libs/curvefixer-0.3.0-1.20.1.jar
+./gradlew build -Pmc=1.20.4      # MC 1.20.4              -> build/libs/curvefixer-0.3.0-1.20.4.jar
+./gradlew build -Pmc=1.21.1      # MC 1.21.1              -> build/libs/curvefixer-0.3.0-1.21.1.jar
+./gradlew build -Pmc=universal   # one jar, 1.20.1–1.21.1 -> build/libs/curvefixer-0.3.0-universal.jar
 ./gradlew runClient              # dev client (MC 1.20.1)
-./gradlew runClient -Pmc=1.20.4  # dev client (MC 1.20.4)
+./gradlew runClient -Pmc=1.21.1  # dev client (MC 1.21.1)
 ```
 
-> **JDK 17 required.** The BBS jars in `libs/` are the build dependency (one per MC version). Iris and RefreshedUI are `compileOnly` — the addon only touches their stable, mapping-independent APIs, so they're never bundled and stay optional at runtime.
+> **JDK 17 and JDK 21 required** — Gradle picks the toolchain per target (1.21.1 needs 21 to read Minecraft's Java 21 class files). The emitted bytecode is Java 17 on *every* target, which is what keeps the mixin configs on `compatibilityLevel: JAVA_17` and lets one jar load on both runtimes.
+>
+> The BBS jars in `libs/` are the build dependency (one per MC version). Iris and RefreshedUI are `compileOnly` — the addon only touches their stable, mapping-independent APIs, so they're never bundled and stay optional at runtime.
+
+### Why a single jar can span three Minecraft versions
+
+The whole addon touches exactly **one** vanilla member — `MinecraftClient.getInstance().isOnThread()` — and ships an empty access widener. Everything else it binds to is BBS, Iris or RefreshedUI, none of which are remapped. That one member is unchanged from 1.20.1 to 1.21.1, so the intermediary-mapped jar resolves everywhere. Adding a second vanilla binding is what would force the `universal` target to shrink.
 
 ---
 
@@ -80,7 +88,7 @@ One source tree, two Minecraft targets — pick the target per build:
 
 | Seam | File | Mechanism |
 |---|---|---|
-| Make every float curvable | [`mixin/client/ShaderCurvesMixin`](src/client/java/org/qualet/curvefixer/mixin/client/ShaderCurvesMixin.java) | `@Overwrite` of the private `removeIrrelevantVariables` *(pinned to BBS 2.3.1)* |
+| Make every float curvable | [`mixin/client/ShaderCurvesMixin`](src/client/java/org/qualet/curvefixer/mixin/client/ShaderCurvesMixin.java) | `@Overwrite` of the private `removeIrrelevantVariables` *(pinned to BBS 2.4)* |
 | Reroute "add curve" → picker | [`mixin/client/UICurveClipMixin`](src/client/java/org/qualet/curvefixer/mixin/client/UICurveClipMixin.java) | `@Inject(HEAD, cancellable)` on `offerCurveKeys` |
 | Read the live Iris pack menu | [`iris/CurveFixerIris`](src/client/java/org/qualet/curvefixer/iris/CurveFixerIris.java) + [`ShaderMenu`](src/client/java/org/qualet/curvefixer/iris/ShaderMenu.java) | Iris-only, gated behind `isModLoaded("iris")` |
 | The picker UI | [`client/ui/shader/UIShaderOptionPicker`](src/client/java/org/qualet/curvefixer/client/ui/shader/UIShaderOptionPicker.java) + cells | stock BBS UI elements |

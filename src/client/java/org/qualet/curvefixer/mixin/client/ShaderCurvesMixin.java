@@ -22,7 +22,8 @@ import java.util.Set;
  * almost fully animatable. Integer options are kept only when the author exposed them as sliders.</p>
  *
  * <p>This is a single-method {@link Overwrite} of a small, self-contained private method — pinned to
- * BBS 2.3.1. If BBS rewrites {@code removeIrrelevantVariables}, this must be re-synced.</p>
+ * BBS 2.4 (the method is byte-identical in its 1.20.1 / 1.20.4 / 1.21.1 builds). If BBS rewrites
+ * {@code removeIrrelevantVariables}, this must be re-synced.</p>
  */
 @Mixin(value = ShaderCurves.class, remap = false)
 public abstract class ShaderCurvesMixin
