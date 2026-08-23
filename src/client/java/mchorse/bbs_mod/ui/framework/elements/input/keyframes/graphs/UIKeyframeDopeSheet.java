@@ -19,6 +19,7 @@ import mchorse.bbs_mod.ui.utils.Scroll;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.renderers.TimelineRulerRenderer;
+import mchorse.bbs_mod.ui.utils.renderers.TrackGuideRenderer;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Pair;
@@ -1241,6 +1242,8 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         {
             context.batcher.box(area.x, by, area.ex(), by + bh, BBSSettings.color(BBSSettings.raisedSurface(), Colors.A25));
         }
+
+        TrackGuideRenderer.renderTrackGuide(context, area, y, (int) this.trackHeight, sheet.color);
 
         builder = beginShapes();
 

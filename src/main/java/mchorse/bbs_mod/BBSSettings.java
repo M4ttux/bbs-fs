@@ -155,6 +155,8 @@ public class BBSSettings {
 	public static ValueBoolean editorMinutesBackup;
 	public static ValueBoolean editorResizablePanels;
 	public static ValueInt editorTrackWidth;
+	public static ValueBoolean editorTrackGuides;
+	public static ValueFloat editorTrackGuidesOpacity;
 	public static ValueInt keyframeDefaultShape;
 	public static ValueString keyframeDefaultInterpolation;
 	public static ValueInt editorPreviewSizeMode;
@@ -692,6 +694,8 @@ public class BBSSettings {
 		keyframeDefaultInterpolation = builder.getString("keyframe_default_interpolation", Interpolations.LINEAR.getKey());
 		keyframeDefaultShape = builder.getInt("keyframe_default_shape", 0, 0, KeyframeShape.values().length - 1);
 		editorTrackWidth = builder.getInt("track_width", 2, 1, 10).slider();
+		editorTrackGuides = builder.getBoolean("track_guides", true);
+		editorTrackGuidesOpacity = builder.getFloat("track_guides_opacity", 0.5F, 0F, 1F).slider();
 		editorSnapToMarkers = builder.getBoolean("snap_to_markers", false);
 		editorRewind = builder.getBoolean("rewind", true);
 		editorStopPlaybackOnScrub = builder.getBoolean("stop_playback_on_scrub", false);
