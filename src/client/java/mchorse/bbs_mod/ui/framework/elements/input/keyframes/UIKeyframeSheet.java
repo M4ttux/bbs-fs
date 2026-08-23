@@ -58,7 +58,7 @@ public class UIKeyframeSheet extends UIKeyframeElement
 
     public UIKeyframeSheet(int color, boolean separator, KeyframeChannel channel, BaseValueBasic property)
     {
-        this(channel.getId(), IKey.constant(property != null ? FormUtils.getForm(property).getTrackName(channel.getId()) : channel.getId()), color, separator, channel, property, false);
+        this(channel.getId(), IKey.constant(property != null ? FormUtils.getForm(property).getTrackName(property.getId()) : channel.getId()), color, separator, channel, property, false);
     }
 
     public UIKeyframeSheet(String id, IKey title, int color, boolean separator, KeyframeChannel channel, BaseValueBasic property)

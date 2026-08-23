@@ -908,10 +908,7 @@ public class UIReplaysEditor extends UIElement
                 }
             });
 
-            for (UIKeyframeSheet sheet : sheets)
-            {
-                this.keyframeEditor.view.addSheet(sheet);
-            }
+            ReplayFormGroupBuilder.buildElements(this.replay, sheets, this.keyframeEditor.view);
 
             Set<String> expandedPoseIds = this.expandedPoseTabsByReplay.getOrDefault(
                 this.replay == null ? "" : this.replay.getId(),
@@ -957,7 +954,7 @@ public class UIReplaysEditor extends UIElement
             if (property != null)
             {
                 BaseValueBasic formProperty = FormUtils.getProperty(this.replay.form.get(), key);
-                Form form = formProperty.getParent() instanceof Form ? (Form) formProperty.getParent() : null;
+                Form form = formProperty != null ? FormUtils.getForm(formProperty) : null;
 
                 if (form != lastForm)
                 {
@@ -1162,7 +1159,8 @@ public class UIReplaysEditor extends UIElement
 
         for (UIKeyframeSheet sheet : formSheets)
         {
-            if (poseId.equals(sheet.id) && sheet.channel.getFactory() == KeyframeFactories.POSE)
+            if (((poseId.equals(sheet.id) || (sheet.property != null && form instanceof ModelForm mf && sheet.property == mf.pose)))
+                && sheet.channel.getFactory() == KeyframeFactories.POSE)
             {
                 poseSheet = sheet;
                 break;

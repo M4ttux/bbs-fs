@@ -8,6 +8,7 @@ import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeElement;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeGroup;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeHeader;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.shapes.IKeyframeShapeRenderer;
@@ -653,13 +654,26 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
                     return true;
                 }
 
+                y += (int) this.trackHeight;
+
                 if (!group.collapsed)
                 {
-                    if (this.clickElements(context, group.children, offset + 10, y + (int) this.trackHeight))
+                    if (this.clickElements(context, group.children, offset + 10, y))
                     {
                         return true;
                     }
+
+                    y = this.calculateLayout(group.children, y);
                 }
+            }
+            else if (element instanceof UIKeyframeHeader)
+            {
+                if (context.mouseY >= y && context.mouseY < y + this.trackHeight)
+                {
+                    return true;
+                }
+
+                y += (int) this.trackHeight;
             }
             else if (element instanceof UIKeyframeSheet sheet)
             {
@@ -682,9 +696,9 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
                     return true;
                 }
-            }
 
-            y += this.getElementHeight(element);
+                y += (int) this.trackHeight;
+            }
         }
 
         return false;
@@ -1035,7 +1049,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         }
     }
 
-    private void renderLabels(UIContext context, VertexConsumer builder, Matrix3x2fc matrix, List<UIKeyframeElement> elements, int offset, int y)
+    private int renderLabels(UIContext context, VertexConsumer builder, Matrix3x2fc matrix, List<UIKeyframeElement> elements, int offset, int y)
     {
         Area area = this.keyframes.area;
         int w = this.keyframes.getLabelWidth();
@@ -1052,24 +1066,59 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
                 if (this.isVisible(sheet))
                 {
                     this.renderSheetLabel(context, builder, matrix, area, sheet, offset, y, w);
+                    y += (int) this.trackHeight;
                 }
+            }
+            else if (element instanceof UIKeyframeHeader header)
+            {
+                this.renderHeaderLabel(context, builder, matrix, area, header, offset, y, w);
+                y += (int) this.trackHeight;
             }
             else if (element instanceof UIKeyframeGroup group)
             {
                 this.renderGroupLabel(context, builder, matrix, area, group, offset, y, w);
-            }
+                y += (int) this.trackHeight;
 
-            y += this.getElementHeight(element);
-
-            if (element instanceof UIKeyframeGroup group && !group.collapsed)
-            {
-                this.renderLabels(context, builder, matrix, group.children, offset + 10, y);
-
-                y = this.getElementHeight(group) - (int) this.trackHeight + y;
+                if (!group.collapsed)
+                {
+                    y = this.renderLabels(context, builder, matrix, group.children, offset + 10, y);
+                }
             }
         }
 
         context.batcher.unclip(context);
+
+        return y;
+    }
+
+    private void renderHeaderLabel(UIContext context, VertexConsumer builder, Matrix3x2fc matrix, Area area, UIKeyframeHeader header, int offset, int y, int w)
+    {
+        if (y + this.trackHeight < area.y || y > area.ey())
+        {
+            return;
+        }
+
+        int my = y + (int) this.trackHeight / 2;
+        int lx = area.x;
+
+        context.batcher.box(lx, y, lx + w, y + (int) this.trackHeight, BBSSettings.deepSurface());
+        context.batcher.box(lx, y, lx + 3, y + (int) this.trackHeight, header.color | Colors.A100);
+
+        FontRenderer font = context.batcher.getFont();
+        int textX = lx + LABEL_TEXT_LEFT + offset;
+        Icon icon = header.icon;
+        boolean hasIcon = icon != null && this.trackHeight >= 12D;
+        int iconX = lx + w - LABEL_RIGHT_PAD - LABEL_ICON_SIZE;
+        int textRight = hasIcon ? iconX - LABEL_TEXT_ICON_GAP : lx + w - LABEL_RIGHT_PAD;
+
+        String label = font.limitToWidth(header.title.get(), Math.max(0, textRight - textX));
+
+        context.batcher.textShadow(label, textX, my - font.getHeight() / 2, Colors.WHITE);
+
+        if (hasIcon)
+        {
+            context.batcher.icon(icon, iconX, my - icon.h / 2);
+        }
     }
 
     private void renderGroupLabel(UIContext context, VertexConsumer builder, Matrix3x2fc matrix, Area area, UIKeyframeGroup group, int offset, int y, int w)
@@ -1150,18 +1199,23 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
                 if (this.isVisible(sheet))
                 {
                     this.renderSheet(context, builder, matrix, area, sheet, offset, y);
+                    y += (int) this.trackHeight;
                 }
+            }
+            else if (element instanceof UIKeyframeHeader header)
+            {
+                this.renderHeader(context, builder, matrix, area, header, offset, y);
+                y += (int) this.trackHeight;
             }
             else if (element instanceof UIKeyframeGroup group)
             {
                 this.renderGroup(context, builder, matrix, area, group, offset, y);
-            }
+                y += (int) this.trackHeight;
 
-            y += this.getElementHeight(element);
-
-            if (element instanceof UIKeyframeGroup group && !group.collapsed)
-            {
-                y = this.renderElements(context, builder, matrix, area, group.children, offset + 10, y);
+                if (!group.collapsed)
+                {
+                    y = this.renderElements(context, builder, matrix, area, group.children, offset + 10, y);
+                }
             }
         }
 
@@ -1183,6 +1237,19 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         int gap = this.getTrackGap();
 
         return Math.max(2, (int) this.trackHeight - gap * 2);
+    }
+
+    private void renderHeader(UIContext context, VertexConsumer builder, Matrix3x2fc matrix, Area area, UIKeyframeHeader header, int offset, int y)
+    {
+        if (y + this.trackHeight < area.y || y > area.ey())
+        {
+            return;
+        }
+
+        int by = this.getTrackBodyY(y);
+        int bh = this.getTrackBodyHeight();
+
+        context.batcher.box(area.x, by, area.ex(), by + bh, BBSSettings.deepSurface());
     }
 
     private void renderGroup(UIContext context, VertexConsumer builder, Matrix3x2fc matrix, Area area, UIKeyframeGroup group, int offset, int y)
@@ -1397,14 +1464,24 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         {
             if (element instanceof UIKeyframeSheet sheet)
             {
-                this.renderSheetKeyframeShapes(context, builder, matrix, area, sheet, y);
+                if (this.isVisible(sheet))
+                {
+                    this.renderSheetKeyframeShapes(context, builder, matrix, area, sheet, y);
+                    y += (int) this.trackHeight;
+                }
             }
-
-            y += this.getElementHeight(element);
-
-            if (element instanceof UIKeyframeGroup group && !group.collapsed)
+            else if (element instanceof UIKeyframeHeader)
             {
-                y = this.renderElementsTopmostKeyframes(context, builder, matrix, area, group.children, y);
+                y += (int) this.trackHeight;
+            }
+            else if (element instanceof UIKeyframeGroup group)
+            {
+                y += (int) this.trackHeight;
+
+                if (!group.collapsed)
+                {
+                    y = this.renderElementsTopmostKeyframes(context, builder, matrix, area, group.children, y);
+                }
             }
         }
 
