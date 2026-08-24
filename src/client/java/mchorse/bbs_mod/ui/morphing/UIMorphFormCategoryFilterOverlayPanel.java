@@ -25,7 +25,8 @@ public class UIMorphFormCategoryFilterOverlayPanel extends UIOverlayPanel
         for (FormCategory category : categories)
         {
             String id = category.visible.getId();
-            UIToggle toggle = new UIToggle(category::getProcessedTitle, (b) ->
+            String prefix = "  ".repeat(category.depth);
+            UIToggle toggle = new UIToggle(() -> prefix + category.getProcessedTitle(), (b) ->
             {
                 if (disabled.contains(id))
                 {

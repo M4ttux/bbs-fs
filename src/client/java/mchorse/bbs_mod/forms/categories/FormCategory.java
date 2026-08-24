@@ -22,12 +22,69 @@ public class FormCategory implements IMapSerializable
     public IKey title;
     public final ValueBoolean visible;
 
+    public FormCategory parent;
+    public final List<FormCategory> children = new ArrayList<>();
+    public int depth = 0;
+
     private final List<Form> forms = new ArrayList<>();
 
     public FormCategory(IKey title, ValueBoolean visible)
     {
         this.title = title;
         this.visible = visible;
+    }
+
+    public void addChild(FormCategory child)
+    {
+        if (child != null && !this.children.contains(child))
+        {
+            child.parent = this;
+            child.depth = this.depth + 1;
+            this.children.add(child);
+        }
+    }
+
+    public List<FormCategory> getChildren()
+    {
+        return Collections.unmodifiableList(this.children);
+    }
+
+    public boolean isVisibleInHierarchy()
+    {
+        FormCategory current = this.parent;
+
+        while (current != null)
+        {
+            if (!current.visible.get())
+            {
+                return false;
+            }
+
+            current = current.parent;
+        }
+
+        return true;
+    }
+
+    public void expandAncestors()
+    {
+        FormCategory current = this.parent;
+
+        while (current != null)
+        {
+            current.visible.set(true);
+            current = current.parent;
+        }
+    }
+
+    public void collectHierarchy(List<FormCategory> result)
+    {
+        result.add(this);
+
+        for (FormCategory child : this.children)
+        {
+            child.collectHierarchy(result);
+        }
     }
 
     public String getProcessedTitle()

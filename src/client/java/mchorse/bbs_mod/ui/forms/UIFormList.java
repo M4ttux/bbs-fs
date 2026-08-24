@@ -158,6 +158,17 @@ public class UIFormList extends UIElement
             category.search(s);
         }
 
+        if (!s.isEmpty())
+        {
+            for (UIFormCategory category : this.categories)
+            {
+                if (!category.getForms().isEmpty())
+                {
+                    category.category.expandAncestors();
+                }
+            }
+        }
+
         this.afterSearchLayout();
     }
 
@@ -242,6 +253,7 @@ public class UIFormList extends UIElement
             {
                 found = true;
 
+                category.category.expandAncestors();
                 category.select(category.category.getForms().get(index), false);
             }
         }
@@ -274,6 +286,8 @@ public class UIFormList extends UIElement
         {
             return;
         }
+
+        category.category.expandAncestors();
 
         /* Categories only learn their real height once they render (until then
          * they keep the inflated, width-0 height from setupForms), so the bounds

@@ -41,19 +41,61 @@ public abstract class SubFormSection extends FormSection
 
     protected FormCategory getCategory(String key)
     {
-        String newKey = this.getKey(key);
+        String path = this.getKey(key);
 
-        return this.categories.computeIfAbsent(newKey, (k) ->
+        if (path.isEmpty())
         {
-            IKey uiKey = this.getTitle();
-
-            if (!newKey.isEmpty())
+            return this.categories.computeIfAbsent("", (k) ->
             {
-                uiKey = IKey.comp(Arrays.asList(uiKey, IKey.constant(" (" + newKey + ")")));
+                return this.createCategory(this.getTitle(), "");
+            });
+        }
+
+        String[] parts = path.split("/");
+        String currentPath = "";
+        FormCategory parentCat = null;
+
+        for (int i = 0; i < parts.length; i++)
+        {
+            String part = parts[i];
+            currentPath = currentPath.isEmpty() ? part : currentPath + "/" + part;
+
+            final String lookupPath = currentPath;
+            final int depth = i;
+            final FormCategory parent = parentCat;
+
+            FormCategory category = this.categories.computeIfAbsent(lookupPath, (k) ->
+            {
+                IKey uiKey;
+
+                if (depth == 0)
+                {
+                    uiKey = IKey.comp(Arrays.asList(this.getTitle(), IKey.constant(" (" + part + ")")));
+                }
+                else
+                {
+                    uiKey = IKey.constant(part);
+                }
+
+                FormCategory created = this.createCategory(uiKey, lookupPath);
+
+                if (parent != null)
+                {
+                    parent.addChild(created);
+                }
+
+                return created;
+            });
+
+            if (parentCat != null && category.parent == null && category != parentCat)
+            {
+                parentCat.addChild(category);
             }
 
-            return this.createCategory(uiKey, key);
-        });
+            parentCat = category;
+        }
+
+        return parentCat;
     }
 
     protected void add(String key)
@@ -85,9 +127,15 @@ public abstract class SubFormSection extends FormSection
             }
         }
 
-        if (category.getForms().isEmpty())
+        if (category.getForms().isEmpty() && category.getChildren().isEmpty())
         {
             this.categories.remove(this.getKey(key));
+
+            if (category.parent != null)
+            {
+                category.parent.children.remove(category);
+            }
+
             this.parent.markDirty();
         }
     }
@@ -95,6 +143,16 @@ public abstract class SubFormSection extends FormSection
     @Override
     public List<FormCategory> getCategories()
     {
-        return new ArrayList<>(this.categories.values());
+        List<FormCategory> result = new ArrayList<>();
+
+        for (FormCategory category : this.categories.values())
+        {
+            if (category.parent == null)
+            {
+                category.collectHierarchy(result);
+            }
+        }
+
+        return result;
     }
 }

@@ -169,11 +169,26 @@ public class UIFormCategory extends UIElement
         }
     }
 
+    public boolean isCategoryVisible()
+    {
+        if (!this.search.isEmpty())
+        {
+            return !this.getForms().isEmpty();
+        }
+
+        return this.category.isVisibleInHierarchy();
+    }
+
     /**
      * Pixel height for the category at a given column width (used before {@link #area} is laid out).
      */
     public int computeContentHeight(int columnWidth)
     {
+        if (!this.isCategoryVisible())
+        {
+            return 0;
+        }
+
         int width = Math.max(CELL_WIDTH, columnWidth);
         List<Form> forms = this.getForms();
 
@@ -230,17 +245,30 @@ public class UIFormCategory extends UIElement
     @Override
     public boolean subMouseClicked(UIContext context)
     {
+        if (!this.isCategoryVisible() || this.area.h == 0)
+        {
+            return false;
+        }
+
         if (this.area.isInside(context))
         {
+            int indent = this.category.depth * 14;
             int x = context.mouseX - this.area.x;
             int y = context.mouseY - this.area.y - HEADER_HEIGHT;
             int perRow = Math.max(1, Math.max(CELL_WIDTH, this.area.w) / CELL_WIDTH);
 
             if (y < 0)
             {
-                if (x < this.area.x + 30 + context.batcher.getFont().getWidth(this.category.title.get()))
+                if (x < this.area.x + 30 + indent + context.batcher.getFont().getWidth(this.category.title.get()))
                 {
                     this.category.visible.set(!this.category.visible.get());
+
+                    UIElement container = this.getParentContainer();
+
+                    if (container != null)
+                    {
+                        container.resize();
+                    }
 
                     return true;
                 }
@@ -286,6 +314,24 @@ public class UIFormCategory extends UIElement
         List<Form> forms = this.getForms();
         int h = this.computeContentHeight(layoutWidth);
 
+        if (!this.isCategoryVisible())
+        {
+            if (this.last != h)
+            {
+                this.last = h;
+                this.h(h);
+
+                UIElement container = this.getParentContainer();
+
+                if (container != null)
+                {
+                    container.resize();
+                }
+            }
+
+            return;
+        }
+
         if (!this.search.isEmpty() && forms.isEmpty())
         {
             if (this.last != h)
@@ -306,15 +352,25 @@ public class UIFormCategory extends UIElement
 
         super.render(context);
 
-        context.batcher.textCard(this.category.getProcessedTitle(), this.area.x + 26, this.area.y + 6);
+        int indent = this.category.depth * 14;
+
+        if (this.category.depth > 0)
+        {
+            int guideX = this.area.x + 8 + (this.category.depth - 1) * 14;
+            int midY = this.area.y + HEADER_HEIGHT / 2;
+            context.batcher.box(guideX, this.area.y, guideX + 1, midY, Colors.A25);
+            context.batcher.box(guideX, midY, this.area.x + 14 + indent, midY + 1, Colors.A25);
+        }
+
+        context.batcher.textCard(this.category.getProcessedTitle(), this.area.x + 26 + indent, this.area.y + 6);
 
         if (this.category.visible.get())
         {
-            context.batcher.icon(Icons.MOVE_DOWN, this.area.x + 16, this.area.y + 5, 0.5F, 0F);
+            context.batcher.icon(Icons.MOVE_DOWN, this.area.x + 16 + indent, this.area.y + 5, 0.5F, 0F);
         }
         else
         {
-            context.batcher.icon(Icons.MOVE_UP, this.area.x + 16, this.area.y + 4, 0.5F, 0F);
+            context.batcher.icon(Icons.MOVE_UP, this.area.x + 16 + indent, this.area.y + 4, 0.5F, 0F);
         }
 
         h = HEADER_HEIGHT;
