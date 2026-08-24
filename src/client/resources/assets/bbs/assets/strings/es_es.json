@@ -574,6 +574,8 @@
     "bbs.ui.forms.editors.label.anchor_lines": "Líneas de anclaje",
     "bbs.ui.forms.editors.label.background": "Fondo",
     "bbs.ui.forms.editors.label.label": "Texto",
+    "bbs.ui.forms.editors.label.nametag": "Nametag",
+    "bbs.ui.forms.editors.label.nametag_tooltip": "Requiere la opción 'Usar objetivo' (Use Target) en la parte del cuerpo",
     "bbs.ui.forms.editors.label.shadow_color": "Color de sombra",
     "bbs.ui.forms.editors.label.shadow_offset": "Desplazamiento de sombra",
     "bbs.ui.forms.editors.label.title": "Opciones de texto",

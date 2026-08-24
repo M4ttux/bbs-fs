@@ -884,6 +884,8 @@
 	"bbs.ui.forms.editors.label.anchor_lines": "Anchor lines",
 	"bbs.ui.forms.editors.label.background": "Background",
 	"bbs.ui.forms.editors.label.label": "Label",
+	"bbs.ui.forms.editors.label.nametag": "Nametag",
+	"bbs.ui.forms.editors.label.nametag_tooltip": "Requires 'Use target' in body part",
 	"bbs.ui.forms.editors.label.shadow_color": "Shadow color",
 	"bbs.ui.forms.editors.label.shadow_offset": "Shadow offset",
 	"bbs.ui.forms.editors.label.title": "Label options",

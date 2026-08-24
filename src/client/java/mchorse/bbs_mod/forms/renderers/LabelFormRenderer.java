@@ -50,6 +50,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
     );
 
     private static RenderLayer shadowLayer;
+    private float nametagAlpha = 1F;
 
     private static RenderLayer getShadowLayer()
     {
@@ -121,6 +122,14 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
 
         context.stack.push();
 
+        this.nametagAlpha = 1F;
+
+        if (this.form.nametag.get() && context.entity != null && context.entity.isSneaking())
+        {
+            context.stack.translate(0F, -0.5F, 0F);
+            this.nametagAlpha = 0.125F;
+        }
+
         if (this.form.billboard.get())
         {
             MatrixStackUtils.billboard(context.stack);
@@ -183,6 +192,9 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
 
         FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
         shadowColor.mul(context.color);
+
+        shadowColor.a *= this.nametagAlpha;
+        color.a *= this.nametagAlpha;
 
         if (shadowColor.a > 0)
         {
@@ -256,6 +268,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         Color shadowColor = this.form.shadowColor.get().copy();
 
         shadowColor.mul(context.color);
+        shadowColor.a *= this.nametagAlpha;
 
         if (shadowColor.a > 0)
         {
@@ -289,6 +302,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         Color cColor = new Color().set(context.color, true);
 
         FormColorBlend.blend(cColor, this.form.color.get(), this.form.additiveColor.get());
+        cColor.a *= this.nametagAlpha;
 
         int color = cColor.getARGBColor();
 
@@ -324,6 +338,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         Color color = this.form.background.get().copy();
 
         color.mul(context.color);
+        color.a *= this.nametagAlpha;
 
         if (color.a <= 0)
         {
