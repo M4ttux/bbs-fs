@@ -708,6 +708,7 @@ public class BBSRendering
         Batcher2D batcher2D = new Batcher2D(drawContext);
 
         BBSModClient.getFilms().renderHud(batcher2D, tickDelta);
+        mchorse.bbs_mod.ui.film.replays.SelectedReplayHudRenderer.render(batcher2D, tickDelta);
     }
 
     /**

@@ -53,6 +53,7 @@ import mchorse.bbs_mod.selectors.EntitySelectors;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
+import mchorse.bbs_mod.ui.film.replays.SelectedReplayHudRenderer;
 import mchorse.bbs_mod.ui.film.replays.UIQuickReplaySelector;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
@@ -128,6 +129,7 @@ public class BBSModClient implements ClientModInitializer
     private static KeyBinding keyDemorph;
     private static KeyBinding keyTeleport;
     private static KeyBinding keyQuickReplaySelector;
+    private static KeyBinding keyToggleReplayIndicator;
     private static KeyBinding keyZoom;
 
     /* NOTE(1.21.11 port): KeyBinding categories are now registered objects (KeyBinding.Category.create);
@@ -545,6 +547,7 @@ public class BBSModClient implements ClientModInitializer
         keyDemorph = this.createKey("demorph", GLFW.GLFW_KEY_PERIOD);
         keyTeleport = this.createKey("teleport", GLFW.GLFW_KEY_Y);
         keyQuickReplaySelector = this.createKey("quick_replay_selector", GLFW.GLFW_KEY_CAPS_LOCK);
+        keyToggleReplayIndicator = this.createKey("toggle_replay_indicator", GLFW.GLFW_KEY_P);
         keyZoom = this.createKeyMouse("zoom", 2);
 
         WorldRenderEvents.AFTER_ENTITIES.register((context) ->
@@ -713,6 +716,7 @@ public class BBSModClient implements ClientModInitializer
             while (keyDemorph.wasPressed()) ClientNetwork.sendPlayerForm(null);
             while (keyTeleport.wasPressed()) this.keyTeleport();
             while (keyQuickReplaySelector.wasPressed()) this.keyQuickReplaySelector();
+            while (keyToggleReplayIndicator.wasPressed()) SelectedReplayHudRenderer.toggle();
 
             if (mc.player != null)
             {
