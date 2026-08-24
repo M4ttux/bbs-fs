@@ -30,8 +30,8 @@ public class PathClip extends CameraClip
      */
     public final ValuePositions points = new ValuePositions("points");
 
-    public final Interpolation interpolationPoint = new Interpolation("interpPoint", Interpolations.MAP, Interpolations.HERMITE);
-    public final Interpolation interpolationAngle = new Interpolation("interpAngle", Interpolations.MAP, Interpolations.HERMITE);
+    public final Interpolation interpolationPoint = new Interpolation("interpPoint", Interpolations.MAP, mchorse.bbs_mod.BBSSettings.getDefaultPathInterpolation());
+    public final Interpolation interpolationAngle = new Interpolation("interpAngle", Interpolations.MAP, mchorse.bbs_mod.BBSSettings.getDefaultPathInterpolation());
 
     public PathClip()
     {

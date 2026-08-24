@@ -6,8 +6,10 @@ import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.IUIClipsDelegate;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.utils.Scroll;
 import mchorse.bbs_mod.ui.utils.ScrollDirection;
+import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -205,21 +207,26 @@ public class UIPointsModule extends UIAbstractModule
 
         int x = this.area.x;
         int y = this.area.y;
+        int h = this.area.h;
         int c = this.path.size();
 
         /* Draw background and buttons */
-        context.batcher.box(x, y, x + this.area.w, y + this.area.h, Colors.A50);
+        context.batcher.box(x, y, x + this.area.w, y + h, Colors.A50);
         context.batcher.clip(this.area, context);
+
+        FontRenderer font = context.batcher.getFont();
+        int fontH = font.getHeight();
 
         for (int i = 0; i < c; i++)
         {
             String label = String.valueOf(i);
             int xx = this.area.x + i * this.scroll.scrollItemSize - (int) this.scroll.getScroll();
-            int w = context.batcher.getFont().getWidth(label);
+            int w = font.getWidth(label);
+            int itemW = this.scroll.scrollItemSize;
 
-            context.batcher.box(xx, y, xx + 20, y + 20, this.index == i ? 0xffcc1170 : 0xffff2280);
-            context.batcher.box(xx + 19, y, xx + 20, y + 20, Colors.A12);
-            context.batcher.textShadow(label, xx + 10 - w / 2, y + 6);
+            context.batcher.box(xx, y, xx + itemW, y + h, this.index == i ? 0xffcc1170 : 0xffffa0cb);
+            context.batcher.box(xx + itemW - 1, y, xx + itemW, y + h, Colors.A12);
+            context.batcher.textShadow(label, xx + itemW / 2 - w / 2, y + (h - fontH) / 2);
         }
 
         context.batcher.unclip(context);

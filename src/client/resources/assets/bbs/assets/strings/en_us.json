@@ -141,6 +141,8 @@
 	"bbs.config.misc.damage_control-comment": "Whether damage control is enabled",
 	"bbs.config.camera.angle_speed": "Angle speed",
 	"bbs.config.camera.angle_speed-comment": "Angle flight speed when rotating the camera around",
+	"bbs.config.camera.path_default_interpolation": "Default path interpolation",
+	"bbs.config.camera.path_default_interpolation-comment": "Default interpolation given to newly created Path camera clips.",
 	"bbs.config.viewport.center_lines": "Center lines",
 	"bbs.config.viewport.center_lines-comment": "Center lines",
 	"bbs.config.viewport.clip_preview": "Clip preview",

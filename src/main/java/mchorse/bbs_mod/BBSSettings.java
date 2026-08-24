@@ -142,6 +142,7 @@ public class BBSSettings {
 	public static ValueFloat editorCameraSmoothness;
 	public static ValueInt editorCameraMode;
 	public static ValueBoolean editorPlayerFollowsCamera;
+	public static ValueString cameraPathDefaultInterpolation;
 	public static ValueEditorLayout editorLayoutSettings;
 	public static ValueOnionSkin editorOnionSkin;
 	public static ValueIKDebug ikDebug;
@@ -453,6 +454,18 @@ public class BBSSettings {
 		return interp == null ? Interpolations.LINEAR : interp;
 	}
 
+	public static IInterp getDefaultPathInterpolation()
+	{
+		if (cameraPathDefaultInterpolation == null)
+		{
+			return Interpolations.HERMITE;
+		}
+
+		IInterp interp = Interpolations.MAP.get(cameraPathDefaultInterpolation.get());
+
+		return interp == null ? Interpolations.HERMITE : interp;
+	}
+
 	/**
 	 * Bring a settings file written by an older version onto the current category
 	 * layout. Every rule moves a value out of the category it used to live in and
@@ -655,6 +668,7 @@ public class BBSSettings {
 		editorOrbitTeleportOnSwitch = builder.getBoolean("orbit_teleport_on_switch", true);
 		editorCameraMode = builder.getInt("camera_mode", 0, 0, 5);
 		editorCameraMode.invisible();
+		cameraPathDefaultInterpolation = builder.getString("path_default_interpolation", Interpolations.HERMITE.getKey());
 
 		builder.category("viewport", Icons.FRUSTUM);
 		editorGuidesColor = builder.getInt("guides_color", 0xcccc0000).colorAlpha();

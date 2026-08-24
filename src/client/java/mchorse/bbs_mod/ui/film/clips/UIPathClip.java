@@ -13,8 +13,17 @@ import mchorse.bbs_mod.ui.film.clips.modules.UIPointsModule;
 import mchorse.bbs_mod.ui.film.utils.UICameraUtils;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.context.UIInterpolationContextMenu;
-import mchorse.bbs_mod.ui.framework.tooltips.InterpolationTooltip;import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
+import mchorse.bbs_mod.ui.framework.tooltips.InterpolationTooltip;
+import mchorse.bbs_mod.utils.Direction;
+import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.colors.Color;
+import mchorse.bbs_mod.utils.colors.Colors;
 
 public class UIPathClip extends UIClip<PathClip>
 {
@@ -24,12 +33,27 @@ public class UIPathClip extends UIClip<PathClip>
     public UIButton interpAngle;
 
     public UIPointsModule points;
+    public UIButton removePoint;
+    public UIButton addPoint;
 
     public ValuePosition position;
 
     public UIPathClip(PathClip clip, IUIClipsDelegate editor)
     {
         super(clip, editor);
+    }
+
+    private int getDesaturatedPrimaryColor(boolean hover)
+    {
+        int primary = BBSSettings.primaryColor.get();
+        Color hsv = Colors.RGBtoHSV(Colors.getR(primary), Colors.getG(primary), Colors.getB(primary));
+
+        hsv.g *= 0.45F;
+
+        Color rgb = Colors.HSVtoRGB(hsv.r, hsv.g, hsv.b);
+        int color = rgb.getARGBColor() | Colors.A100;
+
+        return hover ? Colors.mulRGB(color, 0.85F) : color;
     }
 
     @Override
@@ -44,14 +68,66 @@ public class UIPathClip extends UIClip<PathClip>
             this.getContext().replaceContextMenu(new UIInterpolationContextMenu(this.clip.interpolationPoint));
         });
         this.interpPoint.tooltip(new InterpolationTooltip(1F, 0.5F, () -> this.clip.interpolationPoint));
+        this.interpPoint.h(20);
         this.interpAngle = new UIButton(UIKeys.CAMERA_PANELS_ANGLE, (b) ->
         {
             this.getContext().replaceContextMenu(new UIInterpolationContextMenu(this.clip.interpolationAngle));
         });
         this.interpAngle.tooltip(new InterpolationTooltip(1F, 0.5F, () -> this.clip.interpolationAngle));
+        this.interpAngle.h(20);
 
         this.points = new UIPointsModule(this.editor, this::pickPoint);
         this.points.h(20);
+
+        this.removePoint = new UIButton(IKey.constant("-"), (b) -> this.points.removePoint())
+        {
+            @Override
+            protected void renderSkin(UIContext context)
+            {
+                int color = UIPathClip.this.getDesaturatedPrimaryColor(this.hover);
+
+                if (this.background)
+                {
+                    context.batcher.surfaceBox(this.area.x, this.area.y, this.area.ex(), this.area.ey(), color, true, false);
+                }
+
+                FontRenderer font = context.batcher.getFont();
+                String label = font.limitToWidth(this.label.get(), this.area.w - 4);
+                int x = this.area.mx(font.getWidth(label));
+                int y = this.area.my(font.getHeight());
+
+                context.batcher.text(label, x, y, Colors.mulRGB(this.textColor, this.hover ? 0.9F : 1F), this.textShadow);
+
+                this.renderLockedArea(context);
+            }
+        };
+        this.removePoint.tooltip(UIKeys.CAMERA_PANELS_POINTS_CONTEXT_REMOVE, Direction.TOP);
+        this.removePoint.w(20).h(20);
+
+        this.addPoint = new UIButton(IKey.constant("+"), (b) -> this.points.addPoint())
+        {
+            @Override
+            protected void renderSkin(UIContext context)
+            {
+                int color = UIPathClip.this.getDesaturatedPrimaryColor(this.hover);
+
+                if (this.background)
+                {
+                    context.batcher.surfaceBox(this.area.x, this.area.y, this.area.ex(), this.area.ey(), color, true, false);
+                }
+
+                FontRenderer font = context.batcher.getFont();
+                String label = font.limitToWidth(this.label.get(), this.area.w - 4);
+                int x = this.area.mx(font.getWidth(label));
+                int y = this.area.my(font.getHeight());
+
+                context.batcher.text(label, x, y, Colors.mulRGB(this.textColor, this.hover ? 0.9F : 1F), this.textShadow);
+
+                this.renderLockedArea(context);
+            }
+        };
+        this.addPoint.tooltip(UIKeys.CAMERA_PANELS_POINTS_CONTEXT_ADD, Direction.TOP);
+        this.addPoint.w(20).h(20);
     }
 
     @Override
@@ -59,7 +135,7 @@ public class UIPathClip extends UIClip<PathClip>
     {
         super.registerPanels();
 
-        this.panels.add(this.section(UIKeys.CAMERA_PANELS_PATH_POINTS, this.points, UI.row(this.interpPoint, this.interpAngle)));
+        this.panels.add(this.section(UIKeys.CAMERA_PANELS_PATH_POINTS, UI.row(this.removePoint, this.points, this.addPoint), UI.row(this.interpPoint, this.interpAngle)));
         this.panels.add(this.point, this.angle);
         this.panels.context((menu) -> UICameraUtils.positionContextMenu(menu, editor, this.position));
     }

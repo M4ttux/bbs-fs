@@ -72,6 +72,8 @@
     "bbs.config.misc.damage_control-comment": "Si el control de daños está habilitado",
     "bbs.config.camera.angle_speed": "Velocidad angular",
     "bbs.config.camera.angle_speed-comment": "Velocidad de vuelo angular al girar la cámara",
+    "bbs.config.camera.path_default_interpolation": "Interpolación de Path predeterminada",
+    "bbs.config.camera.path_default_interpolation-comment": "Interpolación por defecto dada a los nuevos clips Path de cámara.",
     "bbs.config.viewport.center_lines": "Líneas centrales",
     "bbs.config.viewport.center_lines-comment": "Líneas centrales",
     "bbs.config.viewport.clip_preview": "Previsualización del Clip",

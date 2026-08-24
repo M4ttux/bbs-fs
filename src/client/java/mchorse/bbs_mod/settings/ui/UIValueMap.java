@@ -27,6 +27,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.UINumericInput;
 import mchorse.bbs_mod.ui.framework.elements.context.UIInterpolationContextMenu;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.shapes.IKeyframeShapeRenderer;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.shapes.KeyframeShapeRenderers;
+import mchorse.bbs_mod.utils.interps.IInterp;
 import mchorse.bbs_mod.utils.interps.Interpolation;
 import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
@@ -190,15 +191,19 @@ public class UIValueMap
 
         register(ValueString.class, (value, ui) ->
         {
-            if (value == BBSSettings.keyframeDefaultInterpolation)
+            if (value == BBSSettings.keyframeDefaultInterpolation || value == BBSSettings.cameraPathDefaultInterpolation)
             {
                 UIIcon button = new UIIcon(
-                    () -> UIInterpolationContextMenu.INTERP_ICON_MAP.getOrDefault(BBSSettings.getDefaultKeyframeInterpolation(), Icons.INTERP_LINEAR),
+                    () -> UIInterpolationContextMenu.INTERP_ICON_MAP.getOrDefault(
+                        value == BBSSettings.keyframeDefaultInterpolation ? BBSSettings.getDefaultKeyframeInterpolation() : BBSSettings.getDefaultPathInterpolation(),
+                        Icons.INTERP_LINEAR
+                    ),
                     (b) ->
                     {
                         /* Open the same interpolation picker used everywhere else (grid + graph preview),
                          * seeded from the current value, and store the picked type's key back. */
-                        Interpolation interpolation = new Interpolation("interp", Interpolations.MAP, BBSSettings.getDefaultKeyframeInterpolation());
+                        IInterp current = value == BBSSettings.keyframeDefaultInterpolation ? BBSSettings.getDefaultKeyframeInterpolation() : BBSSettings.getDefaultPathInterpolation();
+                        Interpolation interpolation = new Interpolation("interp", Interpolations.MAP, current);
 
                         b.getContext().replaceContextMenu(new UIInterpolationContextMenu(interpolation)
                             .callback(() -> value.set(interpolation.getInterp().getKey())));
