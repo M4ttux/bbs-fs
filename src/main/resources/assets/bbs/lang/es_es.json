@@ -12,5 +12,6 @@
     "key.bbs.record_replay": "Grabar reproducción actual",
     "key.bbs.record_video": "Grabar vídeo",
     "key.bbs.teleport": "Teletransportarse a la reproducción actual",
+    "key.bbs.quick_replay_selector": "Selector rápido de replays",
     "category.bbs.main": "BBS mod"
 }

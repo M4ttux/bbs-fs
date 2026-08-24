@@ -1052,5 +1052,8 @@
     "studio.ui.utility.reload_terrain": "Terreno",
     "studio.ui.utility.reload_textures": "Texturas",
     "studio.ui.utility.resize": "Cambiar tamaño de ventana",
-    "studio.ui.utility.title": "Panel de utilidades"
+    "studio.ui.utility.title": "Panel de utilidades",
+    "bbs.ui.quick_replay.title": "Selector Rápido de Replays",
+    "bbs.ui.quick_replay.hint": "Scroll ↕ para navegar • %s para seleccionar • ESC para cancelar",
+    "bbs.ui.quick_replay.empty": "No hay replays en el film actual"
 }
