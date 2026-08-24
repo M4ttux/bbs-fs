@@ -146,7 +146,8 @@ public class UIFormCategory extends UIElement
             }
         });
 
-        this.h(UIConstants.CONTROL_HEIGHT);
+        this.setVisible(this.isCategoryVisible());
+        this.h(this.isCategoryVisible() ? UIConstants.CONTROL_HEIGHT : 0);
     }
 
     public void search(String search)
@@ -223,6 +224,9 @@ public class UIFormCategory extends UIElement
 
     public void refreshLayoutForSearch(int columnWidth)
     {
+        boolean visible = this.isCategoryVisible();
+        this.setVisible(visible);
+
         int h = this.computeContentHeight(columnWidth);
 
         if (this.last != h)
@@ -263,11 +267,18 @@ public class UIFormCategory extends UIElement
                 {
                     this.category.visible.set(!this.category.visible.get());
 
-                    UIElement container = this.getParentContainer();
-
-                    if (container != null)
+                    if (this.list != null)
                     {
-                        container.resize();
+                        this.list.afterSearchLayout();
+                    }
+                    else
+                    {
+                        UIElement container = this.getParentContainer();
+
+                        if (container != null)
+                        {
+                            container.resize();
+                        }
                     }
 
                     return true;
@@ -313,19 +324,28 @@ public class UIFormCategory extends UIElement
         int layoutWidth = Math.max(CELL_WIDTH, this.area.w);
         List<Form> forms = this.getForms();
         int h = this.computeContentHeight(layoutWidth);
+        boolean visible = this.isCategoryVisible();
+        this.setVisible(visible);
 
-        if (!this.isCategoryVisible())
+        if (!visible)
         {
-            if (this.last != h)
+            if (this.last != 0)
             {
-                this.last = h;
-                this.h(h);
+                this.last = 0;
+                this.h(0);
 
-                UIElement container = this.getParentContainer();
-
-                if (container != null)
+                if (this.list != null)
                 {
-                    container.resize();
+                    this.list.afterSearchLayout();
+                }
+                else
+                {
+                    UIElement container = this.getParentContainer();
+
+                    if (container != null)
+                    {
+                        container.resize();
+                    }
                 }
             }
 

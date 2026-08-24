@@ -106,6 +106,12 @@ public class ColumnResizer extends AutomaticResizer
     @Override
     public void apply(Area area, IResizer resizer, ChildResizer child)
     {
+        if (!child.element.isVisible())
+        {
+            area.set(0, 0, 0, 0);
+            return;
+        }
+
         Margin margin = child.element.margin;
         int w = resizer == null ? this.width : resizer.getW();
         int h = resizer == null ? this.height : resizer.getH();
@@ -173,6 +179,11 @@ public class ColumnResizer extends AutomaticResizer
 
             for (ChildResizer child : this.getResizers())
             {
+                if (!child.element.isVisible())
+                {
+                    continue;
+                }
+
                 int h = child.resizer == null ? 0 : child.resizer.getH();
 
                 y += (h == 0 ? this.height : h) + this.margin + child.element.margin.vertical();
