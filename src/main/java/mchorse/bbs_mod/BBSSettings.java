@@ -160,6 +160,7 @@ public class BBSSettings {
 	public static ValueFloat editorTrackGuidesOpacity;
 	public static ValueInt keyframeDefaultShape;
 	public static ValueString keyframeDefaultInterpolation;
+	public static ValueBoolean keyframePreview;
 	public static ValueInt editorPreviewSizeMode;
 	public static ValueInt editorPreviewCustomWidth;
 	public static ValueInt editorPreviewCustomHeight;
@@ -189,6 +190,7 @@ public class BBSSettings {
 	public static ValueBoolean overlayGradientBorder;
 
 	public static ValueBoolean shaderCurvesEnabled;
+	public static ValueBoolean translucencyQueue;
 
 	public static ValueBoolean audioWaveformVisibleInPreview;
 	public static ValueBoolean audioWaveformVisibleInKeyframes;
@@ -707,6 +709,7 @@ public class BBSSettings {
 		editorTimelineGrid = builder.getBoolean("timeline_grid", false);
 		keyframeDefaultInterpolation = builder.getString("keyframe_default_interpolation", Interpolations.LINEAR.getKey());
 		keyframeDefaultShape = builder.getInt("keyframe_default_shape", 0, 0, KeyframeShape.values().length - 1);
+		keyframePreview = builder.getBoolean("keyframe_preview", true);
 		editorTrackWidth = builder.getInt("track_width", 2, 1, 10).slider();
 		editorTrackGuides = builder.getBoolean("track_guides", true);
 		editorTrackGuidesOpacity = builder.getFloat("track_guides_opacity", 0.5F, 0F, 1F).slider();
@@ -781,6 +784,7 @@ public class BBSSettings {
 		builder.category("misc", Icons.MORE);
 		damageControl = builder.getBoolean("damage_control", true);
 		shaderCurvesEnabled = builder.getBoolean("shader_curves", true);
+		translucencyQueue = builder.getBoolean("translucency_queue", false);
 		multiskinMultiThreaded = builder.getBoolean("multiskin_multithreaded", true);
 		entitySelectorsPropertyWhitelist = builder.getString("entity_selectors_whitelist", "CustomName,Name");
 	}
