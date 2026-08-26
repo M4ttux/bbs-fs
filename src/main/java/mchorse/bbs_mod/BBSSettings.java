@@ -142,6 +142,7 @@ public class BBSSettings {
 	public static ValueFloat editorCameraSmoothness;
 	public static ValueInt editorCameraMode;
 	public static ValueBoolean editorPlayerFollowsCamera;
+	public static ValueBoolean editorFlightFreeLook;
 	public static ValueString cameraPathDefaultInterpolation;
 	public static ValueEditorLayout editorLayoutSettings;
 	public static ValueOnionSkin editorOnionSkin;
@@ -670,6 +671,7 @@ public class BBSSettings {
 		editorOrbitTeleportOnSwitch = builder.getBoolean("orbit_teleport_on_switch", true);
 		editorCameraMode = builder.getInt("camera_mode", 0, 0, 5);
 		editorCameraMode.invisible();
+		editorFlightFreeLook = builder.getBoolean("flight_free_look", false);
 		cameraPathDefaultInterpolation = builder.getString("path_default_interpolation", Interpolations.HERMITE.getKey());
 
 		builder.category("viewport", Icons.FRUSTUM);

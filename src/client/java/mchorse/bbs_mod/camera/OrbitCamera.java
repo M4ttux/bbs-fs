@@ -222,6 +222,24 @@ public class OrbitCamera
         return rotate;
     }
 
+    public Vector3f getTargetRotation()
+    {
+        return this.targetRotation;
+    }
+
+    public Vector3d getTargetPosition()
+    {
+        return this.targetPosition;
+    }
+
+    public void rotate(float dx, float dy)
+    {
+        float angleFactor = this.getAngleSpeed();
+
+        this.targetRotation.x += dy * angleFactor;
+        this.targetRotation.y += dx * angleFactor;
+    }
+
     /**
      * Drag the mouse Should be called in rendering.
      */

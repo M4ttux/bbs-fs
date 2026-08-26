@@ -54,6 +54,11 @@ public class UIOrbitCameraKeys implements IUIElement
     @Override
     public IUIElement mouseScrolled(UIContext context)
     {
+        if (this.dashboard.orbitUI.getControl())
+        {
+            return this.dashboard.orbit.scroll((int) context.mouseWheel) ? this : null;
+        }
+
         return null;
     }
 

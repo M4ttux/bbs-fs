@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.dashboard.utils;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.OrbitCamera;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.IUIElement;
@@ -36,6 +37,11 @@ public class UIOrbitCamera implements IUIElement
     @Override
     public IUIElement mouseClicked(UIContext context)
     {
+        if (this.control && BBSSettings.editorFlightFreeLook != null && BBSSettings.editorFlightFreeLook.get())
+        {
+            return null;
+        }
+
         int i = this.orbit.canStart(context);
 
         if (i >= 0)

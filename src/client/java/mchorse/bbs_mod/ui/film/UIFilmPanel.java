@@ -82,6 +82,7 @@ import net.minecraft.util.math.Vec3d;
 import org.joml.Matrix4f;
 import org.joml.Vector2i;
 import org.joml.Vector3d;
+import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -106,6 +107,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private int lastRestartCursor = -1;
     private final Position position = new Position(0, 0, 0, 0, 0);
     private final Position lastPosition = new Position(0, 0, 0, 0, 0);
+
+    private boolean resetFreeFlightLookDrag;
+    private boolean freeFlightLookPrimed;
+    private int freeFlightLookRawX;
+    private int freeFlightLookRawY;
 
     public UIFilmSelectionPanel selectionPanel;
 
@@ -1724,6 +1730,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
             this.runner.setManual(flight ? this.position : null);
             this.dashboard.orbitUI.setControl(flight);
+            this.updateFreeFlightMouseCapture(flight);
         }
     }
 
@@ -1899,6 +1906,12 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         if (this.controller.isControlling())
         {
             context.mouseX = context.mouseY = -1;
+        }
+
+        if (this.isFlying() && BBSSettings.editorFlightFreeLook != null && BBSSettings.editorFlightFreeLook.get())
+        {
+            boolean orbitFlight = this.controller.getPovMode() == UIFilmController.CAMERA_MODE_ORBIT;
+            this.updateFreeFlightLookFromRawCursor(orbitFlight);
         }
 
         this.controller.orbit.update(context);
@@ -2276,5 +2289,106 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     protected boolean canSave(UIContext context)
     {
         return !this.recorder.isRecording();
+    }
+
+    private void centerCursor(net.minecraft.client.util.Window window)
+    {
+        Window.moveCursor(window.getWidth() / 2, window.getHeight() / 2);
+    }
+
+    private void updateFreeFlightMouseCapture(boolean flight)
+    {
+        if (BBSSettings.editorFlightFreeLook == null || !BBSSettings.editorFlightFreeLook.get())
+        {
+            return;
+        }
+
+        net.minecraft.client.util.Window window = MinecraftClient.getInstance().getWindow();
+
+        if (flight)
+        {
+            this.centerCursor(window);
+            GLFW.glfwSetInputMode(window.getHandle(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
+            this.resetFreeFlightLookDrag = true;
+            this.freeFlightLookPrimed = false;
+            this.dashboard.orbitUI.orbit.release();
+        }
+        else if (!this.controller.isControlling())
+        {
+            GLFW.glfwSetInputMode(window.getHandle(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL);
+            this.resetFreeFlightLookDrag = false;
+            this.freeFlightLookPrimed = false;
+            this.dashboard.orbitUI.orbit.release();
+        }
+    }
+
+    private boolean enforceFreeFlightMouseCapture()
+    {
+        if (!this.isFlying() || BBSSettings.editorFlightFreeLook == null || !BBSSettings.editorFlightFreeLook.get())
+        {
+            return false;
+        }
+
+        net.minecraft.client.util.Window window = MinecraftClient.getInstance().getWindow();
+
+        if (GLFW.glfwGetInputMode(window.getHandle(), GLFW.GLFW_CURSOR) != GLFW.GLFW_CURSOR_DISABLED)
+        {
+            this.centerCursor(window);
+            GLFW.glfwSetInputMode(window.getHandle(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
+            return true;
+        }
+
+        return false;
+    }
+
+    private void updateFreeFlightLookFromRawCursor(boolean orbitFlight)
+    {
+        net.minecraft.client.util.Window window = MinecraftClient.getInstance().getWindow();
+
+        if (this.enforceFreeFlightMouseCapture())
+        {
+            this.resetFreeFlightLookDrag = true;
+            this.freeFlightLookPrimed = false;
+        }
+
+        double[] rawX = new double[1];
+        double[] rawY = new double[1];
+        GLFW.glfwGetCursorPos(window.getHandle(), rawX, rawY);
+        int mouseX = (int) Math.round(rawX[0]);
+        int mouseY = (int) Math.round(rawY[0]);
+
+        if (this.resetFreeFlightLookDrag || !this.freeFlightLookPrimed)
+        {
+            this.freeFlightLookRawX = mouseX;
+            this.freeFlightLookRawY = mouseY;
+
+            this.resetFreeFlightLookDrag = false;
+            this.freeFlightLookPrimed = true;
+
+            if (!orbitFlight)
+            {
+                this.dashboard.orbitUI.orbit.release();
+            }
+
+            return;
+        }
+
+        int dx = mouseX - this.freeFlightLookRawX;
+        int dy = mouseY - this.freeFlightLookRawY;
+
+        this.freeFlightLookRawX = mouseX;
+        this.freeFlightLookRawY = mouseY;
+
+        if (dx != 0 || dy != 0)
+        {
+            if (orbitFlight)
+            {
+                this.controller.orbit.rotate(dx, dy);
+            }
+            else
+            {
+                this.dashboard.orbitUI.orbit.rotate(dx, dy);
+            }
+        }
     }
 }
