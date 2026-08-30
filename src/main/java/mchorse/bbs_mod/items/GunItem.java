@@ -59,6 +59,7 @@ public class GunItem extends Item
                 float yaw = owner.getHeadYaw() + (float) (properties.scatterY * (Math.random() - 0.5D));
                 float pitch = owner.getPitch() + (float) (properties.scatterX * (Math.random() - 0.5D));
 
+                projectile.setOwner(owner);
                 projectile.setProperties(properties);
                 projectile.setForm(FormUtils.copy(properties.projectileForm));
                 projectile.setPos(owner.getX(), owner.getY() + owner.getEyeHeight(owner.getPose()), owner.getZ());
@@ -70,7 +71,14 @@ public class GunItem extends Item
 
             if (!properties.cmdFiring.isEmpty())
             {
-                serverWorld.getServer().getCommandManager().parseAndExecute(owner.getCommandSource(serverWorld), properties.cmdFiring);
+                String command = properties.cmdFiring.startsWith("/") ? properties.cmdFiring.substring(1) : properties.cmdFiring;
+                net.minecraft.server.command.ServerCommandSource source = serverWorld.getServer().getCommandSource()
+                    .withWorld(serverWorld)
+                    .withEntity(owner)
+                    .withPosition(owner.getEntityPos())
+                    .withSilent();
+
+                serverWorld.getServer().getCommandManager().parseAndExecute(source, command);
             }
         }
 

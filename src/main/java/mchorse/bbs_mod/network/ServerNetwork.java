@@ -634,7 +634,18 @@ public class ServerNetwork
 
             if (!command.isEmpty())
             {
-                server.getCommandManager().parseAndExecute(player.getCommandSource(), command);
+                if (command.startsWith("/"))
+                {
+                    command = command.substring(1);
+                }
+
+                net.minecraft.server.command.ServerCommandSource source = server.getCommandSource()
+                    .withWorld((net.minecraft.server.world.ServerWorld) player.getEntityWorld())
+                    .withEntity(player)
+                    .withPosition(player.getEntityPos())
+                    .withSilent();
+
+                server.getCommandManager().parseAndExecute(source, command);
             }
         }
     }

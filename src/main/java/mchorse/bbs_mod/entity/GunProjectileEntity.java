@@ -87,7 +87,17 @@ public class GunProjectileEntity extends ProjectileEntity implements IEntityForm
     {
         if (!command.isEmpty() && this.getEntityWorld() instanceof ServerWorld serverWorld)
         {
-            serverWorld.getServer().getCommandManager().parseAndExecute(this.getCommandSource(serverWorld).withSilent(), command);
+            if (command.startsWith("/"))
+            {
+                command = command.substring(1);
+            }
+
+            net.minecraft.server.command.ServerCommandSource source = serverWorld.getServer().getCommandSource()
+                .withWorld(serverWorld)
+                .withPosition(this.getEntityPos())
+                .withSilent();
+
+            serverWorld.getServer().getCommandManager().parseAndExecute(source, command);
         }
     }
 
