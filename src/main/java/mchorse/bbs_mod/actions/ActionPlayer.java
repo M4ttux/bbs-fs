@@ -201,6 +201,9 @@ public class ActionPlayer
             {
                 ActorEntity actor = new ActorEntity(BBSMod.ACTOR_ENTITY, this.world);
 
+                actor.replay = replay;
+                actor.film = this.film;
+                actor.currentTick = this.tick;
                 actor.setForm(FormUtils.copy(replay.form.get()));
 
                 this.apply(actor, replay, this.tick, false);
@@ -227,6 +230,13 @@ public class ActionPlayer
 
     public void apply(LivingEntity actor, Replay replay, float tick, boolean ticking)
     {
+        if (actor instanceof ActorEntity actorEntity)
+        {
+            actorEntity.replay = replay;
+            actorEntity.film = this.film;
+            actorEntity.currentTick = tick;
+        }
+
         double x = replay.keyframes.x.interpolate(tick);
         double y = replay.keyframes.y.interpolate(tick);
         double z = replay.keyframes.z.interpolate(tick);
@@ -327,7 +337,14 @@ public class ActionPlayer
 
             if (replay != null)
             {
-                this.apply(entry.getValue(), replay, this.tick, true);
+                LivingEntity actor = entry.getValue();
+
+                if (actor != null && (actor.isRemoved() || actor.isDead() || actor.getHealth() <= 0F))
+                {
+                    continue;
+                }
+
+                this.apply(actor, replay, this.tick, true);
             }
         }
 
@@ -386,7 +403,7 @@ public class ActionPlayer
             this.pendingResync = false;
             baseValue.fromData(data);
 
-            if (baseValue == this.film || baseValue.getId().equals("actor") || baseValue.getId().equals("enabled") || baseValue.getId().equals("replays"))
+            if (baseValue == this.film || baseValue.getId().equals("actor") || baseValue.getId().equals("enabled") || baseValue.getId().equals("replays") || baseValue.getId().startsWith("drop_"))
             {
                 this.updateReplayEntities();
             }
@@ -475,5 +492,15 @@ public class ActionPlayer
     public void toggle()
     {
         this.playing = !this.playing;
+    }
+
+    public Map<String, LivingEntity> getActors()
+    {
+        return this.actors;
+    }
+
+    public int getTick()
+    {
+        return this.tick;
     }
 }

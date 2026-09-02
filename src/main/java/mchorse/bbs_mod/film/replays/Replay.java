@@ -50,6 +50,14 @@ public class Replay extends ValueGroup
     public final ValueBoolean axesPreview = new ValueBoolean("axes_preview", false);
     public final ValueString axesPreviewBone = new ValueString("axes_preview_bone", "");
 
+    public final ValueBoolean dropItemsOnDeath = new ValueBoolean("drop_items_on_death", false);
+    public final ValueFloat dropVelocityMinX = new ValueFloat("drop_velocity_min_x", -0.1F);
+    public final ValueFloat dropVelocityMaxX = new ValueFloat("drop_velocity_max_x", 0.1F);
+    public final ValueFloat dropVelocityMinY = new ValueFloat("drop_velocity_min_y", 0.1F);
+    public final ValueFloat dropVelocityMaxY = new ValueFloat("drop_velocity_max_y", 0.25F);
+    public final ValueFloat dropVelocityMinZ = new ValueFloat("drop_velocity_min_z", -0.1F);
+    public final ValueFloat dropVelocityMaxZ = new ValueFloat("drop_velocity_max_z", 0.1F);
+
     public Replay(String id)
     {
         super(id);
@@ -76,6 +84,14 @@ public class Replay extends ValueGroup
 
         this.add(this.axesPreview);
         this.add(this.axesPreviewBone);
+
+        this.add(this.dropItemsOnDeath);
+        this.add(this.dropVelocityMinX);
+        this.add(this.dropVelocityMaxX);
+        this.add(this.dropVelocityMinY);
+        this.add(this.dropVelocityMaxY);
+        this.add(this.dropVelocityMinZ);
+        this.add(this.dropVelocityMaxZ);
     }
 
     /**

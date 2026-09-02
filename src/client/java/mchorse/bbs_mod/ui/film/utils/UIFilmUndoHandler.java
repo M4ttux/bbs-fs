@@ -93,7 +93,9 @@ public class UIFilmUndoHandler extends UIFormUndoHandler
             path.endsWith("/properties") ||
             path.endsWith("/actor") ||
             path.endsWith("/enabled") ||
-            path.endsWith("/form")
+            path.endsWith("/form") ||
+            path.endsWith("/drop_items_on_death") ||
+            path.contains("/drop_velocity_")
         ) {
             return true;
         }

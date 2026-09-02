@@ -360,6 +360,15 @@ public class UIKeys
     public static final IKey FILM_REPLAY_CONTEXT_POSES_TO_LIMBS = L10n.lang("bbs.ui.film.replay.context.poses_to_limbs");
     public static final IKey FILM_REPLAY_CONTEXT_CLEAR_IK = L10n.lang("bbs.ui.film.replay.context.clear_ik");
     public static final IKey FILM_REPLAY_CONTEXT_MOVE_HERE = L10n.lang("bbs.ui.film.replay.context.move_here");
+    public static final IKey FILM_REPLAY_DROP_ITEMS_ON_DEATH = L10n.lang("bbs.ui.film.replay.drop_items_on_death");
+    public static final IKey FILM_REPLAY_DROP_ITEMS_ON_DEATH_TOOLTIP = L10n.lang("bbs.ui.film.replay.drop_items_on_death-tooltip");
+    public static final IKey FILM_REPLAY_DROP_VELOCITY = L10n.lang("bbs.ui.film.replay.drop_velocity");
+    public static final IKey FILM_REPLAY_DROP_VELOCITY_MIN_X = L10n.lang("bbs.ui.film.replay.drop_velocity_min_x");
+    public static final IKey FILM_REPLAY_DROP_VELOCITY_MAX_X = L10n.lang("bbs.ui.film.replay.drop_velocity_max_x");
+    public static final IKey FILM_REPLAY_DROP_VELOCITY_MIN_Y = L10n.lang("bbs.ui.film.replay.drop_velocity_min_y");
+    public static final IKey FILM_REPLAY_DROP_VELOCITY_MAX_Y = L10n.lang("bbs.ui.film.replay.drop_velocity_max_y");
+    public static final IKey FILM_REPLAY_DROP_VELOCITY_MIN_Z = L10n.lang("bbs.ui.film.replay.drop_velocity_min_z");
+    public static final IKey FILM_REPLAY_DROP_VELOCITY_MAX_Z = L10n.lang("bbs.ui.film.replay.drop_velocity_max_z");
     public static final IKey FILM_REPLAY_FILTER_SHEETS = L10n.lang("bbs.ui.film.replay.filter_sheets");
     public static final IKey FILM_REPLAY_FILTER_SHEETS_TITLE = L10n.lang("bbs.ui.film.replay.filter_sheets-title");
     public static final IKey FILM_REPLAY_FILTER_SHEETS_DISABLE_ALL = L10n.lang("bbs.ui.film.replay.filter_sheets-disable_all");

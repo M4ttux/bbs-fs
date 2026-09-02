@@ -24,6 +24,11 @@ public class ActionManager
     private Map<ServerPlayerEntity, ActionRecorder> recorders = new HashMap<>();
     private Map<ServerWorld, DamageControl> dc = new HashMap<>();
 
+    public List<ActionPlayer> getPlayers()
+    {
+        return this.players;
+    }
+
     /**
      * Stopping, not just forgetting: playback borrows the first person player's equipment and
      * only gives it back on stop, so dropping the players on the floor here would leave them
