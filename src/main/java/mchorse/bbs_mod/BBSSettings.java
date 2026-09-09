@@ -126,6 +126,8 @@ public class BBSSettings {
 	public static ValueInt editorJump;
 	public static ValueInt editorGuidesColor;
 	public static ValueBoolean editorRuleOfThirds;
+	public static ValueBoolean editorSafeMargins;
+	public static ValueInt editorSafeMarginsColor;
 	public static ValueBoolean editorCenterLines;
 	public static ValueBoolean editorCrosshair;
 	public static ValueBoolean editorSeconds;
@@ -491,7 +493,7 @@ public class BBSSettings {
 			"orbit_movement_requires_flight", "orbit_center_marker", "orbit_gizmo", "orbit_gizmo_scale",
 			"orbit_axis_ortho", "orbit_teleport_on_switch", "camera_mode");
 		migrated |= migrateLegacyCategory(root, "editor", "viewport",
-			"guides_color", "rule_of_thirds", "center_lines", "crosshair", "preview_size_mode",
+			"guides_color", "rule_of_thirds", "safe_margins", "safe_margins_color", "center_lines", "crosshair", "preview_size_mode",
 			"preview_custom_width", "preview_custom_height", "preview_resolution_scale", "clip_preview",
 			"onion_skin", "motion_path", "ik_debug", "physics_debug");
 		migrated |= migrateLegacyCategory(root, "editor", "timeline",
@@ -677,6 +679,8 @@ public class BBSSettings {
 		builder.category("viewport", Icons.FRUSTUM);
 		editorGuidesColor = builder.getInt("guides_color", 0xcccc0000).colorAlpha();
 		editorRuleOfThirds = builder.getBoolean("rule_of_thirds", false);
+		editorSafeMargins = builder.getBoolean("safe_margins", false);
+		editorSafeMarginsColor = builder.getInt("safe_margins_color", 0xcccc0000).colorAlpha();
 		editorCenterLines = builder.getBoolean("center_lines", false);
 		editorCrosshair = builder.getBoolean("crosshair", false);
 		editorPreviewSizeMode = builder.getInt("preview_size_mode", 0, 0, 2);

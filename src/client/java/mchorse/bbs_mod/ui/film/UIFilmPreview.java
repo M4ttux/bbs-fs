@@ -409,6 +409,7 @@ public class UIFilmPreview extends UIElement
         }
 
         boolean needGuides = BBSSettings.editorRuleOfThirds.get()
+            || BBSSettings.editorSafeMargins.get()
             || BBSSettings.editorCenterLines.get()
             || BBSSettings.editorCrosshair.get();
         if (needGuides)
@@ -422,6 +423,37 @@ public class UIFilmPreview extends UIElement
 
                 context.batcher.box(area.x, area.y + area.h / 3 - 1, area.x + area.w, area.y + area.h / 3, guidesColor);
                 context.batcher.box(area.x, area.y + area.h - area.h / 3, area.x + area.w, area.y + area.h - area.h / 3 + 1, guidesColor);
+            }
+
+            if (BBSSettings.editorSafeMargins.get())
+            {
+                int guidesColor = BBSSettings.editorSafeMarginsColor.get();
+
+                /* Action Safe - 90% (5% margin on each edge) */
+                int actionMarginX = Math.round(area.w * 0.05F);
+                int actionMarginY = Math.round(area.h * 0.05F);
+                int actionLeft = area.x + actionMarginX;
+                int actionRight = area.x + area.w - actionMarginX;
+                int actionTop = area.y + actionMarginY;
+                int actionBottom = area.y + area.h - actionMarginY;
+
+                context.batcher.box(actionLeft, actionTop, actionLeft + 1, actionBottom, guidesColor);
+                context.batcher.box(actionRight - 1, actionTop, actionRight, actionBottom, guidesColor);
+                context.batcher.box(actionLeft, actionTop, actionRight, actionTop + 1, guidesColor);
+                context.batcher.box(actionLeft, actionBottom - 1, actionRight, actionBottom, guidesColor);
+
+                /* Title Safe - 80% (10% margin on each edge) */
+                int titleMarginX = Math.round(area.w * 0.10F);
+                int titleMarginY = Math.round(area.h * 0.10F);
+                int titleLeft = area.x + titleMarginX;
+                int titleRight = area.x + area.w - titleMarginX;
+                int titleTop = area.y + titleMarginY;
+                int titleBottom = area.y + area.h - titleMarginY;
+
+                context.batcher.box(titleLeft, titleTop, titleLeft + 1, titleBottom, guidesColor);
+                context.batcher.box(titleRight - 1, titleTop, titleRight, titleBottom, guidesColor);
+                context.batcher.box(titleLeft, titleTop, titleRight, titleTop + 1, guidesColor);
+                context.batcher.box(titleLeft, titleBottom - 1, titleRight, titleBottom, guidesColor);
             }
 
             if (BBSSettings.editorCenterLines.get())
