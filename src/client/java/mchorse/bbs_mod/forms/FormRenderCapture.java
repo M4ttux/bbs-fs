@@ -101,6 +101,38 @@ public class FormRenderCapture
     }
 
     /**
+     * Temporarily close the session for a nested offscreen render, the way
+     * {@link FormTranslucentQueue#suspend()} does for the queue. A framebuffer form draws its parts
+     * into a buffer of its own, under its own ortho projection — while a capture session is armed
+     * those draws were swallowed by {@code RenderLayerMixin} instead of executed, so the buffer came
+     * out empty and the parts were replayed at the item, where ortho-sized geometry filled the
+     * screen. Only the finished quad belongs to the item, and it draws after this is restored.
+     *
+     * <p>The depth goes with it: a form nested inside the buffer may open a session of its own
+     * (a model-block item form inside a framebuffer form), and it has to be a whole one, not an
+     * inner level of the suspended session that would end without ever returning its capture.</p>
+     */
+    public static Suspended suspend()
+    {
+        Suspended was = new Suspended(active, depth);
+
+        active = null;
+        depth = 0;
+
+        return was;
+    }
+
+    public static void restore(Suspended was)
+    {
+        active = was.active();
+        depth = was.depth();
+    }
+
+    /** A capture session set aside by {@link #suspend()}. */
+    public record Suspended(Map<RenderLayer, List<Captured>> active, int depth)
+    {}
+
+    /**
      * Called from {@code RenderLayerMixin#onDraw} while a session is open. Consumes the buffer:
      * vanilla's {@code RenderLayer#draw} closes the {@link BuiltBuffer} it is given, so when the
      * draw is cancelled the capture must close it instead — otherwise the allocator slice leaks

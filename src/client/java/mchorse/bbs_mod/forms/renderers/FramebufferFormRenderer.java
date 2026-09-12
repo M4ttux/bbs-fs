@@ -265,6 +265,14 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         boolean queueWasActive = FormTranslucentQueue.suspend();
         boolean renderLastWasActive = FormRenderLast.suspend();
 
+        /* And the item capture, for the same reason once more: a model block held in hand renders
+         * its form inside an armed FormRenderCapture session, where RenderLayerMixin cancels every
+         * layer draw and keeps the geometry for the item command queue. The parts below must draw
+         * for real, into this buffer — captured instead, they left the buffer empty and came back at
+         * the item with their ortho-sized coordinates, filling the screen. The quad that follows is
+         * what the item is meant to capture, and it draws after this is restored. */
+        FormRenderCapture.Suspended captureWasActive = FormRenderCapture.suspend();
+
         /* Full bright on the way in: the quad that draws the finished picture applies the
          * caller's lightmap once, so letting it shade the parts inside the buffer too would
          * land the very same shading on them twice. */
@@ -291,6 +299,7 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
 
             FormTranslucentQueue.restore(queueWasActive);
             FormRenderLast.restore(renderLastWasActive);
+            FormRenderCapture.restore(captureWasActive);
         }
 
         FramebufferDebug.readBuffer("after parts", framebuffer);
