@@ -1517,7 +1517,9 @@ public class Gizmo
             }
         }
 
-        matrix.set(new Matrix4f(basis).setTranslation(translation));
+        Matrix3f ambient = new Matrix4f(RenderSystem.getModelViewMatrix()).get3x3(new Matrix3f());
+
+        matrix.set(new Matrix4f(ambient.invert().mul(basis)).setTranslation(translation));
     }
 
     /**
