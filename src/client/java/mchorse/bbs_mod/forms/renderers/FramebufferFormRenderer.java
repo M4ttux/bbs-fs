@@ -13,6 +13,7 @@ import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.client.render.picker.BBSPickerRenderer;
 import mchorse.bbs_mod.forms.FormRenderCapture;
+import mchorse.bbs_mod.forms.FormRenderLast;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
@@ -259,8 +260,10 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
 
         /* The nested forms render under an ortho projection into this framebuffer — deferring
          * their translucent pixels into the world's queue would replay them with the wrong
-         * projection, so they render single-pass as before. */
+         * projection, so they render single-pass as before. Render-last is off here for the
+         * same reason: a part postponed out of this buffer would come back in the world. */
         boolean queueWasActive = FormTranslucentQueue.suspend();
+        boolean renderLastWasActive = FormRenderLast.suspend();
 
         /* Full bright on the way in: the quad that draws the finished picture applies the
          * caller's lightmap once, so letting it shade the parts inside the buffer too would
@@ -287,6 +290,7 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
             context.light = light;
 
             FormTranslucentQueue.restore(queueWasActive);
+            FormRenderLast.restore(renderLastWasActive);
         }
 
         FramebufferDebug.readBuffer("after parts", framebuffer);
@@ -488,9 +492,24 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
                 Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
                 Vector3f origin = modelView.transformPosition(matrix.getTranslation(new Vector3f()));
 
-                FormTranslucentQueue.add(new FormTranslucentQueue.BufferCommand(deferred, FormRenderCapture.copy(built), origin));
+                /* The quad's opaque texels also draw right here, writing depth, because the sort
+                 * alone cannot order this quad against a model it sits inside: a semi-transparent
+                 * layer of the parent model (a skin's hat layer) sorts by its group's pivot, which
+                 * is always further than the quad's own plane, so it replays first. With depth in
+                 * the buffer that layer lands over the quad by the depth test, pixel by pixel,
+                 * instead of the two fighting over who overwrites whom.
+                 *
+                 * 1.21.1 drew this half with the vanilla cutout program and a global depth mask; here
+                 * it is the same PASS_OPAQUE + depthWrite pair {@link FormTranslucentQueue#submit} uses
+                 * for a split model, and the opaque half always writes depth even though the deferred
+                 * one above may not. Drawing hands the buffer over, so the capture is taken first. */
+                FormRenderCapture.Captured captured = FormRenderCapture.copy(built);
+                RenderLayer opaque = BBSShaders.getModelLayer(new BBSShaders.ModelVariant(
+                    FormTranslucentQueue.PASS_OPAQUE, true, true), identifier);
 
-                built.close();
+                opaque.draw(built);
+
+                FormTranslucentQueue.add(new FormTranslucentQueue.BufferCommand(deferred, captured, origin));
             }
             else
             {

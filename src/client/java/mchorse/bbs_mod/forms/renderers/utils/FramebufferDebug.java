@@ -103,6 +103,7 @@ public class FramebufferDebug
         String pass = context.isPicking() ? "PICK"
             : BBSRendering.isIrisShadowPass() ? "SHADOW"
             : context.ui ? "UI"
+            : irisHand() ? "HAND"
             : BBSRendering.isRenderingWorld() ? "WORLD" : "OTHER";
         List<BodyPart> parts = form.parts.getAllTyped();
         StringBuilder inside = new StringBuilder();
@@ -199,10 +200,26 @@ public class FramebufferDebug
             + " " + framebuffers());
     }
 
+    /**
+     * Whether the pack is drawing the first-person hand right now. Iris renders the hand from
+     * inside the level render, with a projection of its own and into a batch of its own, so a
+     * form in hand comes through a pass the world's own label cannot tell apart.
+     */
+    public static boolean irisHand()
+    {
+        return Boolean.TRUE.equals(instanceCall(handRenderer(), "isActive"));
+    }
+
+    private static Object handRenderer()
+    {
+        return staticField("net.irisshaders.iris.pathways.HandRenderer", "INSTANCE");
+    }
+
     /** What the pack thinks, and every flag of its that our offscreen render toggles. */
     public static String iris()
     {
         Object pipeline = pipeline();
+        Object hand = handRenderer();
 
         return "irisPack=" + BBSRendering.isIrisShadersEnabled()
             + " shadingThisDraw=" + BBSRendering.isIrisWorldForms()
@@ -213,6 +230,7 @@ public class FramebufferDebug
             + " isRenderingWorld=" + instanceField(pipeline, "isRenderingWorld")
             + " shouldOverride=" + instanceCall(pipeline, "shouldOverrideShaders")
             + " shadowACTIVE=" + staticField("net.irisshaders.iris.shadows.ShadowRenderer", "ACTIVE")
+            + " irisHand=" + instanceCall(hand, "isActive") + " irisHandSolid=" + instanceCall(hand, "isRenderingSolid")
             + " depthColorLocked=" + staticCall("net.irisshaders.iris.gl.blending.DepthColorStorage", "isDepthColorLocked")
             + " blendLocked=" + staticCall("net.irisshaders.iris.gl.blending.BlendModeStorage", "isBlendLocked")
             + " isRenderingLevel=" + staticField("net.irisshaders.iris.vertices.ImmediateState", "isRenderingLevel")
@@ -301,6 +319,17 @@ public class FramebufferDebug
         return "lightingBuffer=" + RenderSystem.getShaderLights();
     }
 
+    /* TODO(1.21.11 render): 1.21.1 also had quad(tag, matrices, quad) here, printing where the
+     * finished quad landed as NDC and as pixels of the viewport. It multiplied by
+     * RenderSystem.getProjectionMatrix(), which 1.21.11 removed - the projection lives in a GPU
+     * uniform buffer now (see matrices(), which can only report the slice). Without a CPU-side
+     * projection there are no screen coordinates to print, so the probe waits for one. */
+
+    /**
+     * What the nested forms actually left in the buffer, straight out of GL: how much of it
+     * they covered, where, and the brightest texel. Reads the framebuffer bound for reading -
+     * call it while the form's own buffer is still bound.
+     */
     public static void readBuffer(String tag, FormFramebuffer framebuffer)
     {
         if (logging)

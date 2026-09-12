@@ -44,6 +44,7 @@
         "GlyphGuiElementRenderStateMixin",
         "EntityGuiElementRendererMixin",
         "iris.IrisMixin",
+        "iris.HandRendererMixin",
         "iris.CelestialUniformsMixin",
         "iris.ShadowMatricesMixin",
         "iris.JcppProcessorMixin",
