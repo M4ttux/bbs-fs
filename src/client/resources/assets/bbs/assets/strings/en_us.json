@@ -1440,6 +1440,7 @@
 	"bbs.ui.model_editor.model.cube.rotation": "Rotation",
 	"bbs.ui.model_editor.model.cube.inflate": "Inflate",
 	"bbs.ui.model_editor.model.undo.cube_transform": "Cube: %s",
+	"bbs.ui.model_editor.model.undo.cube_transform_many": "Move: %s rows",
 	"bbs.ui.model_editor.model.undo.cube_pivot": "Cube pivot: %s",
 	"bbs.ui.model_editor.model.undo.cube_inflate": "Cube inflate: %s",
 	"bbs.ui.model_editor.model.undo.cube_rename": "Rename cube: %s → %s",

@@ -1434,6 +1434,7 @@
 	"bbs.ui.model_editor.model.cube.rotation": "Поворот",
 	"bbs.ui.model_editor.model.cube.inflate": "Раздутие",
 	"bbs.ui.model_editor.model.undo.cube_transform": "Куб: %s",
+	"bbs.ui.model_editor.model.undo.cube_transform_many": "Перемещение строк (%s)",
 	"bbs.ui.model_editor.model.undo.cube_pivot": "Якорь куба: %s",
 	"bbs.ui.model_editor.model.undo.cube_inflate": "Раздутие куба: %s",
 	"bbs.ui.model_editor.model.undo.cube_rename": "Переименовать куб: %s → %s",

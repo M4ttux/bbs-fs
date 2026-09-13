@@ -51,6 +51,29 @@ public final class ModelCubeFrames
         return frame.translate(-pivot.x / 16F, -pivot.y / 16F, -pivot.z / 16F);
     }
 
+    /**
+     * Where the gizmo of a cube stands: on the cube's pivot, turned as the cube is for the space
+     * that places a target on its own frame, and left in the group's turn for every other.
+     *
+     * <p>The half turn at the end is the convention a captured bone matrix carries, and what the
+     * group's own gizmo is therefore drawn in — a cube's arrows point the way its group's do. It
+     * doesn't reach the drag: the axes a handle moves along are measured numerically off this very
+     * frame, so the flip cancels itself there.</p>
+     */
+    public static Matrix4f cubeGizmoFrame(Matrix4f groupFrame, ModelCube cube, boolean ownFrame)
+    {
+        Vector3f pivot = cube.pivot;
+        Vector3f rotate = cube.rotate;
+        Matrix4f frame = new Matrix4f(groupFrame).translate(pivot.x / 16F, pivot.y / 16F, pivot.z / 16F);
+
+        if (ownFrame && (rotate.x != 0 || rotate.y != 0 || rotate.z != 0))
+        {
+            frame.rotateZ(MathUtils.toRad(rotate.z)).rotateY(MathUtils.toRad(rotate.y)).rotateX(MathUtils.toRad(rotate.x));
+        }
+
+        return frame.rotateY(MathUtils.PI);
+    }
+
     /** The near corner of the cube's box in its frame, the inflate taken in, in blocks. */
     public static Vector3f boxMin(ModelCube cube, Vector3f out)
     {

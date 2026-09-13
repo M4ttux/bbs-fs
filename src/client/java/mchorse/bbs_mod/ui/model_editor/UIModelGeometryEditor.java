@@ -68,7 +68,9 @@ import java.util.function.Supplier;
  * rotations alone. The row under the tree moves THE POINT ALONE, leaving the geometry where it
  * stands, so the group turns about somewhere else. The sphere over the preview puts the gizmo on
  * the point too, for when that is what's wanted. A cube's rows read the same way round: its
- * position row moves the cube as a whole, the pivot row below moves its point alone.</p>
+ * position row moves the cube as a whole, the pivot row below moves its point alone. Its gizmo
+ * stands on that pivot and turns as the cube does — the rings turn the cube about it, and unlike a
+ * group's rest the cube has scale handles, which grow it about the same point.</p>
  *
  * <p>Several rows can be picked at once (ctrl / shift, as in every list here): the verbs — copy,
  * remove — then work on all the picked groups as one undo step, and so does moving them. The
@@ -106,7 +108,7 @@ public class UIModelGeometryEditor extends UIElement
      * own, and a ring dragged over a pick of them has no one answer — so those handles aren't
      * offered rather than quietly turning only the first.
      */
-    private static final Gizmo.HandleMask ANCHOR_MANY_MASK = Gizmo.HandleMask.of(
+    private static final Gizmo.HandleMask MANY_MASK = Gizmo.HandleMask.of(
         EnumSet.of(Gizmo.Op.MOVE, Gizmo.Op.SCREEN),
         EnumSet.noneOf(Axis.class)
     );
@@ -210,6 +212,15 @@ public class UIModelGeometryEditor extends UIElement
         this.cubeTransform = new UIPropTransform().noUniformScale();
         this.cubeTransform.labels(UIKeys.MODEL_EDITOR_MODEL_CUBE_POSITION, UIKeys.MODEL_EDITOR_MODEL_CUBE_SIZE, UIKeys.MODEL_EDITOR_MODEL_CUBE_ROTATION);
         this.cubeTransform.callbacks(this::beginEdit, this::commitEdit, this::endEdit);
+        this.cubeTransform.hotkeyDrag(() ->
+        {
+            ModelSlotTarget target = this.shownTarget();
+
+            return target == null ? null : this.modelPanel.renderer.buildGizmoDrag(target);
+        });
+        /* A cube takes all three operations — unlike a group's rest it does have a size — but a
+         * size and a turn are one cube's own, so with several picked only moving is left. */
+        this.cubeTransform.enableHotkeys(() -> this.shownTarget() != null, (op) -> op == TransformOp.TRANSLATE || this.single());
 
         IKey raw = IKey.constant("%s (%s)");
         IKey[] axes = {UIKeys.GENERAL_X, UIKeys.GENERAL_Y, UIKeys.GENERAL_Z};
@@ -305,17 +316,27 @@ public class UIModelGeometryEditor extends UIElement
         return node != null && node.isGroup() && this.tree.getCurrent().size() == 1 ? node.group() : null;
     }
 
-    /** What the viewport gizmo is on: the leading group's rest, through the stand-in. */
+    /**
+     * What the viewport gizmo is on: the leading row's numbers, through its stand-in — a group's
+     * rest, or a cube, which takes all three handles since a cube does have a size.
+     */
     public ModelSlotTarget shownTarget()
     {
-        String id = this.leader();
+        ModelNode leader = this.leaderNode();
 
-        if (id == null)
+        if (leader == null)
         {
             return null;
         }
 
-        return new ModelSlotTarget(id, ModelSlotKind.ANCHOR, this.transform, this::applyAnchor, this.single() ? ANCHOR_MASK : ANCHOR_MANY_MASK);
+        if (leader.isCube())
+        {
+            return this.leadCube() == null
+                ? null
+                : new ModelSlotTarget(leader.group(), ModelSlotKind.CUBE, this.cubeTransform, this::applyCube, this.single() ? Gizmo.HandleMask.ALL : MANY_MASK, leader.cube());
+        }
+
+        return new ModelSlotTarget(leader.group(), ModelSlotKind.ANCHOR, this.transform, this::applyAnchor, this.single() ? ANCHOR_MASK : MANY_MASK);
     }
 
     /** The group the fields and the gizmo sit on: the first of the pick, when it is a group, which the rest follows. */
@@ -627,7 +648,7 @@ public class UIModelGeometryEditor extends UIElement
      *
      * <p>A rest already within a hair of the numbers is left alone: the round trip through radians
      * isn't exact, and the file must not pick up the noise. The rotation is the leader's alone —
-     * with several picked, neither the gizmo nor the row offers it (see {@link #ANCHOR_MANY_MASK}).</p>
+     * with several picked, neither the gizmo nor the row offers it (see {@link #MANY_MASK}).</p>
      */
     private void applyAnchor()
     {
@@ -837,7 +858,12 @@ public class UIModelGeometryEditor extends UIElement
         }
 
         this.applied.copy(this.standin);
+        this.syncCubeRows(cube);
+    }
 
+    /** The cube's own rows take its numbers — the pivot and the inflate, which have no stand-in. */
+    private void syncCubeRows(ModelCube cube)
+    {
         for (int i = 0; i < 3; i++)
         {
             this.pivotFields[i].setValue(cube == null ? 0D : cube.pivot.get(i));
@@ -851,6 +877,14 @@ public class UIModelGeometryEditor extends UIElement
      * carried in, so the cube moves as a whole — its pivot along with its corner — and the rest of
      * the pick moves by the same step; its size and rotation as they are. A cube already within a
      * hair of the numbers is left alone, as a group's rest is.
+     *
+     * <p>Two things a gesture does that the rows don't. With the sphere over the preview on, a
+     * drag moves the pivot alone, as it does for a group — and then the position row runs ahead of
+     * the corner, which stays put, until {@link #endEdit} reads the cube back. And the scale
+     * handles grow the cube FROM ITS PIVOT, which is where they sit, by walking the corner in with
+     * the size — the size row, typed, grows it from the corner instead, which is what a corner and
+     * a size read as. Neither touches the stand-in, so an Escape mid-drag rewinds exactly: the
+     * numbers go back through the very same path they came.</p>
      */
     private void applyCube()
     {
@@ -870,13 +904,25 @@ public class UIModelGeometryEditor extends UIElement
 
         if (step.length() > EPSILON)
         {
-            /* The row is the cube's corner, and a corner moved is the cube moved — the pivot
-             * toggle over the preview is the gizmo's, and the cube has no gizmo yet. */
-            this.distribute(step, true);
+            /* The row is the cube's corner, and a corner moved is the cube moved; the toggle only
+             * has a say while the gizmo or a hotkey is what's driving. */
+            boolean geometry = !pivotOnly || !this.cubeTransform.isEditing();
+
+            this.distribute(step, geometry);
+
+            if (!geometry)
+            {
+                this.syncCubeRows(cube);
+            }
         }
 
         if (!cube.size.equals(this.standin.scale, EPSILON))
         {
+            if (this.cubeTransform.isEditing())
+            {
+                growFromPivot(cube, this.standin.scale);
+            }
+
             cube.size.set(this.standin.scale);
             changed = true;
         }
@@ -892,6 +938,28 @@ public class UIModelGeometryEditor extends UIElement
         if (changed)
         {
             this.dirty.add(group);
+        }
+    }
+
+    /**
+     * Walk the cube's corner in with a new size so the cube grows about its pivot rather than out
+     * of its corner — each side moves by the factor that side grew by. A side that was flat has no
+     * factor to speak of and its corner stays; the size alone gives it its thickness back.
+     */
+    private static void growFromPivot(ModelCube cube, Vector3f size)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            float was = cube.size.get(i);
+
+            if (Math.abs(was) < EPSILON)
+            {
+                continue;
+            }
+
+            float pivot = cube.pivot.get(i);
+
+            cube.origin.setComponent(i, pivot + (cube.origin.get(i) - pivot) * (size.get(i) / was));
         }
     }
 
@@ -1057,8 +1125,12 @@ public class UIModelGeometryEditor extends UIElement
 
         if (cube != null)
         {
+            int picked = this.tree.getCurrent().size();
+
             this.applyCube();
-            label = UIKeys.MODEL_EDITOR_MODEL_UNDO_CUBE_TRANSFORM.format(UIModelTree.cubeLabel(cube, leader.cube()));
+            label = picked > 1
+                ? UIKeys.MODEL_EDITOR_MODEL_UNDO_CUBE_TRANSFORM_MANY.format(picked)
+                : UIKeys.MODEL_EDITOR_MODEL_UNDO_CUBE_TRANSFORM.format(UIModelTree.cubeLabel(cube, leader.cube()));
             key = "transform:" + leader.key();
         }
         else
@@ -1076,11 +1148,24 @@ public class UIModelGeometryEditor extends UIElement
         this.before = null;
     }
 
-    /** The end of a gesture or a pad's drag: its undo step closes, and the model settles. */
+    /**
+     * The end of a gesture or a pad's drag: its undo step closes, and the model settles. The cube's
+     * stand-in is read back from the cube afterwards — a gesture can leave it ahead of the numbers
+     * it shows, growing the cube from its pivot without the position row, or moving the pivot alone
+     * while the row followed the gizmo.
+     */
     private void endEdit()
     {
         this.modelPanel.closeModelEdit();
         this.settle();
+
+        ModelCube cube = this.leadCube();
+
+        if (cube != null)
+        {
+            this.loadCube(cube);
+            this.cubeTransform.setTransform(this.standin);
+        }
     }
 
     /* The structure: groups added, copied, removed, renamed, moved — each one undo step, settled

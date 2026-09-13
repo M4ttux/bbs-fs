@@ -570,7 +570,8 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
      * Where the gizmo sits for {@code space}: on the slot's own frame for LOCAL, at the slot's
      * position on the parent frame otherwise — the form editor's placement convention. A pose
      * bone is placed the way the form editor places a bone: its full matrix for LOCAL, the frame
-     * before its own rotation for every other space.
+     * before its own rotation for every other space; a cube of a group stands on its own pivot, in
+     * its own turn for LOCAL and in its group's for the rest ({@link ModelCubeFrames}).
      *
      * @param fresh re-evaluate the bones instead of reading the drawn frame's — for a drag's
      *              samplers, which need to see the pose they just nudged
@@ -594,6 +595,27 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
             }
 
             return new Matrix4f(space.placesOnOwnFrame() ? entry.matrix() : entry.origin());
+        }
+
+        if (target.kind() == ModelSlotKind.CUBE)
+        {
+            /* The same stand-in dance as a group's rest, one level down: the cube's numbers are
+             * pushed into the model first, then the bone is read back and the cube placed in it. */
+            if (fresh && target.apply() != null)
+            {
+                target.apply().run();
+            }
+
+            Model model = this.cubicModel();
+            ModelGroup group = model == null ? null : model.getGroup(target.bone());
+            MatrixCacheEntry entry = fresh ? this.sampleBone(target.bone()) : this.boneEntry(target.bone());
+
+            if (entry == null || group == null || target.cube() < 0 || target.cube() >= group.cubes.size())
+            {
+                return new Matrix4f();
+            }
+
+            return ModelCubeFrames.cubeGizmoFrame(ModelCubeFrames.groupFrame(entry, group), group.cubes.get(target.cube()), space.placesOnOwnFrame());
         }
 
         Transform transform = target.editor().getTransform();
