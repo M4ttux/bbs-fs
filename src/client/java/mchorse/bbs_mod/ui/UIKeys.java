@@ -1059,8 +1059,10 @@ public class UIKeys
     public static final IKey MODEL_EDITOR_OPEN_MODEL_EDITOR_UNAVAILABLE = L10n.lang("bbs.ui.model_editor.open_model_editor.unavailable");
     public static final IKey MODEL_EDITOR_MODEL_GROUP_NAME = L10n.lang("bbs.ui.model_editor.model.group.name");
     public static final IKey MODEL_EDITOR_MODEL_GROUP_ADD = L10n.lang("bbs.ui.model_editor.model.group.add");
-    public static final IKey MODEL_EDITOR_MODEL_GROUP_DUPLICATE = L10n.lang("bbs.ui.model_editor.model.group.duplicate");
-    public static final IKey MODEL_EDITOR_MODEL_GROUP_REMOVE = L10n.lang("bbs.ui.model_editor.model.group.remove");
+    public static final IKey MODEL_EDITOR_MODEL_CUBE_ADD = L10n.lang("bbs.ui.model_editor.model.cube.add");
+    public static final IKey MODEL_EDITOR_MODEL_DUPLICATE = L10n.lang("bbs.ui.model_editor.model.duplicate");
+    public static final IKey MODEL_EDITOR_MODEL_REMOVE = L10n.lang("bbs.ui.model_editor.model.remove");
+    public static final IKey MODEL_EDITOR_MODEL_REMOVE_CONFIRM_ROWS = L10n.lang("bbs.ui.model_editor.model.remove_confirm_rows");
     public static final IKey MODEL_EDITOR_MODEL_GROUP_REMOVE_CONFIRM = L10n.lang("bbs.ui.model_editor.model.group.remove_confirm");
     public static final IKey MODEL_EDITOR_MODEL_GROUP_REMOVE_CONFIRM_MANY = L10n.lang("bbs.ui.model_editor.model.group.remove_confirm_many");
     public static final IKey MODEL_EDITOR_MODEL_GROUP_CENTER_ANCHOR = L10n.lang("bbs.ui.model_editor.model.group.center_anchor");
@@ -1085,6 +1087,7 @@ public class UIKeys
     public static final IKey MODEL_EDITOR_MODEL_CUBE_PIVOT = L10n.lang("bbs.ui.model_editor.model.cube.pivot");
     public static final IKey MODEL_EDITOR_MODEL_CUBE_ROTATION = L10n.lang("bbs.ui.model_editor.model.cube.rotation");
     public static final IKey MODEL_EDITOR_MODEL_CUBE_INFLATE = L10n.lang("bbs.ui.model_editor.model.cube.inflate");
+    public static final IKey MODEL_EDITOR_MODEL_UNDO_CUBE_ADD = L10n.lang("bbs.ui.model_editor.model.undo.cube_add");
     public static final IKey MODEL_EDITOR_MODEL_UNDO_CUBE_TRANSFORM = L10n.lang("bbs.ui.model_editor.model.undo.cube_transform");
     public static final IKey MODEL_EDITOR_MODEL_UNDO_CUBE_TRANSFORM_MANY = L10n.lang("bbs.ui.model_editor.model.undo.cube_transform_many");
     public static final IKey MODEL_EDITOR_MODEL_UNDO_CUBE_PIVOT = L10n.lang("bbs.ui.model_editor.model.undo.cube_pivot");

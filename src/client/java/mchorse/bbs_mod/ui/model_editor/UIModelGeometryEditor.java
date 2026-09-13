@@ -34,6 +34,7 @@ import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.pose.Transform;
+import org.joml.Vector2f;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
@@ -47,8 +48,8 @@ import java.util.function.Supplier;
 
 /**
  * The model editor of the model panel: the model itself rather than its configuration. Its groups
- * and their cubes as one tree ({@link UIModelTree}); the groups added, duplicated, removed,
- * renamed, dragged among their siblings or into another group — and for the picked one its rest,
+ * and their cubes as one tree ({@link UIModelTree}); rows of either kind added, duplicated,
+ * removed, renamed and dragged where they belong — and for the picked one its rest,
  * the pivot it turns about and the rotation it rests at, on the viewport gizmo and in a transform
  * editor. For a picked cube, its numbers: where it starts, how big it is, the pivot it turns
  * about, its rotation and its inflate. Edits land in the live model (the preview shows them at
@@ -73,7 +74,7 @@ import java.util.function.Supplier;
  * group's rest the cube has scale handles, which grow it about the same point.</p>
  *
  * <p>Several rows can be picked at once (ctrl / shift, as in every list here): the verbs — copy,
- * remove — then work on all the picked groups as one undo step, and so does moving them. The
+ * remove — then work on the whole pick as one undo step, and so does moving it. The
  * fields and the gizmo sit on the FIRST of the pick, and what it is moved by is given to every
  * other picked row, in the same terms — geometry travels with geometry, points with points,
  * keeping the distances between them. Only moving: a name, a size and a rotation are each row's
@@ -95,6 +96,9 @@ public class UIModelGeometryEditor extends UIElement
 
     /** How faintly the cubes under a picked group are outlined, next to a picked cube's full outline. */
     private static final float UNDER_GROUP_ALPHA = 0.35F;
+
+    /** How big a new cube is, in the model's pixels — a quarter of a block, centred on its group's pivot. */
+    private static final float NEW_CUBE_SIDE = 4F;
 
     /** What a group's rest can take: moving and turning, no scale. */
     private static final Gizmo.HandleMask ANCHOR_MASK = Gizmo.HandleMask.of(
@@ -118,6 +122,7 @@ public class UIModelGeometryEditor extends UIElement
     private final UIScrollView page;
     private final UIModelTree tree;
     private final UISearchList<ModelNode> search;
+    private final UIIcon addCube;
     private final UIIcon dupe;
     private final UIIcon remove;
     private final UIIcon ikBones;
@@ -170,19 +175,22 @@ public class UIModelGeometryEditor extends UIElement
         this.tree = new UIModelTree((list) -> this.fillSelection())
             .onReorder(this::moveNode)
             .onDrop(this::dropNode);
-        this.tree.context(this::fillGroupMenu);
+        this.tree.context(this::fillNodeMenu);
         this.search = new UISearchList<>(this.tree);
         this.search.label(UIKeys.GENERAL_SEARCH);
         this.search.h(20 + UIModelTree.ROW * 6).expand();
 
-        /* The verbs over the tree, the list idiom of the panel: add goes under the picked group */
+        /* The verbs over the tree, the list idiom of the panel: adding goes under the picked row —
+         * a group, or a cube in its group — and the rest work on the pick, however it is mixed. */
         UIIcon add = new UIIcon(Icons.ADD, (b) -> this.addGroup());
 
         add.tooltip(UIKeys.MODEL_EDITOR_MODEL_GROUP_ADD);
-        this.dupe = new UIIcon(Icons.DUPE, (b) -> this.duplicateGroups(this.pickedGroups()));
-        this.dupe.tooltip(UIKeys.MODEL_EDITOR_MODEL_GROUP_DUPLICATE);
-        this.remove = new UIIcon(Icons.REMOVE, (b) -> this.askRemoveGroups(this.pickedGroups()));
-        this.remove.tooltip(UIKeys.MODEL_EDITOR_MODEL_GROUP_REMOVE);
+        this.addCube = new UIIcon(Icons.BLOCK, (b) -> this.addCube());
+        this.addCube.tooltip(UIKeys.MODEL_EDITOR_MODEL_CUBE_ADD);
+        this.dupe = new UIIcon(Icons.DUPE, (b) -> this.duplicateNodes());
+        this.dupe.tooltip(UIKeys.MODEL_EDITOR_MODEL_DUPLICATE);
+        this.remove = new UIIcon(Icons.REMOVE, (b) -> this.askRemoveNodes());
+        this.remove.tooltip(UIKeys.MODEL_EDITOR_MODEL_REMOVE);
         this.ikBones = new UIIcon(Icons.IK, (b) -> this.pickIKParent());
         this.ikBones.tooltip(UIKeys.MODEL_EDITOR_MODEL_GROUP_IK_BONES);
 
@@ -253,7 +261,7 @@ public class UIModelGeometryEditor extends UIElement
         this.body.column(UIConstants.MARGIN).vertical().stretch();
         this.body.add(UI.labelRow(UIKeys.MODEL_EDITOR_MODEL_GROUP_NAME, this.name), this.transform, this.cubeTransform, this.inflateRow);
 
-        this.page = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING, UI.strip(add, this.dupe, this.remove, this.ikBones), this.search, this.body);
+        this.page = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING, UI.strip(add, this.addCube, this.dupe, this.remove, this.ikBones), this.search, this.body);
         this.page.full(this);
         this.add(this.page);
 
@@ -270,11 +278,13 @@ public class UIModelGeometryEditor extends UIElement
     {
         IKey category = UIKeys.MODEL_EDITOR_TITLE;
         Supplier<Boolean> open = () -> this.model != null;
-        Supplier<Boolean> any = () -> !this.pickedGroups().isEmpty();
+        Supplier<Boolean> any = () -> !this.tree.getCurrent().isEmpty();
+        Supplier<Boolean> inGroup = () -> this.leaderNode() != null;
 
         this.tree.keys().register(Keys.MODEL_EDITOR_GROUP_ADD, this::addGroup).inside().active(open).category(category);
-        this.tree.keys().register(Keys.MODEL_EDITOR_GROUP_DUPE, () -> this.duplicateGroups(this.pickedGroups())).inside().active(any).category(category);
-        this.tree.keys().register(Keys.DELETE, () -> this.askRemoveGroups(this.pickedGroups())).inside().active(any).category(category);
+        this.tree.keys().register(Keys.MODEL_EDITOR_CUBE_ADD, this::addCube).inside().active(inGroup).category(category);
+        this.tree.keys().register(Keys.MODEL_EDITOR_GROUP_DUPE, this::duplicateNodes).inside().active(any).category(category);
+        this.tree.keys().register(Keys.DELETE, this::askRemoveNodes).inside().active(any).category(category);
         this.tree.keys().register(Keys.MODEL_EDITOR_GROUP_RENAME, this::editName).inside().active(this::single).category(category);
         this.tree.keys().register(Keys.MODEL_EDITOR_GROUP_IK_BONES, this::pickIKParent).inside().active(this::singleGroup).category(category);
     }
@@ -436,7 +446,7 @@ public class UIModelGeometryEditor extends UIElement
     }
 
     /** Pick several groups at once — what a verb on several leaves behind. */
-    private void selectAll(List<String> ids)
+    private void selectGroups(List<String> ids)
     {
         List<ModelNode> nodes = new ArrayList<>();
 
@@ -445,6 +455,12 @@ public class UIModelGeometryEditor extends UIElement
             nodes.add(ModelNode.group(id));
         }
 
+        this.selectAll(nodes);
+    }
+
+    /** Pick several rows at once — what a verb on several leaves behind. */
+    private void selectAll(List<ModelNode> nodes)
+    {
         if (!nodes.isEmpty())
         {
             this.tree.reveal(nodes.get(0));
@@ -551,7 +567,7 @@ public class UIModelGeometryEditor extends UIElement
         ModelCube cube = this.leadCube();
 
         boolean any = group != null || cube != null;
-        boolean groups = !this.pickedGroups().isEmpty();
+        boolean picked = !this.tree.getCurrent().isEmpty();
         boolean single = this.single();
         boolean singleGroup = this.singleGroup();
         boolean singleCube = single && cube != null;
@@ -575,8 +591,9 @@ public class UIModelGeometryEditor extends UIElement
         UIUtils.setEnabledDeep(this.pivotRow, singleCube);
         this.inflate.setEnabled(singleCube);
         this.name.setEnabled(single);
-        this.dupe.setEnabled(groups);
-        this.remove.setEnabled(groups);
+        this.addCube.setEnabled(leader != null);
+        this.dupe.setEnabled(picked);
+        this.remove.setEnabled(picked);
         this.ikBones.setEnabled(singleGroup);
 
         this.page.resize();
@@ -585,9 +602,9 @@ public class UIModelGeometryEditor extends UIElement
 
     /**
      * The row's menu offers the verbs of the strip. A row outside the pick becomes the pick; a row
-     * already in it leaves the pick alone, so a menu opened on several groups acts on all of them.
+     * already in it leaves the pick alone, so a menu opened on several rows acts on all of them.
      */
-    private void fillGroupMenu(ContextMenuManager menu)
+    private void fillNodeMenu(ContextMenuManager menu)
     {
         ModelNode node = this.model == null ? null : this.tree.atCursor(this.getContext());
 
@@ -601,14 +618,13 @@ public class UIModelGeometryEditor extends UIElement
             this.select(node);
         }
 
-        List<ModelGroup> picked = this.pickedGroups();
-
         menu.icon(MenuVerb.ADD, this::addGroup).label(UIKeys.MODEL_EDITOR_MODEL_GROUP_ADD);
+        menu.action(Icons.BLOCK, UIKeys.MODEL_EDITOR_MODEL_CUBE_ADD, this::addCube);
 
-        if (!picked.isEmpty())
+        if (!this.tree.getCurrent().isEmpty())
         {
-            menu.action(Icons.DUPE, UIKeys.MODEL_EDITOR_MODEL_GROUP_DUPLICATE, () -> this.duplicateGroups(picked));
-            menu.icon(MenuVerb.REMOVE, () -> this.askRemoveGroups(picked)).label(UIKeys.MODEL_EDITOR_MODEL_GROUP_REMOVE);
+            menu.action(Icons.DUPE, UIKeys.MODEL_EDITOR_MODEL_DUPLICATE, this::duplicateNodes);
+            menu.icon(MenuVerb.REMOVE, this::askRemoveNodes).label(UIKeys.MODEL_EDITOR_MODEL_REMOVE);
         }
 
         if (this.getSelected() != null)
@@ -736,8 +752,10 @@ public class UIModelGeometryEditor extends UIElement
     }
 
     /**
-     * The picked rows that no other picked row carries — see {@link #distribute}. A group's subtree
-     * carries the groups and the cubes below it; a cube carries nothing.
+     * The picked rows that no other picked row carries: a group's subtree carries the groups and
+     * the cubes below it, a cube carries nothing. What is carried comes along on its own, whether
+     * the pick is being moved ({@link #distribute}), copied or removed, and doing it again to a
+     * carried row would do it twice.
      */
     private List<ModelNode> outermostNodes()
     {
@@ -1168,8 +1186,9 @@ public class UIModelGeometryEditor extends UIElement
         }
     }
 
-    /* The structure: groups added, copied, removed, renamed, moved — each one undo step, settled
-     * and shown through the panel right after. */
+    /* The structure: rows added, copied, removed, renamed, moved — each one undo step, settled and
+     * shown through the panel right after. A verb acts on the rows nothing else in the pick carries
+     * ({@link #outermostNodes}), so a group and a cube of it never get it twice. */
 
     /** An edit of the model's structure: snapshot, change, push, settle. */
     private void edit(IKey label, Runnable mutation)
@@ -1290,46 +1309,117 @@ public class UIModelGeometryEditor extends UIElement
             this.addBone(end, group, pivot);
             this.addBone(pole, this.addBone(controller, parent, pivot), pivot);
         });
-        this.selectAll(List.of(end, controller));
+        this.selectGroups(List.of(end, controller));
     }
 
     /**
-     * A copy of every picked group and everything in it, each right after its original among the
-     * siblings, as one undo step; the copies become the pick. A group inside another picked one is
-     * left out: its copy already comes along inside that one.
+     * A new cube in the leading row's group — right under a picked cube, else last — sitting on the
+     * group's pivot, four pixels on a side. It comes wrapped in the texture's top left corner
+     * rather than bare: a cube with no faces at all draws nothing, and a new cube you can't see
+     * reads as a bug rather than as a cube waiting to be unwrapped.
      */
-    private void duplicateGroups(List<ModelGroup> picked)
+    private void addCube()
     {
-        List<ModelGroup> groups = outermost(picked);
+        ModelNode leader = this.leaderNode();
+        ModelGroup group = leader == null ? null : this.model.getGroup(leader.group());
 
-        if (groups.isEmpty())
+        if (group == null)
+        {
+            return;
+        }
+
+        ModelCube cube = new ModelCube();
+        float half = NEW_CUBE_SIDE / 2F;
+
+        cube.size.set(NEW_CUBE_SIDE, NEW_CUBE_SIDE, NEW_CUBE_SIDE);
+        cube.pivot.set(group.initial.translate);
+        cube.origin.set(cube.pivot).sub(half, half, half);
+        cube.setupBoxUV(new Vector2f(0F, 0F), false);
+        cube.generateQuads(this.model.textureWidth, this.model.textureHeight);
+
+        int at = leader.isCube() ? Math.min(leader.cube() + 1, group.cubes.size()) : group.cubes.size();
+
+        this.edit(UIKeys.MODEL_EDITOR_MODEL_UNDO_CUBE_ADD.format(group.id), () -> group.cubes.add(at, cube));
+        this.select(ModelNode.cube(group.id, at));
+    }
+
+    /**
+     * A copy of every picked row, each right after its original — a group among its siblings with
+     * everything inside it, a cube among its group's cubes — as one undo step; the copies become
+     * the pick. A row inside a picked group is left out: its copy already comes along inside that
+     * one.
+     */
+    private void duplicateNodes()
+    {
+        List<ModelNode> nodes = this.outermostNodes();
+
+        if (this.model == null || nodes.isEmpty())
         {
             return;
         }
 
         Set<String> taken = new HashSet<>();
-        List<ModelGroup> copies = new ArrayList<>();
-        List<String> names = new ArrayList<>();
+        List<ModelGroup> groups = new ArrayList<>();
+        List<ModelGroup> groupCopies = new ArrayList<>();
+        List<ModelNode> cubes = new ArrayList<>();
+        List<ModelCube> cubeCopies = new ArrayList<>();
 
-        for (ModelGroup group : groups)
+        for (ModelNode node : nodes)
         {
-            ModelGroup copy = this.copy(group, taken);
+            ModelGroup group = this.model.getGroup(node.group());
 
-            copies.add(copy);
-            names.add(copy.id);
+            if (node.isGroup())
+            {
+                groups.add(group);
+                groupCopies.add(this.copy(group, taken));
+            }
+            else if (node.cube() < group.cubes.size())
+            {
+                cubes.add(node);
+                cubeCopies.add(this.copyCube(group.cubes.get(node.cube())));
+            }
         }
 
-        this.edit(label(UIKeys.MODEL_EDITOR_MODEL_UNDO_DUPLICATE, UIKeys.MODEL_EDITOR_MODEL_UNDO_DUPLICATE_MANY, groups), () ->
+        int[] landed = new int[cubes.size()];
+
+        this.edit(this.label(UIKeys.MODEL_EDITOR_MODEL_UNDO_DUPLICATE, UIKeys.MODEL_EDITOR_MODEL_UNDO_DUPLICATE_MANY, nodes), () ->
         {
             for (int i = 0; i < groups.size(); i++)
             {
                 ModelGroup group = groups.get(i);
                 List<ModelGroup> siblings = this.siblings(group);
 
-                siblings.add(siblings.indexOf(group) + 1, copies.get(i));
+                siblings.add(siblings.indexOf(group) + 1, groupCopies.get(i));
+            }
+
+            /* Back to front: a copy slipped in after its original pushes every cube behind it along,
+             * and the numbers of the ones still to be copied must not move under them. */
+            for (int i = cubes.size() - 1; i >= 0; i--)
+            {
+                ModelNode node = cubes.get(i);
+
+                this.model.getGroup(node.group()).cubes.add(node.cube() + 1, cubeCopies.get(i));
+            }
+
+            for (int i = 0; i < cubes.size(); i++)
+            {
+                landed[i] = this.model.getGroup(cubes.get(i).group()).cubes.indexOf(cubeCopies.get(i));
             }
         });
-        this.selectAll(names);
+
+        List<ModelNode> pick = new ArrayList<>();
+
+        for (ModelGroup copy : groupCopies)
+        {
+            pick.add(ModelNode.group(copy.id));
+        }
+
+        for (int i = 0; i < cubes.size(); i++)
+        {
+            pick.add(ModelNode.cube(cubes.get(i).group(), landed[i]));
+        }
+
+        this.selectAll(pick);
     }
 
     /** A group and its subtree as new groups under new names, the cubes rebuilt from their data. */
@@ -1348,76 +1438,142 @@ public class UIModelGeometryEditor extends UIElement
         return copy;
     }
 
-    /** Removing takes the subtrees and their cubes with them, so it's asked about first. */
-    private void askRemoveGroups(List<ModelGroup> picked)
+    /** A cube as a new one with the same numbers, its name along: nothing refers to a cube by name. */
+    private ModelCube copyCube(ModelCube cube)
     {
-        List<ModelGroup> groups = outermost(picked);
+        ModelCube copy = new ModelCube();
 
-        if (groups.isEmpty())
+        copy.fromData(cube.toData());
+        copy.generateQuads(this.model.textureWidth, this.model.textureHeight);
+
+        return copy;
+    }
+
+    /**
+     * Removing a group takes its subtree and its cubes with it, so a pick with any group in it is
+     * asked about first. Cubes go without a question, the way a row of any other list goes.
+     */
+    private void askRemoveNodes()
+    {
+        List<ModelNode> nodes = this.outermostNodes();
+        int groups = 0;
+
+        for (ModelNode node : nodes)
+        {
+            groups += node.isGroup() ? 1 : 0;
+        }
+
+        if (nodes.isEmpty())
         {
             return;
         }
 
-        IKey question = groups.size() == 1
-            ? UIKeys.MODEL_EDITOR_MODEL_GROUP_REMOVE_CONFIRM.format(groups.get(0).id)
-            : UIKeys.MODEL_EDITOR_MODEL_GROUP_REMOVE_CONFIRM_MANY.format(groups.size());
+        if (groups == 0)
+        {
+            this.removeNodes(nodes);
+
+            return;
+        }
+
+        IKey question;
+
+        if (groups < nodes.size())
+        {
+            question = UIKeys.MODEL_EDITOR_MODEL_REMOVE_CONFIRM_ROWS.format(nodes.size());
+        }
+        else if (nodes.size() == 1)
+        {
+            question = UIKeys.MODEL_EDITOR_MODEL_GROUP_REMOVE_CONFIRM.format(nodes.get(0).group());
+        }
+        else
+        {
+            question = UIKeys.MODEL_EDITOR_MODEL_GROUP_REMOVE_CONFIRM_MANY.format(nodes.size());
+        }
 
         UIOverlay.addOverlay(this.getContext(), new UIConfirmOverlayPanel(
-            UIKeys.MODEL_EDITOR_MODEL_GROUP_REMOVE,
+            UIKeys.MODEL_EDITOR_MODEL_REMOVE,
             question,
             (confirm) ->
             {
                 if (confirm)
                 {
-                    this.removeGroups(groups);
+                    this.removeNodes(nodes);
                 }
             }
         ));
     }
 
-    private void removeGroups(List<ModelGroup> groups)
+    private void removeNodes(List<ModelNode> nodes)
     {
+        List<ModelGroup> groups = new ArrayList<>();
+        List<ModelGroup> owners = new ArrayList<>();
+        List<ModelCube> cubes = new ArrayList<>();
+        int highest = Integer.MAX_VALUE;
+
+        for (ModelNode node : nodes)
+        {
+            ModelGroup group = this.model.getGroup(node.group());
+            int row = this.tree.getList().indexOf(node);
+
+            if (row >= 0)
+            {
+                highest = Math.min(highest, row);
+            }
+
+            if (node.isGroup())
+            {
+                groups.add(group);
+            }
+            else if (node.cube() < group.cubes.size())
+            {
+                owners.add(group);
+                cubes.add(group.cubes.get(node.cube()));
+            }
+        }
+
+        int above = highest;
+
         this.tree.deselect();
-        this.edit(label(UIKeys.MODEL_EDITOR_MODEL_UNDO_REMOVE, UIKeys.MODEL_EDITOR_MODEL_UNDO_REMOVE_MANY, groups), () ->
+        this.edit(this.label(UIKeys.MODEL_EDITOR_MODEL_UNDO_REMOVE, UIKeys.MODEL_EDITOR_MODEL_UNDO_REMOVE_MANY, nodes), () ->
         {
             for (ModelGroup group : groups)
             {
                 this.siblings(group).remove(group);
             }
+
+            /* By the cube itself, not by its number: every cube one of them takes moves the rest. */
+            for (int i = 0; i < cubes.size(); i++)
+            {
+                owners.get(i).cubes.remove(cubes.get(i));
+            }
         });
-        this.fillSelection();
-    }
 
-    /**
-     * The picked groups with the ones inside another of them left out: a verb on a group is a verb
-     * on its whole subtree, so acting on an ancestor and its descendant both would do it twice.
-     */
-    private static List<ModelGroup> outermost(List<ModelGroup> groups)
-    {
-        List<ModelGroup> outer = new ArrayList<>();
+        /* The row above what went takes the pick, so a run of deletions carries on from there. */
+        List<ModelNode> rows = this.tree.getList();
 
-        for (ModelGroup group : groups)
+        if (rows.isEmpty())
         {
-            boolean inside = false;
-
-            for (ModelGroup parent = group.parent; parent != null && !inside; parent = parent.parent)
-            {
-                inside = groups.contains(parent);
-            }
-
-            if (!inside)
-            {
-                outer.add(group);
-            }
+            this.fillSelection();
         }
-
-        return outer;
+        else
+        {
+            this.select(rows.get(Math.max(0, Math.min(above - 1, rows.size() - 1))));
+        }
     }
 
-    /** The undo label for a verb on one group (its name) or on several (how many). */
-    private static IKey label(IKey one, IKey many, List<ModelGroup> groups)
+    /** The undo label for a verb on one row (what it's called) or on several (how many). */
+    private IKey label(IKey one, IKey many, List<ModelNode> nodes)
     {
-        return groups.size() == 1 ? one.format(groups.get(0).id) : many.format(groups.size());
+        return nodes.size() == 1 ? one.format(this.nodeLabel(nodes.get(0))) : many.format(nodes.size());
+    }
+
+    /** What a row is called: a group's name, or what the tree calls the cube. */
+    private String nodeLabel(ModelNode node)
+    {
+        ModelGroup group = this.model == null ? null : this.model.getGroup(node.group());
+        ModelCube cube = node.isCube() && group != null && node.cube() < group.cubes.size() ? group.cubes.get(node.cube()) : null;
+
+        return cube == null ? node.group() : UIModelTree.cubeLabel(cube, node.cube());
     }
 
     /** The name field, committed: the picked row takes the name, whichever kind it is. */
@@ -1486,22 +1642,83 @@ public class UIModelGeometryEditor extends UIElement
 
     /* Drops, as the tree reports them */
 
-    /** A row dropped between rows; only groups travel for now. */
+    /** A row dropped between rows. */
     private void moveNode(ModelNode dragged, ModelNode before)
     {
         if (dragged.isGroup())
         {
             this.moveGroup(dragged.group(), before);
         }
+        else
+        {
+            this.moveCube(dragged, before);
+        }
     }
 
-    /** A row dropped onto a group's row; only groups travel for now. */
+    /** A row dropped onto a group's row: inside it, last. */
     private void dropNode(ModelNode dragged, String parentId)
     {
         if (dragged.isGroup())
         {
             this.reparentGroup(dragged.group(), parentId);
         }
+        else if (this.model != null)
+        {
+            this.moveCubeInto(dragged, this.model.getGroup(parentId), -1);
+        }
+    }
+
+    /**
+     * A cube dropped between rows lands in the group the caret is inside of: above another cube, in
+     * its place among that group's cubes; above a group's row, at the end of the cubes of the group
+     * that row sits in — which is exactly where the caret is drawn, after the last cube and before
+     * the first group inside. A cube has nowhere to live at the root, so a caret there, or past the
+     * last row, is the one drop it has no answer for.
+     */
+    private void moveCube(ModelNode dragged, ModelNode before)
+    {
+        ModelGroup target = before == null || this.model == null ? null : this.model.getGroup(before.group());
+
+        if (target == null)
+        {
+            return;
+        }
+
+        if (before.isCube())
+        {
+            this.moveCubeInto(dragged, target, before.cube());
+        }
+        else
+        {
+            this.moveCubeInto(dragged, target.parent, -1);
+        }
+    }
+
+    /** A cube into {@code to} at {@code index} — the end for -1 — as one undo step; it stays picked. */
+    private void moveCubeInto(ModelNode dragged, ModelGroup to, int index)
+    {
+        ModelGroup from = this.model == null ? null : this.model.getGroup(dragged.group());
+
+        if (from == null || to == null || dragged.cube() >= from.cubes.size())
+        {
+            return;
+        }
+
+        ModelCube cube = from.cubes.get(dragged.cube());
+        int[] landed = new int[1];
+
+        this.edit(UIKeys.MODEL_EDITOR_MODEL_UNDO_MOVE.format(this.nodeLabel(dragged)), () ->
+        {
+            from.cubes.remove(dragged.cube());
+
+            /* Taking the cube out first pulls everything behind it down a place — the place it was
+             * headed for included, when that is among the cubes it just left. */
+            int at = index < 0 ? to.cubes.size() : index - (to == from && dragged.cube() < index ? 1 : 0);
+
+            to.cubes.add(Math.max(0, Math.min(at, to.cubes.size())), cube);
+            landed[0] = to.cubes.indexOf(cube);
+        });
+        this.select(ModelNode.cube(to.id, landed[0]));
     }
 
     /**

@@ -32,8 +32,10 @@ import java.util.function.Consumer;
  * the group lands right before the row below, whatever depth that row sits at; dropped past the
  * last row it goes to the end of the roots. Dropped ONTO a group's row (its middle, the base
  * list's rule) it goes inside that group. Nothing snaps and nothing is refused except a drop into
- * the group's own subtree, which would unhook it from the model. What a drop means for the model
- * is the editor's to say ({@link #onReorder}, {@link #onDrop}); the tree only reports it.</p>
+ * the group's own subtree, which would unhook it from the model. A cube travels the same way, and
+ * lands in the group the caret is inside of — it has nowhere else to live, so a caret at the root
+ * is the one drop it has no answer for. What a drop means for the model is the editor's to say
+ * ({@link #onReorder}, {@link #onDrop}); the tree only reports it.</p>
  *
  * <p>A search shows its matches flat: without the rows above them, branches would be a lie about
  * the structure — and there is nothing to fold in a flat list, so the arrows go too.</p>
@@ -269,17 +271,12 @@ public class UIModelTree extends UIList<ModelNode>
     @Override
     protected List<ModelNode> dragPayload(ModelNode item)
     {
-        /* One group at a time: the move is told as "this one, before that one", which says nothing
-         * about where the rest of a pick would go. Cubes stay where they are for now. */
-        if (item.isCube() || super.dragPayload(item) == null)
-        {
-            return null;
-        }
-
-        return Collections.singletonList(item);
+        /* One row at a time: the move is told as "this one, before that one", which says nothing
+         * about where the rest of a pick would go. */
+        return super.dragPayload(item) == null ? null : Collections.singletonList(item);
     }
 
-    /** A group's row takes a drop from any group but itself and the ones inside it. */
+    /** A group's row takes a drop from any cube, and from any group but itself and the ones inside it. */
     @Override
     protected boolean acceptsDrop(ModelNode row)
     {
