@@ -15,7 +15,6 @@ import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.RotationAxis;
 import org.joml.Matrix4f;
-import org.joml.Vector3f;
 
 public class Draw
 {
@@ -31,12 +30,20 @@ public class Draw
 
     public static void renderBox(MatrixStack stack, double x, double y, double z, double w, double h, double d, float r, float g, float b, float a)
     {
+        renderBox(stack, x, y, z, w, h, d, r, g, b, a, 1 / 96F + (float) (Math.sqrt(w * w + h + h + d + d) / 2000));
+    }
+
+    /**
+     * The same box of bars with their half-thickness given, in the units of the box — for an
+     * outline that has to sit finer than the default bars on a small box.
+     */
+    public static void renderBox(MatrixStack stack, double x, double y, double z, double w, double h, double d, float r, float g, float b, float a, float t)
+    {
         stack.push();
         stack.translate(x, y, z);
         float fw = (float) w;
         float fh = (float) h;
         float fd = (float) d;
-        float t = 1 / 96F + (float) (Math.sqrt(w * w + h + h + d + d) / 2000);
 
         BufferBuilder builder = Tessellator.getInstance().getBuffer();
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
@@ -64,68 +71,6 @@ public class Draw
         BufferRenderer.drawWithGlobalProgram(builder.end());
 
         stack.pop();
-    }
-
-    /**
-     * The twelve edges of a box as lines {@code width} pixels wide on screen, whatever the distance
-     * — where {@link #renderBox}'s bars have a thickness in the world, and swell as the camera
-     * closes in until a small box reads as a solid lump. Drawn with vanilla's line program, the one
-     * that outlines the block the player looks at, so a wide line holds on every driver.
-     */
-    public static void renderBoxLines(MatrixStack stack, double x, double y, double z, double w, double h, double d, float r, float g, float b, float a, float width)
-    {
-        Matrix4f matrix = stack.peek().getPositionMatrix();
-        float x1 = (float) x;
-        float y1 = (float) y;
-        float z1 = (float) z;
-        float x2 = (float) (x + w);
-        float y2 = (float) (y + h);
-        float z2 = (float) (z + d);
-
-        BufferBuilder builder = Tessellator.getInstance().getBuffer();
-        RenderSystem.setShader(GameRenderer::getRenderTypeLinesProgram);
-        RenderSystem.lineWidth(width);
-
-        builder.begin(VertexFormat.DrawMode.LINES, VertexFormats.LINES);
-
-        for (float y0 : new float[] {y1, y2})
-        {
-            line(builder, matrix, x1, y0, z1, x2, y0, z1, r, g, b, a);
-            line(builder, matrix, x2, y0, z1, x2, y0, z2, r, g, b, a);
-            line(builder, matrix, x2, y0, z2, x1, y0, z2, r, g, b, a);
-            line(builder, matrix, x1, y0, z2, x1, y0, z1, r, g, b, a);
-        }
-
-        line(builder, matrix, x1, y1, z1, x1, y2, z1, r, g, b, a);
-        line(builder, matrix, x2, y1, z1, x2, y2, z1, r, g, b, a);
-        line(builder, matrix, x2, y1, z2, x2, y2, z2, r, g, b, a);
-        line(builder, matrix, x1, y1, z2, x1, y2, z2, r, g, b, a);
-
-        BufferRenderer.drawWithGlobalProgram(builder.end());
-        RenderSystem.lineWidth(1F);
-    }
-
-    /**
-     * One edge for the line program. It widens a line across its direction on screen, which it
-     * reads from the vertex normal — so the ends are placed here already transformed, and the
-     * normal is the direction between them in that same space; a flat edge has none and is left
-     * out rather than handed a zero direction.
-     */
-    private static void line(BufferBuilder builder, Matrix4f matrix, float x1, float y1, float z1, float x2, float y2, float z2, float r, float g, float b, float a)
-    {
-        Vector3f start = matrix.transformPosition(x1, y1, z1, new Vector3f());
-        Vector3f end = matrix.transformPosition(x2, y2, z2, new Vector3f());
-        Vector3f direction = new Vector3f(end).sub(start);
-
-        if (direction.lengthSquared() < 1.0E-12F)
-        {
-            return;
-        }
-
-        direction.normalize();
-
-        builder.vertex(start.x, start.y, start.z).color(r, g, b, a).normal(direction.x, direction.y, direction.z).next();
-        builder.vertex(end.x, end.y, end.z).color(r, g, b, a).normal(direction.x, direction.y, direction.z).next();
     }
 
     /**

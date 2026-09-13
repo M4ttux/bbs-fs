@@ -90,6 +90,12 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
     /** The cube under the cursor — in the viewport, or its row in the tree: white, and faint next to the pick's own outlines. */
     static final int HOVER_COLOR = Colors.setA(Colors.WHITE, 0.6F);
 
+    /**
+     * Half the thickness of a cube's outline bars, in blocks: half of what {@link Draw#renderBox}
+     * draws by default, whose bars outweigh a cube of a few pixels.
+     */
+    private static final float OUTLINE_THICKNESS = 1 / 192F;
+
     /** A click on the model: the bone, and the cube of it under the cursor (-1 without cube picking); whether the click was taken. */
     @FunctionalInterface
     public interface Pick
@@ -425,15 +431,6 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
         RenderSystem.enableDepthTest();
     }
 
-    /**
-     * How wide an outline is on screen: the width vanilla outlines the block the player looks at
-     * with, and wider on a screen bigger than 1080p the same way it grows there.
-     */
-    private static float outlineWidth()
-    {
-        return Math.max(2.5F, MinecraftClient.getInstance().getWindow().getFramebufferWidth() / 1920F * 2.5F);
-    }
-
     /** A group read as the shape it carries: every cube of it and of every group under it. */
     private void renderSubtreeOutline(MatrixStack stack, Model model, ModelGroup group, int color)
     {
@@ -469,7 +466,7 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
 
         stack.push();
         MatrixStackUtils.multiply(stack, ModelCubeFrames.cubeFrame(ModelCubeFrames.groupFrame(entry, group), cube));
-        Draw.renderBoxLines(stack, min.x, min.y, min.z, max.x - min.x, max.y - min.y, max.z - min.z, Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color), outlineWidth());
+        Draw.renderBox(stack, min.x, min.y, min.z, max.x - min.x, max.y - min.y, max.z - min.z, Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color), OUTLINE_THICKNESS);
         stack.pop();
     }
 
