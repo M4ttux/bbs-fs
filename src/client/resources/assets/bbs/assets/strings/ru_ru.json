@@ -1466,7 +1466,7 @@
 	"bbs.ui.model_editor.model.undo.texture_size": "Размер развёртки: %s×%s",
 	"bbs.ui.model_editor.model.undo.cube_add": "Добавить куб: %s",
 	"bbs.ui.model_editor.model.undo.cube_transform": "Куб: %s",
-	"bbs.ui.model_editor.model.undo.cube_transform_many": "Перемещение строк (%s)",
+	"bbs.ui.model_editor.model.undo.cube_transform_many": "Кубы (%s)",
 	"bbs.ui.model_editor.model.undo.cube_pivot": "Якорь куба: %s",
 	"bbs.ui.model_editor.model.undo.cube_inflate": "Раздутие куба: %s",
 	"bbs.ui.model_editor.model.undo.cube_rename": "Переименовать куб: %s → %s",
