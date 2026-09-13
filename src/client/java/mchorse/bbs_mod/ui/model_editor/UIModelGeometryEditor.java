@@ -124,8 +124,6 @@ public class UIModelGeometryEditor extends UIElement
     private final UIModelTree tree;
     private final UISearchList<ModelNode> search;
     private final UIIcon addCube;
-    private final UIIcon dupe;
-    private final UIIcon remove;
     private final UIIcon ikBones;
     private final UIElement body;
     private final UITextbox name;
@@ -185,16 +183,13 @@ public class UIModelGeometryEditor extends UIElement
         this.search.h(20 + UIModelTree.ROW * 6).expand();
 
         /* The verbs over the tree, the list idiom of the panel: adding goes under the picked row —
-         * a group, or a cube in its group — and the rest work on the pick, however it is mixed. */
+         * a group, or a cube in its group. Duplicating and removing work on the pick from the row's
+         * menu and their keys, and take no room here. */
         UIIcon add = new UIIcon(Icons.ADD, (b) -> this.addGroup());
 
         add.tooltip(UIKeys.MODEL_EDITOR_MODEL_GROUP_ADD);
         this.addCube = new UIIcon(Icons.BLOCK, (b) -> this.addCube());
         this.addCube.tooltip(UIKeys.MODEL_EDITOR_MODEL_CUBE_ADD);
-        this.dupe = new UIIcon(Icons.DUPE, (b) -> this.duplicateNodes());
-        this.dupe.tooltip(UIKeys.MODEL_EDITOR_MODEL_DUPLICATE);
-        this.remove = new UIIcon(Icons.REMOVE, (b) -> this.askRemoveNodes());
-        this.remove.tooltip(UIKeys.MODEL_EDITOR_MODEL_REMOVE);
         this.ikBones = new UIIcon(Icons.IK, (b) -> this.pickIKParent());
         this.ikBones.tooltip(UIKeys.MODEL_EDITOR_MODEL_GROUP_IK_BONES);
 
@@ -270,7 +265,7 @@ public class UIModelGeometryEditor extends UIElement
         this.body.column(UIConstants.MARGIN).vertical().stretch();
         this.body.add(UI.labelRow(UIKeys.MODEL_EDITOR_MODEL_GROUP_NAME, this.name), this.transform, this.cubeTransform, this.inflateRow);
 
-        this.page = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING, UI.strip(add, this.addCube, this.dupe, this.remove, this.ikBones), this.search, this.body);
+        this.page = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING, UI.strip(add, this.addCube, this.ikBones), this.search, this.body);
         this.page.full(this);
         this.add(this.page);
 
@@ -281,7 +276,7 @@ public class UIModelGeometryEditor extends UIElement
      * The tree's verbs on the keyboard. Registered on the tree rather than on the editor, and only
      * while the cursor is over it — the same keys mean other things elsewhere in the panel, and
      * Delete would otherwise reach the tree from anywhere. Each key answers to the same rule as its
-     * icon, so a verb with nothing to act on simply isn't there.
+     * verb in the strip or the menu, so a verb with nothing to act on simply isn't there.
      */
     private void registerKeybinds()
     {
@@ -619,7 +614,6 @@ public class UIModelGeometryEditor extends UIElement
         ModelCube cube = this.leadCube();
 
         boolean any = group != null || cube != null;
-        boolean picked = !this.tree.getCurrent().isEmpty();
         boolean single = this.single();
         boolean singleGroup = this.singleGroup();
         boolean singleCube = single && cube != null;
@@ -644,8 +638,6 @@ public class UIModelGeometryEditor extends UIElement
         this.inflate.setEnabled(singleCube);
         this.name.setEnabled(single);
         this.addCube.setEnabled(leader != null);
-        this.dupe.setEnabled(picked);
-        this.remove.setEnabled(picked);
         this.ikBones.setEnabled(singleGroup);
 
         this.cubeUV.fill();
@@ -655,8 +647,9 @@ public class UIModelGeometryEditor extends UIElement
     }
 
     /**
-     * The row's menu offers the verbs of the strip. A row outside the pick becomes the pick; a row
-     * already in it leaves the pick alone, so a menu opened on several rows acts on all of them.
+     * The row's menu offers the verbs of the strip, and duplicating and removing, which only live
+     * here and on their keys. A row outside the pick becomes the pick; a row already in it leaves
+     * the pick alone, so a menu opened on several rows acts on all of them.
      */
     private void fillNodeMenu(ContextMenuManager menu)
     {
