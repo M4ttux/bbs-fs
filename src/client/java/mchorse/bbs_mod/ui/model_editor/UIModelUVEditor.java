@@ -16,7 +16,8 @@ import mchorse.bbs_mod.utils.colors.Colors;
  * The texture with the picked cube's sides drawn on it, the way an outliner's UV view shows them:
  * every side of the cube is a rectangle over the sheet, the one being worked on is lit and carries
  * four corner handles. Clicking a rectangle picks that side, dragging inside it slides the side
- * over the texture, dragging a handle stretches it — all in whole pixels of the sheet.
+ * over the texture, dragging a handle stretches it — all in whole pixels of the sheet. What a click
+ * would take lights up under the cursor first.
  *
  * <p>Which side is picked, and what a drag writes, belong to the panel around it
  * ({@link UIModelCubeUV}): this is the picture and the mouse, and every change goes back out
@@ -103,34 +104,61 @@ public class UIModelUVEditor extends UICanvasEditor
         }
 
         ModelUV uv = this.cube.getUV(this.host.face());
+        int corner = this.handleAt(uv, context.mouseX, context.mouseY);
 
-        /* A corner of the side already picked comes first: its handles sit on the rectangle's edge,
-         * where the rectangle itself would otherwise take the click. */
-        if (uv != null)
+        if (corner >= 0)
         {
-            for (int i = 0; i < 4; i++)
+            this.grab(uv, corner);
+
+            return;
+        }
+
+        CubeFace found = this.faceAt(context.mouseX, context.mouseY);
+
+        if (found != null)
+        {
+            this.host.pickFace(found);
+            this.grab(this.cube.getUV(found), MOVE);
+        }
+    }
+
+    /**
+     * Which corner of the picked side the cursor is on, or -1. The corners come first, before any
+     * side: their handles sit on the rectangle's edge, where the rectangle itself would otherwise
+     * take the click.
+     */
+    private int handleAt(ModelUV uv, int mouseX, int mouseY)
+    {
+        if (uv == null)
+        {
+            return -1;
+        }
+
+        for (int i = 0; i < 4; i++)
+        {
+            Area at = this.corner(uv, i);
+
+            if (Math.abs(at.x - mouseX) <= HANDLE && Math.abs(at.y - mouseY) <= HANDLE)
             {
-                Area at = this.corner(uv, i);
-
-                if (Math.abs(at.x - context.mouseX) <= HANDLE && Math.abs(at.y - context.mouseY) <= HANDLE)
-                {
-                    this.grab(uv, i);
-
-                    return;
-                }
+                return i;
             }
         }
 
-        /* Otherwise the side under the cursor, the smallest of them where they overlap. */
+        return -1;
+    }
+
+    /** The drawn side under the cursor, the smallest of them where they overlap; null over none. */
+    private CubeFace faceAt(int mouseX, int mouseY)
+    {
         CubeFace found = null;
         int smallest = Integer.MAX_VALUE;
 
         for (CubeFace face : ModelFaces.ALL)
         {
-            ModelUV other = this.cube.getUV(face);
-            Area box = other == null ? null : this.box(other);
+            ModelUV uv = this.cube.getUV(face);
+            Area box = uv == null ? null : this.box(uv);
 
-            if (box == null || !box.isInside(context.mouseX, context.mouseY))
+            if (box == null || !box.isInside(mouseX, mouseY))
             {
                 continue;
             }
@@ -144,11 +172,7 @@ public class UIModelUVEditor extends UICanvasEditor
             }
         }
 
-        if (found != null)
-        {
-            this.host.pickFace(found);
-            this.grab(this.cube.getUV(found), MOVE);
-        }
+        return found;
     }
 
     private void grab(ModelUV uv, int handle)
@@ -267,23 +291,30 @@ public class UIModelUVEditor extends UICanvasEditor
 
         int accent = BBSSettings.primaryColor.get();
         CubeFace picked = this.host.face();
+        ModelUV uv = this.cube.getUV(picked);
+
+        /* What a click would take, lit under the cursor before it's pressed: a corner of the picked
+         * side, else the side itself — worked out the way the click works it out. Nothing is lit
+         * while a drag is on; the dragged side already is. */
+        boolean hovering = !this.dragging && this.area.isInside(context);
+        int hoveredCorner = hovering ? this.handleAt(uv, context.mouseX, context.mouseY) : -1;
+        CubeFace hovered = !hovering ? null : hoveredCorner >= 0 ? picked : this.faceAt(context.mouseX, context.mouseY);
 
         for (CubeFace face : ModelFaces.ALL)
         {
-            ModelUV uv = this.cube.getUV(face);
+            ModelUV other = this.cube.getUV(face);
 
-            if (uv == null || face == picked)
+            if (other == null || face == picked)
             {
                 continue;
             }
 
-            Area box = this.box(uv);
+            Area box = this.box(other);
+            boolean lit = face == hovered;
 
-            context.batcher.normalizedBox(box.x, box.y, box.ex(), box.ey(), Colors.setA(Colors.WHITE, 0.15F));
-            context.batcher.outline(box.x, box.y, box.ex(), box.ey(), Colors.setA(Colors.WHITE, 0.35F));
+            context.batcher.normalizedBox(box.x, box.y, box.ex(), box.ey(), Colors.setA(Colors.WHITE, lit ? 0.3F : 0.15F));
+            context.batcher.outline(box.x, box.y, box.ex(), box.ey(), Colors.setA(Colors.WHITE, lit ? 0.85F : 0.35F));
         }
-
-        ModelUV uv = this.cube.getUV(picked);
 
         if (uv == null)
         {
@@ -292,15 +323,16 @@ public class UIModelUVEditor extends UICanvasEditor
 
         Area box = this.box(uv);
 
-        context.batcher.normalizedBox(box.x, box.y, box.ex(), box.ey(), Colors.setA(accent, 0.25F));
+        context.batcher.normalizedBox(box.x, box.y, box.ex(), box.ey(), Colors.setA(accent, hovered == picked && hoveredCorner < 0 ? 0.4F : 0.25F));
         context.batcher.outline(box.x, box.y, box.ex(), box.ey(), Colors.A100 | accent);
 
         for (int i = 0; i < 4; i++)
         {
             Area at = this.corner(uv, i);
+            int size = i == hoveredCorner ? 4 : 3;
 
-            context.batcher.box(at.x - 3, at.y - 3, at.x + 3, at.y + 3, Colors.WHITE);
-            context.batcher.box(at.x - 2, at.y - 2, at.x + 2, at.y + 2, Colors.A100 | accent);
+            context.batcher.box(at.x - size, at.y - size, at.x + size, at.y + size, Colors.WHITE);
+            context.batcher.box(at.x - size + 1, at.y - size + 1, at.x + size - 1, at.y + size - 1, i == hoveredCorner ? Colors.WHITE : Colors.A100 | accent);
         }
     }
 
