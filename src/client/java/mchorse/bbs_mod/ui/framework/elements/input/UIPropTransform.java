@@ -10,6 +10,7 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.events.UITrackpadDragEndEvent;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIChoiceButton;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformGesture;
 import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformGestureHud;
 import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformOp;
@@ -80,6 +81,12 @@ public class UIPropTransform extends UITransform implements TransformGesture.Hos
     /** The edit session this editor's transform is worked through. */
     private final TransformGesture gesture = new TransformGesture(this);
 
+    /** Rows the editor stands on: the space picker, translate, scale, rotate — and any a host adds. */
+    private int rows = 4;
+
+    /** Whether an all-equal scale collapses the row to one pad; off for a host whose three numbers are sizes, not factors. */
+    private boolean uniformScaleSync = true;
+
     public UIPropTransform()
     {
         this.buildQuaternionFields();
@@ -121,7 +128,7 @@ public class UIPropTransform extends UITransform implements TransformGesture.Hos
         /* Four uniform rows: the space picker above translate / scale / rotate.
          * (Was 3×CONTROL_HEIGHT + 20 — the 20 being the rotate row, which its
          * oversized toggle icon pushed past the others.) */
-        this.h(4 * UIConstants.CONTROL_HEIGHT);
+        this.applyRows();
 
         /* Each finished value-field drag closes the current undo block, so dragging a
          * field several times in a row undoes one drag at a time (see endGesture). */
@@ -209,13 +216,50 @@ public class UIPropTransform extends UITransform implements TransformGesture.Hos
         this.model = true;
     }
 
+    /** The editor stands as tall as the rows it shows. */
+    private void applyRows()
+    {
+        this.h(this.rows * UIConstants.CONTROL_HEIGHT);
+    }
+
     /** Drop the scale row — for a target that has no scale to speak of, such as a group's rest in the model editor. */
     public UIPropTransform noScale()
     {
         this.scaleRow.setVisible(false);
-        this.h(3 * UIConstants.CONTROL_HEIGHT);
+        this.rows -= 1;
+        this.applyRows();
 
         return this;
+    }
+
+    /**
+     * Keep the scale row's three pads apart even when they agree — for a host whose scale is
+     * three sizes rather than three factors (a cube of the model editor), where an equal size on
+     * every side is the common case and not a reason to fold the row to one pad.
+     */
+    public UIPropTransform noUniformScale()
+    {
+        this.uniformScaleSync = false;
+
+        return this;
+    }
+
+    /**
+     * Add a row shaped like translate / scale / rotate — an icon, then three pads — under them, for
+     * a host with another vector on the same target to edit (the model editor's cube pivot). The
+     * pads belong to the host: it wires their callbacks and keeps them in step with its model.
+     */
+    public UIElement addRow(UIIcon icon, UITrackpad x, UITrackpad y, UITrackpad z)
+    {
+        icon.wh(UIConstants.CONTROL_HEIGHT, UIConstants.CONTROL_HEIGHT);
+
+        UIElement row = UI.row(2, 0, UIConstants.CONTROL_HEIGHT, icon, x, y, z);
+
+        this.add(row);
+        this.rows += 1;
+        this.applyRows();
+
+        return row;
     }
 
     @Override
@@ -446,7 +490,7 @@ public class UIPropTransform extends UITransform implements TransformGesture.Hos
      */
     private void syncUniformScaleRow()
     {
-        if (this.transform == null || !BBSSettings.uniformScale.get())
+        if (this.transform == null || !this.uniformScaleSync || !BBSSettings.uniformScale.get())
         {
             return;
         }

@@ -62,6 +62,7 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -396,6 +397,48 @@ public class ModelInstance implements IModelInstance
                 ModelSetupQueue.add(() -> CubicRenderer.processRenderModel(new CubicVAOBuilderRenderer(this.vaos), null, new MatrixStack(), cubicModel));
             }
         }
+    }
+
+    /**
+     * Re-bake the VAOs of these groups alone, leaving the rest of the model's on the GPU as they
+     * are — the model editor changing a cube's numbers, where a whole {@link #delete()} plus
+     * {@link #setup()} would re-upload every bone of the model on every step of a drag. A group's
+     * VAO is built from its own cubes with nothing on the matrix stack (see
+     * {@link CubicVAOBuilderRenderer}), so a group bakes on its own. The old VAOs go in the same
+     * queued step that builds the new ones, so a rebake a frame behind another can't strand them.
+     *
+     * <p>Nothing to do for a model with no VAOs: it draws the cubes' quads straight through the
+     * CPU path, and a model still waiting on its first bake will bake the changed numbers anyway.</p>
+     */
+    public void rebakeGroups(Collection<ModelGroup> groups)
+    {
+        if (this.vaos.isEmpty() || !(this.model instanceof Model cubicModel))
+        {
+            return;
+        }
+
+        List<ModelGroup> rebaked = new ArrayList<>(groups);
+
+        ModelSetupQueue.add(() ->
+        {
+            CubicVAOBuilderRenderer builder = new CubicVAOBuilderRenderer(this.vaos);
+            MatrixStack stack = new MatrixStack();
+
+            for (ModelGroup group : rebaked)
+            {
+                Map<String, ModelVAO> groupVaos = this.vaos.remove(group);
+
+                if (groupVaos != null)
+                {
+                    for (ModelVAO vao : groupVaos.values())
+                    {
+                        vao.delete();
+                    }
+                }
+
+                builder.renderGroup(null, stack, group, cubicModel);
+            }
+        });
     }
 
     /** Whether some group carries shape-keyed meshes — the VAO builder skips those, so the render is hybrid. */

@@ -21,6 +21,13 @@ public class ModelCube implements IMapSerializable
     public float inflate;
 
     /**
+     * What the cube is called in the model editor's tree; empty for most cubes, which are named
+     * by their place in their group there. Nothing in the model refers to a cube by name, so
+     * names may repeat. Written to the file only when given.
+     */
+    public String name = "";
+
+    /**
      * The material this cube is drawn with, the same way {@link ModelMesh#material} names a mesh's:
      * empty for the model's default texture, a name for a texture of its own — a layer over the
      * entity, the wool over a sheep, drawn from the same bones as the body. Drives the per-material
@@ -236,9 +243,21 @@ public class ModelCube implements IMapSerializable
         }
     }
 
+    /** Move the cube as a whole: its corner and the pivot it turns about go by the same step. */
+    public void shift(Vector3f delta)
+    {
+        this.origin.add(delta);
+        this.pivot.add(delta);
+    }
+
     @Override
     public void toData(MapType data)
     {
+        if (!this.name.isEmpty())
+        {
+            data.putString("name", this.name);
+        }
+
         data.put("from", DataStorageUtils.vector3fToData(this.origin));
         data.put("size", DataStorageUtils.vector3fToData(this.size));
         data.put("origin", DataStorageUtils.vector3fToData(this.pivot));
@@ -281,24 +300,31 @@ public class ModelCube implements IMapSerializable
         }
     }
 
+    /**
+     * The whole cube from its data: what the data leaves out takes its default, so a cube read
+     * twice (the model editor's copies and undo snapshots) never keeps a rotation, an inflate or
+     * a face the data no longer has.
+     */
     @Override
     public void fromData(MapType data)
     {
+        this.name = data.getString("name", "");
         this.origin.set(DataStorageUtils.vector3fFromData(data.getList("from")));
         this.size.set(DataStorageUtils.vector3fFromData(data.getList("size")));
         this.pivot.set(DataStorageUtils.vector3fFromData(data.getList("origin")));
-
-        if (data.has("offset"))
-        {
-            this.inflate = data.getFloat("offset");
-        }
+        this.inflate = data.getFloat("offset", 0F);
 
         if (data.has("rotate"))
         {
             this.rotate.set(DataStorageUtils.vector3fFromData(data.getList("rotate")));
         }
+        else
+        {
+            this.rotate.set(0F, 0F, 0F);
+        }
 
         this.material = data.getString("material", "");
+        this.front = this.back = this.right = this.left = this.top = this.bottom = null;
 
         if (data.has("uvs"))
         {

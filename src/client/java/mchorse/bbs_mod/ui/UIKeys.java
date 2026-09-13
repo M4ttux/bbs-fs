@@ -1079,6 +1079,15 @@ public class UIKeys
     public static final IKey MODEL_EDITOR_MODEL_UNDO_CENTER_ANCHOR_MANY = L10n.lang("bbs.ui.model_editor.model.undo.center_anchor_many");
     public static final IKey MODEL_EDITOR_MODEL_UNDO_IK_BONES = L10n.lang("bbs.ui.model_editor.model.undo.ik_bones");
     public static final IKey MODEL_EDITOR_MODEL_CUBE_LABEL = L10n.lang("bbs.ui.model_editor.model.cube.label");
+    public static final IKey MODEL_EDITOR_MODEL_CUBE_POSITION = L10n.lang("bbs.ui.model_editor.model.cube.position");
+    public static final IKey MODEL_EDITOR_MODEL_CUBE_SIZE = L10n.lang("bbs.ui.model_editor.model.cube.size");
+    public static final IKey MODEL_EDITOR_MODEL_CUBE_PIVOT = L10n.lang("bbs.ui.model_editor.model.cube.pivot");
+    public static final IKey MODEL_EDITOR_MODEL_CUBE_ROTATION = L10n.lang("bbs.ui.model_editor.model.cube.rotation");
+    public static final IKey MODEL_EDITOR_MODEL_CUBE_INFLATE = L10n.lang("bbs.ui.model_editor.model.cube.inflate");
+    public static final IKey MODEL_EDITOR_MODEL_UNDO_CUBE_TRANSFORM = L10n.lang("bbs.ui.model_editor.model.undo.cube_transform");
+    public static final IKey MODEL_EDITOR_MODEL_UNDO_CUBE_PIVOT = L10n.lang("bbs.ui.model_editor.model.undo.cube_pivot");
+    public static final IKey MODEL_EDITOR_MODEL_UNDO_CUBE_INFLATE = L10n.lang("bbs.ui.model_editor.model.undo.cube_inflate");
+    public static final IKey MODEL_EDITOR_MODEL_UNDO_CUBE_RENAME = L10n.lang("bbs.ui.model_editor.model.undo.cube_rename");
     public static final IKey MODEL_EDITOR_PROCEDURAL = L10n.lang("bbs.ui.model_editor.procedural");
     public static final IKey MODEL_EDITOR_CULLING = L10n.lang("bbs.ui.model_editor.culling");
     public static final IKey MODEL_EDITOR_ON_CPU = L10n.lang("bbs.ui.model_editor.on_cpu");

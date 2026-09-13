@@ -117,6 +117,15 @@ public class Model implements IMapSerializable, IModel
         return this.namedGroups.get(id);
     }
 
+    /** Rebuild what these groups' cubes draw as, after their numbers changed. */
+    public void refreshGeometry(Collection<ModelGroup> groups)
+    {
+        for (ModelGroup group : groups)
+        {
+            group.generateQuads(this.textureWidth, this.textureHeight);
+        }
+    }
+
     /* IModel implementation */
 
     @Override

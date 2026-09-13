@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.model_editor;
 
 import mchorse.bbs_mod.cubic.data.model.Model;
+import mchorse.bbs_mod.cubic.data.model.ModelCube;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -143,7 +144,7 @@ public class UIModelTree extends UIList<ModelNode>
                 ModelNode cube = ModelNode.cube(group.id, c);
                 boolean lastCube = c == cubes - 1 && group.children.isEmpty();
 
-                this.metas.put(cube, new Meta(depth + 1, childLines, lastCube, false, cubeLabel(c)));
+                this.metas.put(cube, new Meta(depth + 1, childLines, lastCube, false, cubeLabel(group.cubes.get(c), c)));
                 this.list.add(cube);
             }
 
@@ -151,10 +152,10 @@ public class UIModelTree extends UIList<ModelNode>
         }
     }
 
-    /** How a cube's row is named: its number in its group, since cubes have no names of their own. */
-    private static String cubeLabel(int index)
+    /** How a cube is named: by the name it was given, else by its number in its group. */
+    public static String cubeLabel(ModelCube cube, int index)
     {
-        return UIKeys.MODEL_EDITOR_MODEL_CUBE_LABEL.format(index + 1).get();
+        return cube.name.isEmpty() ? UIKeys.MODEL_EDITOR_MODEL_CUBE_LABEL.format(index + 1).get() : cube.name;
     }
 
     /** Build the rows again from the model, keeping the pick — what a fold changes. */
