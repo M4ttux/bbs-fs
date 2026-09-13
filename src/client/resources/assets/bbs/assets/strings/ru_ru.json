@@ -1443,7 +1443,7 @@
 	"bbs.ui.model_editor.model.uv.flip_x": "Отразить грань по горизонтали",
 	"bbs.ui.model_editor.model.uv.flip_y": "Отразить грань по вертикали",
 	"bbs.ui.model_editor.model.uv.rotate": "Повернуть грань на 90°",
-	"bbs.ui.model_editor.model.uv.box": "Разложить коробкой от",
+	"bbs.ui.model_editor.model.uv.box": "Разложить коробкой",
 	"bbs.ui.model_editor.model.uv.box_u": "Откуда раскладывать по горизонтали",
 	"bbs.ui.model_editor.model.uv.box_v": "Откуда раскладывать по вертикали",
 	"bbs.ui.model_editor.model.uv.box_mirror": "Разложить зеркально",

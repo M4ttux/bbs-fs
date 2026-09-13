@@ -9,6 +9,7 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcons;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
@@ -46,8 +47,8 @@ public class UIModelCubeUV extends UIElement
     /** Which side the rows are on. Kept across picks and models: it is a mode of working. */
     private static CubeFace picked = CubeFace.FRONT;
 
-    /** How wide the box row's two fields are; the name before them takes what is left. */
-    private static final int BOX_FIELD = 36;
+    /** How tall the strip of sides over the picture stands — a size above the rows, as the pane's main choice. */
+    private static final int FACES_HEIGHT = 20;
 
     private final UIModelGeometryEditor editor;
 
@@ -71,11 +72,11 @@ public class UIModelCubeUV extends UIElement
     {
         this.editor = editor;
         this.canvas = new UIModelUVEditor(this);
-        this.canvas.relative(this).x(0).y(0).w(1F);
+        this.canvas.relative(this).x(0).w(1F);
 
         /* Six sides as six arrows, the way a weld names one: they all fit, and the lit one says
-         * which side the numbers below belong to without a dropdown to open. It is the pane's main
-         * choice, so it spans the pane and stands a size taller than the rows under it. */
+         * which side is being worked on without a dropdown to open. It heads the pane, over the
+         * picture as a tab bar would, since the picture and the rows under it both follow it. */
         this.faces = new UIIcons((b) -> this.pickFace(ModelFaces.ALL.get(b.getValue())));
 
         for (CubeFace face : ModelFaces.ALL)
@@ -84,7 +85,7 @@ public class UIModelCubeUV extends UIElement
         }
 
         this.faces.stretch();
-        this.faces.h(20);
+        this.faces.relative(this).x(0).y(0).w(1F).h(FACES_HEIGHT);
         this.faces.setValue(picked.ordinal());
 
         this.drawn = new UIToggle(UIKeys.MODEL_EDITOR_MODEL_UV_DRAWN, (t) -> this.setDrawn(t.getValue()));
@@ -112,12 +113,12 @@ public class UIModelCubeUV extends UIElement
         flipY.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_FLIP_Y);
         rotate.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_ROTATE);
 
-        this.cornerRows = UI.column(UI.row(this.corners[0], this.corners[1]), UI.row(this.corners[2], this.corners[3]));
+        this.cornerRows = UI.row(this.corners[0], this.corners[1], this.corners[2], this.corners[3]);
         this.flips = UI.strip(flipX, flipY, rotate);
 
-        /* The box unwrap reads as one sentence on one row — lay out as a box from here, mirrored or
-         * not, go. Going is a press rather than a live field: it throws all six sides away, which is
-         * not something a stray scroll over a pad should do. */
+        /* The box unwrap is a section of its own: its name heads it, and under the name one row says
+         * the rest — from where, mirrored or not, go. Going is a press rather than a live field: it
+         * throws all six sides away, which is not something a stray scroll over a pad should do. */
         this.boxU = new UITrackpad((v) -> {}).integer();
         this.boxV = new UITrackpad((v) -> {}).integer();
         this.boxU.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_BOX_U);
@@ -130,16 +131,14 @@ public class UIModelCubeUV extends UIElement
         mirror.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_BOX_MIRROR);
         apply.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_BOX_TIP);
 
-        UIElement box = new UIElement();
+        UISection box = new UISection(UIKeys.MODEL_EDITOR_MODEL_UV_BOX);
 
-        box.row(UIConstants.MARGIN).preferred(0).height(UIConstants.CONTROL_HEIGHT);
-        box.add(
-            UI.label(UIKeys.MODEL_EDITOR_MODEL_UV_BOX, UIConstants.CONTROL_HEIGHT).labelAnchor(0, 0.5F),
-            this.boxU.w(BOX_FIELD),
-            this.boxV.w(BOX_FIELD),
+        box.fields.add(UI.row(
+            this.boxU,
+            this.boxV,
             mirror.wh(UIConstants.CONTROL_HEIGHT, UIConstants.CONTROL_HEIGHT),
             apply.wh(UIConstants.CONTROL_HEIGHT, UIConstants.CONTROL_HEIGHT)
-        );
+        ));
 
         this.sheetWidth = new UITrackpad((v) -> this.setSheet()).integer().limit(1);
         this.sheetHeight = new UITrackpad((v) -> this.setSheet()).integer().limit(1);
@@ -149,7 +148,6 @@ public class UIModelCubeUV extends UIElement
         this.sheetHeight.getEvents().register(UITrackpadDragEndEvent.class, (e) -> this.editor.closeCubeEdit());
 
         this.rows = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING,
-            this.faces,
             this.drawn,
             this.cornerRows,
             this.flips,
@@ -159,22 +157,23 @@ public class UIModelCubeUV extends UIElement
         );
         this.rows.relative(this).x(0).w(1F);
 
-        this.add(this.canvas, this.rows);
+        this.add(this.faces, this.canvas, this.rows);
     }
 
     /**
-     * The picture is square — a sheet reads as the sheet it is — and takes the top of the pane, up
-     * to half its height so the rows under it are never squeezed out on a short window.
+     * The sides head the pane and the picture sits under them. The picture is square — a sheet
+     * reads as the sheet it is — and takes up to half of what is left, so the rows under it are
+     * never squeezed out on a short window.
      */
     @Override
     protected void afterResizeApplied()
     {
         super.afterResizeApplied();
 
-        int side = Math.max(0, Math.min(this.area.w, this.area.h / 2));
+        int side = Math.max(0, Math.min(this.area.w, (this.area.h - FACES_HEIGHT) / 2));
 
-        this.canvas.h(side);
-        this.rows.y(side).h(1F, -side);
+        this.canvas.y(FACES_HEIGHT).h(side);
+        this.rows.y(FACES_HEIGHT + side).h(1F, -FACES_HEIGHT - side);
     }
 
     /* Filling */
@@ -189,6 +188,7 @@ public class UIModelCubeUV extends UIElement
         this.sheetHeight.setValue(model == null ? 0D : model.textureHeight);
 
         UIUtils.setEnabledDeep(this.rows, this.editor.pickedCube() != null);
+        this.faces.setEnabled(this.editor.pickedCube() != null);
 
         this.fillFace();
     }
