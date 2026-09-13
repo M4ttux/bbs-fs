@@ -20,6 +20,8 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
 import org.joml.Vector2f;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 
 /**
@@ -34,8 +36,9 @@ import java.util.function.Consumer;
  *
  * <p>A side is shown as its two CORNERS rather than as a corner and a size, because a mirrored side
  * is exactly what the format calls a NEGATIVE size: carrying the corners through an edit keeps the
- * mirror, where carrying a width would quietly straighten it out. A side with no unwrap at all
- * isn't drawn — that is what the eye in the side's icons takes away and gives back.</p>
+ * mirror, where carrying a width would quietly straighten it out. The eye in the side's icons takes
+ * the side's drawing away and gives it back, not its unwrap: a side taken away keeps its place on the
+ * sheet, shows it in the rows, dimmed, and comes back to it.</p>
  *
  * <p>The sheet's size is the model's, not the cube's — the {@code texture} of the file rather than
  * the size of the PNG — so changing it re-reads every cube's unwrap against the new one.</p>
@@ -205,14 +208,16 @@ public class UIModelCubeUV extends UIElement
         this.fillFace();
     }
 
-    /** The side's own rows; a side that isn't drawn has no corners to show, so they go dead. */
+    /** The side's own rows; a side that isn't drawn shows the corners it will come back to, dead. */
     private void fillFace()
     {
         ModelUV uv = this.uv();
+        ModelCube cube = this.editor.pickedCube();
+        ModelUV shown = uv != null || cube == null ? uv : cube.getHiddenUV(picked);
 
         for (int i = 0; i < this.corners.length; i++)
         {
-            this.corners[i].setValue(uv == null ? 0D : this.corner(uv, i));
+            this.corners[i].setValue(shown == null ? 0D : this.corner(shown, i));
         }
 
         UIUtils.setEnabledDeep(this.cornerRows, uv != null);
@@ -321,7 +326,10 @@ public class UIModelCubeUV extends UIElement
         this.editor.editCube(this.faceLabel(UIKeys.MODEL_EDITOR_MODEL_UNDO_UV), "uv:" + picked.name(), () -> uv.from(c[0], c[1], c[2], c[3]));
     }
 
-    /** Whether the side is drawn at all: off takes its unwrap away, on gives it the cube's own size. */
+    /**
+     * Whether the side is drawn at all. Off keeps its unwrap on the cube, on brings it back there —
+     * or, for a side that was never drawn, gives it the side's own size from the sheet's corner.
+     */
     private void setDrawn(boolean on)
     {
         ModelCube cube = this.editor.pickedCube();
@@ -331,8 +339,19 @@ public class UIModelCubeUV extends UIElement
             return;
         }
 
+        CubeFace face = picked;
+
         this.editor.editCube(this.faceLabel(UIKeys.MODEL_EDITOR_MODEL_UNDO_UV_DRAWN), null, () ->
-            cube.setUV(picked, on ? ModelUV.fromXY(0F, 0F, cube.size.x, cube.size.y) : null));
+        {
+            if (on)
+            {
+                cube.showUV(face);
+            }
+            else
+            {
+                cube.hideUV(face);
+            }
+        });
         this.fillFace();
         this.editor.closeCubeEdit();
     }
@@ -352,7 +371,11 @@ public class UIModelCubeUV extends UIElement
         this.editor.closeCubeEdit();
     }
 
-    /** All six sides laid out as a box from one corner of the sheet — what a new cube is given. */
+    /**
+     * All six sides laid out as a box from one corner of the sheet — what a new cube is given. The box
+     * places every side, but whether a side is drawn stays the eye's to say: one taken away stays
+     * away and keeps its new place for when it comes back.
+     */
     private void applyBoxUV()
     {
         ModelCube cube = this.editor.pickedCube();
@@ -365,7 +388,21 @@ public class UIModelCubeUV extends UIElement
         Vector2f at = new Vector2f((float) this.boxU.getValue(), (float) this.boxV.getValue());
         boolean mirror = this.boxMirror;
 
-        this.editor.editCube(UIKeys.MODEL_EDITOR_MODEL_UNDO_UV_BOX, null, () -> cube.setupBoxUV(at, mirror));
+        this.editor.editCube(UIKeys.MODEL_EDITOR_MODEL_UNDO_UV_BOX, null, () ->
+        {
+            List<CubeFace> hidden = new ArrayList<>();
+
+            for (CubeFace face : ModelFaces.ALL)
+            {
+                if (cube.getUV(face) == null)
+                {
+                    hidden.add(face);
+                }
+            }
+
+            cube.setupBoxUV(at, mirror);
+            hidden.forEach(cube::hideUV);
+        });
         this.fillFace();
         this.editor.closeCubeEdit();
     }
