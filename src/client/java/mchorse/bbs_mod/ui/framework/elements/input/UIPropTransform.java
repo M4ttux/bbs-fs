@@ -451,8 +451,8 @@ public class UIPropTransform extends UITransform implements TransformGesture.Hos
 
     /**
      * As above, but only for the operations {@code ops} answers for — the hotkey twin of the gizmo's
-     * handle mask, for a host whose target can't take all three (a rest has no scale; a rest shared
-     * by several picked bones has no rotation either).
+     * handle mask, for a host whose target can't take all three (a rest shared by several picked
+     * bones can only move).
      */
     public UIPropTransform enableHotkeys(Supplier<Boolean> enabled, Predicate<TransformOp> ops)
     {

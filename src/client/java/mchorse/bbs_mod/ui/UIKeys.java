@@ -1071,6 +1071,7 @@ public class UIKeys
     public static final IKey MODEL_EDITOR_MODEL_PIVOT_ONLY = L10n.lang("bbs.ui.model_editor.model.pivot_only");
     public static final IKey MODEL_EDITOR_MODEL_UNDO_TRANSFORM = L10n.lang("bbs.ui.model_editor.model.undo.transform");
     public static final IKey MODEL_EDITOR_MODEL_UNDO_TRANSFORM_MANY = L10n.lang("bbs.ui.model_editor.model.undo.transform_many");
+    public static final IKey MODEL_EDITOR_MODEL_UNDO_SCALE = L10n.lang("bbs.ui.model_editor.model.undo.scale");
     public static final IKey MODEL_EDITOR_MODEL_UNDO_ADD = L10n.lang("bbs.ui.model_editor.model.undo.add");
     public static final IKey MODEL_EDITOR_MODEL_UNDO_DUPLICATE = L10n.lang("bbs.ui.model_editor.model.undo.duplicate");
     public static final IKey MODEL_EDITOR_MODEL_UNDO_DUPLICATE_MANY = L10n.lang("bbs.ui.model_editor.model.undo.duplicate_many");

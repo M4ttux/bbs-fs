@@ -1419,6 +1419,7 @@
 	"bbs.ui.model_editor.model.pivot_only": "Гизмо двигает только якорь",
 	"bbs.ui.model_editor.model.undo.transform": "Перемещение и поворот: %s",
 	"bbs.ui.model_editor.model.undo.transform_many": "Перемещение (%s)",
+	"bbs.ui.model_editor.model.undo.scale": "Масштаб: %s",
 	"bbs.ui.model_editor.model.undo.add": "Добавить группу: %s",
 	"bbs.ui.model_editor.model.undo.duplicate": "Дублировать: %s",
 	"bbs.ui.model_editor.model.undo.duplicate_many": "Дублировать строки (%s)",

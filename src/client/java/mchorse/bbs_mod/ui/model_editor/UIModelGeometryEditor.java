@@ -77,8 +77,9 @@ import java.util.function.Supplier;
  * stands, so the group turns about somewhere else. The sphere over the tree puts the gizmo on
  * the point too, for when that is what's wanted. A cube's rows read the same way round: its
  * position row moves the cube as a whole, the pivot row below moves its point alone. Its gizmo
- * stands on that pivot and turns as the cube does — the rings turn the cube about it, and unlike a
- * group's rest the cube has scale handles, which grow it about the same point.</p>
+ * stands on that pivot and turns as the cube does — the rings turn the cube about it, and the scale
+ * handles grow it about the same point. A group's rest has no scale of its own, so a group's scale
+ * handles grow its whole branch about the group's pivot instead ({@link ModelBranchScale}).</p>
  *
  * <p>Several rows can be picked at once (ctrl / shift, as in every list here), and a picked group
  * takes the cubes of its whole branch along ({@link #pickedCubes}): the verbs — copy, remove —
@@ -108,9 +109,9 @@ public class UIModelGeometryEditor extends UIElement
     /** How big a new cube is, in the model's pixels — a quarter of a block, centred on its group's pivot. */
     private static final float NEW_CUBE_SIDE = 4F;
 
-    /** What a group's rest can take: moving and turning, no scale. */
+    /** What one picked group can take: moving, turning, and scaling — which scales its whole branch about its pivot. */
     private static final Gizmo.HandleMask ANCHOR_MASK = Gizmo.HandleMask.of(
-        EnumSet.of(Gizmo.Op.MOVE, Gizmo.Op.SCREEN, Gizmo.Op.ROTATE, Gizmo.Op.VIEW, Gizmo.Op.TRACKBALL),
+        EnumSet.of(Gizmo.Op.MOVE, Gizmo.Op.SCREEN, Gizmo.Op.ROTATE, Gizmo.Op.VIEW, Gizmo.Op.TRACKBALL, Gizmo.Op.SCALE, Gizmo.Op.SCALE_ALL),
         EnumSet.allOf(Axis.class)
     );
 
@@ -164,6 +165,9 @@ public class UIModelGeometryEditor extends UIElement
 
     /** The edit of the picked cubes in progress; null while nothing drives their numbers. */
     private ModelCubeEdit cubeEdit;
+
+    /** The scale of the picked group's branch in progress; null while the gizmo isn't scaling one. */
+    private ModelBranchScale branchScale;
 
     /** The cube's pivot and inflate, on rows of their own; the pivot row's icon centres the pivot on the cube. */
     private final UIElement pivotRow;
@@ -232,8 +236,10 @@ public class UIModelGeometryEditor extends UIElement
         this.name = new UITextbox(64, this::rename);
         this.name.delayedInput();
 
-        /* A group's rest has no scale. G/R start a gesture on the picked group without touching a
-         * handle, the way every transform editor of the panel does. */
+        /* A group's rest has no scale, so there's no row for one: the gizmo's scale handles scale the
+         * group's branch instead, through the stand-in's scale ({@link #applyAnchor}). G/R/S start a
+         * gesture on the picked group without touching a handle, the way every transform editor of
+         * the panel does. */
         this.transform = new UIPropTransform().noScale();
         /* The translate row of a group's rest is its pivot, and it moves the point alone — while the
          * gizmo beside it moves the whole group — so it says so instead of the generic "Position". */
@@ -245,11 +251,11 @@ public class UIModelGeometryEditor extends UIElement
 
             return target == null ? null : this.modelPanel.renderer.buildGizmoDrag(target);
         });
-        /* The hotkeys answer to the same rule as the gizmo's handles: a rest never scales, and it
-         * only turns while one group is picked. They are the group rows' only while the gizmo stands
-         * on the group — with a group picked together with cubes both editors show, and a key
-         * must not reach the one the gizmo isn't on. */
-        this.transform.enableHotkeys(() -> this.targetIs(ModelSlotKind.ANCHOR), (op) -> op == TransformOp.TRANSLATE || (op == TransformOp.ROTATE && this.singleGroup()));
+        /* The hotkeys answer to the same rule as the gizmo's handles: a group only turns and scales
+         * while it is picked alone. They are the group rows' only while the gizmo stands on the group
+         * — with a group picked together with cubes both editors show, and a key must not reach the
+         * one the gizmo isn't on. */
+        this.transform.enableHotkeys(() -> this.targetIs(ModelSlotKind.ANCHOR), (op) -> op == TransformOp.TRANSLATE || this.singleGroup());
         /* The group's pivot row wears the sphere, as a cube's pivot row does — in a pick of a group
          * and its cubes it stands right where a cube's pivot row would. */
         this.transform.translateAction(UIKeys.MODEL_EDITOR_MODEL_GROUP_CENTER_ANCHOR, Icons.SPHERE, this::centerAnchor);
@@ -600,6 +606,7 @@ public class UIModelGeometryEditor extends UIElement
         this.dirty.clear();
         this.unsettled = false;
         this.cubeEdit = null;
+        this.branchScale = null;
 
         List<ModelNode> picked = new ArrayList<>(this.tree.getCurrent());
 
@@ -823,6 +830,7 @@ public class UIModelGeometryEditor extends UIElement
 
         /* A new pick is a new set of cubes: an edit of the old one has nothing left to say. */
         this.cubeEdit = null;
+        this.branchScale = null;
 
         /* The name is the leading row's. An unnamed cube shows the name it goes by as a hint, so
          * typing over it names the cube. */
@@ -908,11 +916,16 @@ public class UIModelGeometryEditor extends UIElement
         this.anchorApplied.copy(this.anchor);
     }
 
-    /** Whether the group already rests where its stand-in says — within a hair, as the round trip through radians leaves it. */
+    /**
+     * Whether the group already rests where its stand-in says — within a hair, as the round trip
+     * through radians leaves it — and the stand-in's scale is back at one, where a scale of the
+     * branch starts from.
+     */
     private boolean anchorMatches(ModelGroup group)
     {
         return group.initial.translate.equals(this.anchor.translate, EPSILON)
-            && group.initial.rotate.equals(degreesOf(this.anchor, group.initial.rotate), EPSILON);
+            && group.initial.rotate.equals(degreesOf(this.anchor, group.initial.rotate), EPSILON)
+            && this.anchor.scale.equals(1F, 1F, 1F);
     }
 
     /**
@@ -939,6 +952,11 @@ public class UIModelGeometryEditor extends UIElement
      * rows, and the group rows must not read that as a move of theirs and walk them back; they read
      * the group again once nothing drives ({@link #syncStandins}). The gizmo moves the whole pick,
      * cubes and all; the pivot row moves the groups' points, and the cubes have rows of their own.</p>
+     *
+     * <p>The stand-in's scale is the gizmo's scale of the group's branch, as a factor of where the
+     * gesture began ({@link ModelBranchScale}): it stands at one whenever no gesture runs, so a
+     * gesture's scale starts there. Nothing else gets to set it — a transform pasted onto the group
+     * rows would otherwise blow the branch up to a cube's size — and it is put back to one.</p>
      */
     private void applyAnchor()
     {
@@ -950,11 +968,18 @@ public class UIModelGeometryEditor extends UIElement
         }
 
         boolean gesture = this.transform.isEditing();
+
+        if (!gesture)
+        {
+            this.anchor.scale.set(1F, 1F, 1F);
+        }
+
         boolean typed = this.rowEdit && this.typedEdit;
         Vector3f degrees = degreesOf(this.anchor, group.initial.rotate);
         Vector3f step = new Vector3f(this.anchor.translate).sub(this.anchorApplied.translate);
         Vector3f turned = new Vector3f(this.anchor.rotate).sub(this.anchorApplied.rotate);
         boolean euler = this.anchor.rotationMode == Transform.RotationMode.EULER && this.anchorApplied.rotationMode == Transform.RotationMode.EULER;
+        boolean scaled = !this.anchor.scale.equals(this.anchorApplied.scale);
 
         this.anchorApplied.copy(this.anchor);
 
@@ -1009,6 +1034,21 @@ public class UIModelGeometryEditor extends UIElement
                         picked.initial.rotate.setComponent(i, typed ? degrees.get(i) : picked.initial.rotate.get(i) + MathUtils.toDeg(turned.get(i)));
                     }
                 }
+            }
+        }
+
+        /* Last: the gizmo's probes move the pivot before a gesture starts, and the step above puts it
+         * back — the branch is taken where it stands once it has. */
+        if (scaled)
+        {
+            if (this.branchScale == null)
+            {
+                this.branchScale = new ModelBranchScale(group);
+            }
+
+            if (this.branchScale.scale(this.anchor.scale))
+            {
+                this.dirty.addAll(this.branchScale.groups());
             }
         }
     }
@@ -1615,6 +1655,7 @@ public class UIModelGeometryEditor extends UIElement
         {
             this.settle();
             this.cubeEdit = null;
+            this.branchScale = null;
             this.syncStandins();
         }
 
@@ -1678,11 +1719,16 @@ public class UIModelGeometryEditor extends UIElement
 
         this.applyAnchor();
 
-        IKey label = picked > 1
-            ? UIKeys.MODEL_EDITOR_MODEL_UNDO_TRANSFORM_MANY.format(picked)
-            : UIKeys.MODEL_EDITOR_MODEL_UNDO_TRANSFORM.format(group.id);
+        /* A scale of the branch is a step of its own, by its own name: the steps of a gesture merge
+         * under the first one's, and a gesture can switch from scaling to moving on the way. */
+        boolean scaling = this.transform.isEditing() && this.transform.getGesture().getOp() == TransformOp.SCALE;
+        IKey label = scaling
+            ? UIKeys.MODEL_EDITOR_MODEL_UNDO_SCALE.format(group.id)
+            : picked > 1
+                ? UIKeys.MODEL_EDITOR_MODEL_UNDO_TRANSFORM_MANY.format(picked)
+                : UIKeys.MODEL_EDITOR_MODEL_UNDO_TRANSFORM.format(group.id);
 
-        this.modelPanel.pushModelEdit(new ModelEditUndo(this.modelPanel, label.get(), "transform:" + group.id, this.before, this.snapshot()));
+        this.modelPanel.pushModelEdit(new ModelEditUndo(this.modelPanel, label.get(), (scaling ? "scale:" : "transform:") + group.id, this.before, this.snapshot()));
         this.before = null;
     }
 
@@ -1713,6 +1759,7 @@ public class UIModelGeometryEditor extends UIElement
     private void endEdit()
     {
         this.cubeEdit = null;
+        this.branchScale = null;
         this.modelPanel.closeModelEdit();
         this.settle();
 

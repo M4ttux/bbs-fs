@@ -1425,6 +1425,7 @@
 	"bbs.ui.model_editor.model.pivot_only": "The gizmo moves the pivot only",
 	"bbs.ui.model_editor.model.undo.transform": "Group transform: %s",
 	"bbs.ui.model_editor.model.undo.transform_many": "Move: %s groups",
+	"bbs.ui.model_editor.model.undo.scale": "Scale: %s",
 	"bbs.ui.model_editor.model.undo.add": "Add group: %s",
 	"bbs.ui.model_editor.model.undo.duplicate": "Duplicate: %s",
 	"bbs.ui.model_editor.model.undo.duplicate_many": "Duplicate: %s rows",
