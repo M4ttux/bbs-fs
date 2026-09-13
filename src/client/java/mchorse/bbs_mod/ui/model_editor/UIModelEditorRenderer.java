@@ -85,8 +85,8 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
     /** Vanilla's near plane for the hand ({@code GameRenderer#getBasicProjectionMatrix}). */
     private static final float FIRST_PERSON_NEAR = 0.05F;
 
-    /** The cube under the cursor: white, and faint next to the pick's own outlines. */
-    private static final int HOVER_COLOR = Colors.setA(Colors.WHITE, 0.6F);
+    /** The cube under the cursor — in the viewport, or its row in the tree: white, and faint next to the pick's own outlines. */
+    static final int HOVER_COLOR = Colors.setA(Colors.WHITE, 0.6F);
 
     /** A click on the model: the bone, and the cube of it under the cursor (-1 without cube picking); whether the click was taken. */
     @FunctionalInterface

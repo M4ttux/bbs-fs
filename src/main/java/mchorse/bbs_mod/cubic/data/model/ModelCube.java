@@ -305,7 +305,8 @@ public class ModelCube implements IMapSerializable
             data.putString("material", this.material);
         }
 
-        MapType uvs = new MapType();
+        /* Ordered, as the cube's own keys are: a hash map would shuffle the faces on every save. */
+        MapType uvs = new MapType(false);
 
         this.saveUVSide(uvs, "front", this.front);
         this.saveUVSide(uvs, "back", this.back);

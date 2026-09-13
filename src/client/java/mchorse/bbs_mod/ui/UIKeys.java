@@ -1084,8 +1084,8 @@ public class UIKeys
     public static final IKey MODEL_EDITOR_MODEL_CUBE_LABEL = L10n.lang("bbs.ui.model_editor.model.cube.label");
     public static final IKey MODEL_EDITOR_MODEL_CUBE_POSITION = L10n.lang("bbs.ui.model_editor.model.cube.position");
     public static final IKey MODEL_EDITOR_MODEL_CUBE_SIZE = L10n.lang("bbs.ui.model_editor.model.cube.size");
-    public static final IKey MODEL_EDITOR_MODEL_CUBE_PIVOT = L10n.lang("bbs.ui.model_editor.model.cube.pivot");
-    public static final IKey MODEL_EDITOR_MODEL_CUBE_ROTATION = L10n.lang("bbs.ui.model_editor.model.cube.rotation");
+    public static final IKey MODEL_EDITOR_MODEL_PIVOT = L10n.lang("bbs.ui.model_editor.model.pivot");
+    public static final IKey MODEL_EDITOR_MODEL_ROTATION = L10n.lang("bbs.ui.model_editor.model.rotation");
     public static final IKey MODEL_EDITOR_MODEL_CUBE_INFLATE = L10n.lang("bbs.ui.model_editor.model.cube.inflate");
     public static final IKey MODEL_EDITOR_MODEL_UV_DRAWN = L10n.lang("bbs.ui.model_editor.model.uv.drawn");
     public static final IKey MODEL_EDITOR_MODEL_UV_X1 = L10n.lang("bbs.ui.model_editor.model.uv.x1");

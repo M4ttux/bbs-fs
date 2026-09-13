@@ -33,6 +33,7 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.pose.Transform;
 import org.joml.Vector2f;
 import org.joml.Vector3f;
@@ -204,6 +205,9 @@ public class UIModelGeometryEditor extends UIElement
         /* A group's rest has no scale. G/R start a gesture on the picked group without touching a
          * handle, the way every transform editor of the panel does. */
         this.transform = new UIPropTransform().noScale();
+        /* The translate row of a group's rest is its pivot, and it moves the point alone — while the
+         * gizmo beside it moves the whole group — so it says so instead of the generic "Position". */
+        this.transform.labels(UIKeys.MODEL_EDITOR_MODEL_PIVOT, UIKeys.TRANSFORMS_SCALE, UIKeys.MODEL_EDITOR_MODEL_ROTATION);
         this.transform.callbacks(this::beginEdit, this::commitEdit, this::endEdit);
         this.transform.hotkeyDrag(() ->
         {
@@ -221,7 +225,7 @@ public class UIModelGeometryEditor extends UIElement
          * the pivot it turns about on a row of its own, and the inflate below. The sizes stay three
          * numbers: a cube square on every side is the common case, not a reason to fold the row. */
         this.cubeTransform = new UIPropTransform().noUniformScale();
-        this.cubeTransform.labels(UIKeys.MODEL_EDITOR_MODEL_CUBE_POSITION, UIKeys.MODEL_EDITOR_MODEL_CUBE_SIZE, UIKeys.MODEL_EDITOR_MODEL_CUBE_ROTATION);
+        this.cubeTransform.labels(UIKeys.MODEL_EDITOR_MODEL_CUBE_POSITION, UIKeys.MODEL_EDITOR_MODEL_CUBE_SIZE, UIKeys.MODEL_EDITOR_MODEL_ROTATION);
         this.cubeTransform.callbacks(this::beginEdit, this::commitEdit, this::endEdit);
         this.cubeTransform.hotkeyDrag(() ->
         {
@@ -242,7 +246,7 @@ public class UIModelGeometryEditor extends UIElement
             int axis = i;
             UITrackpad field = new UITrackpad((v) -> this.setCubePivot(axis, v.floatValue())).block().onlyNumbers();
 
-            field.tooltip(raw.format(UIKeys.MODEL_EDITOR_MODEL_CUBE_PIVOT, axes[i]));
+            field.tooltip(raw.format(UIKeys.MODEL_EDITOR_MODEL_PIVOT, axes[i]));
             field.textbox.setColor(colors[i]);
             /* A finished drag of the pad closes its undo step, as the transform's own pads do, and settles the model. */
             field.getEvents().register(UITrackpadDragEndEvent.class, (e) -> this.endEdit());
@@ -292,6 +296,11 @@ public class UIModelGeometryEditor extends UIElement
         this.tree.keys().register(Keys.DELETE, this::askRemoveNodes).inside().active(any).category(category);
         this.tree.keys().register(Keys.MODEL_EDITOR_GROUP_RENAME, this::editName).inside().active(this::single).category(category);
         this.tree.keys().register(Keys.MODEL_EDITOR_GROUP_IK_BONES, this::pickIKParent).inside().active(this::singleGroup).category(category);
+
+        /* Unfolding is the panel's own key, as it is on the config editor's pages — no need to be
+         * over the tree for it. */
+        this.keys().register(Keys.MODEL_EDITOR_EXPAND_ALL, () -> this.tree.setAllExpanded(true)).active(open).category(category);
+        this.keys().register(Keys.MODEL_EDITOR_COLLAPSE_ALL, () -> this.tree.setAllExpanded(false)).active(open).category(category);
     }
 
     /** F2: the name field takes the caret, since the tree renames through it rather than in place. */
@@ -565,6 +574,20 @@ public class UIModelGeometryEditor extends UIElement
             }
         }
 
+        /* Last, so it draws over the pick: the row under the cursor in the tree lights up the way a
+         * cube under the cursor in the viewport does — a group as the cubes it carries. */
+        ModelNode hovered = this.getContext() == null ? null : this.tree.atCursor(this.getContext());
+        ModelGroup owner = hovered == null ? null : this.model.getGroup(hovered.group());
+
+        if (owner != null && hovered.isGroup())
+        {
+            this.outlineSubtree(owner, UIModelEditorRenderer.HOVER_COLOR, outlines);
+        }
+        else if (owner != null && hovered.cube() < owner.cubes.size())
+        {
+            outlines.add(new UIModelEditorRenderer.Outline(hovered, UIModelEditorRenderer.HOVER_COLOR));
+        }
+
         return outlines;
     }
 
@@ -706,8 +729,7 @@ public class UIModelGeometryEditor extends UIElement
             return;
         }
 
-        Vector3f rotate = this.anchor.rotate;
-        Vector3f degrees = new Vector3f(MathUtils.toDeg(rotate.x), MathUtils.toDeg(rotate.y), MathUtils.toDeg(rotate.z));
+        Vector3f degrees = degreesOf(this.anchor, group.initial.rotate);
 
         if (!group.initial.translate.equals(this.anchor.translate, EPSILON))
         {
@@ -726,6 +748,28 @@ public class UIModelGeometryEditor extends UIElement
         {
             group.initial.rotate.set(degrees);
         }
+    }
+
+    /**
+     * A stand-in's rotation in degrees, however its editor stores it. The model rests in euler
+     * angles, but the rotate row can be switched to a quaternion (Shift+Q) for gimbal-free work,
+     * and then the eulers it carries are stale. The quaternion is read back on the branch nearest
+     * the rotation already stored, so a turn keeps its numbers continuous rather than jumping to
+     * a flipped equivalent — and switching the mode alone lands on the same numbers and writes
+     * nothing.
+     */
+    private static Vector3f degreesOf(Transform standin, Vector3f stored)
+    {
+        Vector3f radians = standin.rotate;
+
+        if (standin.rotationMode == Transform.RotationMode.QUATERNION)
+        {
+            Vector3f reference = new Vector3f(MathUtils.toRad(stored.x), MathUtils.toRad(stored.y), MathUtils.toRad(stored.z));
+
+            radians = Matrices.toCompatibleEulerZYXRadians(standin.quat, reference, new Vector3f());
+        }
+
+        return new Vector3f(MathUtils.toDeg(radians.x), MathUtils.toDeg(radians.y), MathUtils.toDeg(radians.z));
     }
 
     /**
@@ -947,8 +991,7 @@ public class UIModelGeometryEditor extends UIElement
 
         ModelGroup group = this.model.getGroup(leader.group());
         Vector3f step = new Vector3f(this.standin.translate).sub(this.applied.translate);
-        Vector3f rotate = this.standin.rotate;
-        Vector3f degrees = new Vector3f(MathUtils.toDeg(rotate.x), MathUtils.toDeg(rotate.y), MathUtils.toDeg(rotate.z));
+        Vector3f degrees = degreesOf(this.standin, cube.rotate);
         boolean changed = false;
 
         if (step.length() > EPSILON)

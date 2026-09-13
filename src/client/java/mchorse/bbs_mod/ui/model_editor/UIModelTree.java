@@ -160,6 +160,19 @@ public class UIModelTree extends UIList<ModelNode>
         return cube.name.isEmpty() ? UIKeys.MODEL_EDITOR_MODEL_CUBE_LABEL.format(index + 1).get() : cube.name;
     }
 
+    /** Unfold every group, or fold them all — the panel's expand and collapse keys. */
+    public void setAllExpanded(boolean expanded)
+    {
+        if (expanded)
+        {
+            this.folds.expandAll(this.model == null ? List.of() : this.model.getAllGroupKeys());
+        }
+        else
+        {
+            this.folds.collapseAll();
+        }
+    }
+
     /** Build the rows again from the model, keeping the pick — what a fold changes. */
     private void refill()
     {
