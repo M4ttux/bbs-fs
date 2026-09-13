@@ -43,6 +43,34 @@ public class ModelCube implements IMapSerializable
     public ModelUV top;
     public ModelUV bottom;
 
+    /** The unwrap of one of the cube's six sides, or null when that side isn't drawn at all. */
+    public ModelUV getUV(CubeFace face)
+    {
+        return switch (face)
+        {
+            case FRONT -> this.front;
+            case BACK -> this.back;
+            case RIGHT -> this.right;
+            case LEFT -> this.left;
+            case TOP -> this.top;
+            case BOTTOM -> this.bottom;
+        };
+    }
+
+    /** Give a side its unwrap, or null to stop drawing it. */
+    public void setUV(CubeFace face, ModelUV uv)
+    {
+        switch (face)
+        {
+            case FRONT -> this.front = uv;
+            case BACK -> this.back = uv;
+            case RIGHT -> this.right = uv;
+            case LEFT -> this.left = uv;
+            case TOP -> this.top = uv;
+            case BOTTOM -> this.bottom = uv;
+        }
+    }
+
     public void setupBoxUV(Vector2f boxUV, boolean mirror)
     {
         /* North */

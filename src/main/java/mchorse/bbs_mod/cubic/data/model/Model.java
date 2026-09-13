@@ -126,6 +126,25 @@ public class Model implements IMapSerializable, IModel
         }
     }
 
+    /** Rebuild what every cube of the model draws as — what a change to the unwrap's sheet needs. */
+    public void regenerateQuads()
+    {
+        this.refreshGeometry(this.orderedGroups);
+    }
+
+    /**
+     * The size of the sheet every face's unwrap is measured against — the {@code texture} of the
+     * file, not the size of the PNG. Changing it re-reads every cube's unwrap against the new one,
+     * so the same numbers cover a different share of the sheet.
+     */
+    public void setTextureSize(int width, int height)
+    {
+        this.textureWidth = width;
+        this.textureHeight = height;
+
+        this.regenerateQuads();
+    }
+
     /**
      * Move a group and everything under it by {@code delta}, in the model's own units: the pivot it
      * rests at, the cubes and meshes it carries, and the same for every group below it. A cubic

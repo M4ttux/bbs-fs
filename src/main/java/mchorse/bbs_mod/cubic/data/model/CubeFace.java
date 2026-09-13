@@ -1,4 +1,4 @@
-package mchorse.bbs_mod.cubic.weld;
+package mchorse.bbs_mod.cubic.data.model;
 
 import org.joml.Vector3f;
 

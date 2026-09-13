@@ -67,7 +67,7 @@ public class UIWeldList extends UIEntryList<WeldValue>
     {
         FontRenderer font = context.batcher.getFont();
         String label = font.limitToWidth(bone.isEmpty() ? "?" : bone, width);
-        Icon icon = UIModelConfigEditor.faceIcon(face);
+        Icon icon = ModelFaces.icon(face);
 
         context.batcher.textShadow(label, x, textY, color);
 

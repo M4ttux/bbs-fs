@@ -2,12 +2,12 @@ package mchorse.bbs_mod.ui.model_editor;
 
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.cubic.ModelInstance;
+import mchorse.bbs_mod.cubic.data.model.CubeFace;
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.model.ArmorType;
 import mchorse.bbs_mod.cubic.model.config.ArmorSlotValue;
 import mchorse.bbs_mod.cubic.model.config.ModelConfig;
 import mchorse.bbs_mod.cubic.model.config.WeldValue;
-import mchorse.bbs_mod.cubic.weld.CubeFace;
 import mchorse.bbs_mod.cubic.weld.WeldBinding;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
@@ -120,22 +120,6 @@ public class UIModelConfigEditor extends UIElement
     private static Tab lastTab = Tab.GENERAL;
 
     private static final CubeFace[] FACES = CubeFace.values();
-
-    /* How a cube's side reads in the UI: the side picker's buttons, and the icon a weld row draws in
-     * place of the side's name. Both are indexed by {@link CubeFace}, so the order is the enum's. */
-    private static final Icon[] FACE_ICONS = {Icons.FORWARD, Icons.BACKWARD, Icons.ARROW_RIGHT, Icons.ARROW_LEFT, Icons.ARROW_UP, Icons.ARROW_DOWN};
-    private static final IKey[] FACE_LABELS = {
-        UIKeys.MODEL_EDITOR_FACE_FRONT, UIKeys.MODEL_EDITOR_FACE_BACK, UIKeys.MODEL_EDITOR_FACE_RIGHT,
-        UIKeys.MODEL_EDITOR_FACE_LEFT, UIKeys.MODEL_EDITOR_FACE_TOP, UIKeys.MODEL_EDITOR_FACE_BOTTOM
-    };
-
-    /** The icon a side is shown by; null when the name doesn't name a side (an unset face). */
-    static Icon faceIcon(String face)
-    {
-        CubeFace value = CubeFace.fromName(face);
-
-        return value == null ? null : FACE_ICONS[value.ordinal()];
-    }
 
     /* The role dots of the bone tree: rightmost, a mirror bone is set; next to it, a picking override. */
     private static final int MARKER_MIRROR = Colors.A100 | Colors.CYAN;
@@ -1401,7 +1385,7 @@ public class UIModelConfigEditor extends UIElement
 
         for (int i = 0; i < FACES.length; i++)
         {
-            icons.add(FACE_ICONS[i], FACE_LABELS[i]);
+            icons.add(ModelFaces.icon(FACES[i]), ModelFaces.label(FACES[i]));
         }
 
         CubeFace current = CubeFace.fromName(value.get());

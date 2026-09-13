@@ -146,6 +146,9 @@ public class UIModelGeometryEditor extends UIElement
     private final UITrackpad inflate;
     private final UIElement inflateRow;
 
+    /** The picked cube's unwrap, under its numbers. */
+    private final UIModelCubeUV cubeUV;
+
     /** Groups whose cubes changed numbers, waiting for their quads and their bake to be rebuilt. */
     private final Set<ModelGroup> dirty = Collections.newSetFromMap(new IdentityHashMap<>());
 
@@ -257,9 +260,11 @@ public class UIModelGeometryEditor extends UIElement
         this.inflate.getEvents().register(UITrackpadDragEndEvent.class, (e) -> this.endEdit());
         this.inflateRow = UI.labelRow(UIKeys.MODEL_EDITOR_MODEL_CUBE_INFLATE, this.inflate);
 
+        this.cubeUV = new UIModelCubeUV(this);
+
         this.body = new UIElement();
         this.body.column(UIConstants.MARGIN).vertical().stretch();
-        this.body.add(UI.labelRow(UIKeys.MODEL_EDITOR_MODEL_GROUP_NAME, this.name), this.transform, this.cubeTransform, this.inflateRow);
+        this.body.add(UI.labelRow(UIKeys.MODEL_EDITOR_MODEL_GROUP_NAME, this.name), this.transform, this.cubeTransform, this.inflateRow, this.cubeUV);
 
         this.page = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING, UI.strip(add, this.addCube, this.dupe, this.remove, this.ikBones), this.search, this.body);
         this.page.full(this);
@@ -374,6 +379,18 @@ public class UIModelGeometryEditor extends UIElement
         String id = this.leader();
 
         return id == null ? null : this.model.getGroup(id);
+    }
+
+    /** The cube the rows sit on, for the unwrap block under them; null with a group or nothing picked. */
+    ModelCube pickedCube()
+    {
+        return this.leadCube();
+    }
+
+    /** The model the tree is bound to, for the unwrap block's sheet row; null with none. */
+    Model pickedModel()
+    {
+        return this.model;
     }
 
     /** The cube the fields sit on: the first of the pick, when it is a cube; null otherwise. */
@@ -583,6 +600,7 @@ public class UIModelGeometryEditor extends UIElement
         this.transform.setVisible(cube == null);
         this.cubeTransform.setVisible(cube != null);
         this.inflateRow.setVisible(cube != null);
+        this.cubeUV.setVisible(cube != null);
 
         UIUtils.setEnabledDeep(this.body, any);
         this.transform.setRotationEnabled(singleGroup);
@@ -595,6 +613,9 @@ public class UIModelGeometryEditor extends UIElement
         this.dupe.setEnabled(picked);
         this.remove.setEnabled(picked);
         this.ikBones.setEnabled(singleGroup);
+
+        /* After the body's own enabling, which would otherwise light the unwrap's rows back up. */
+        this.cubeUV.fill();
 
         this.page.resize();
         this.page.scroll.clamp();
@@ -1078,7 +1099,7 @@ public class UIModelGeometryEditor extends UIElement
             }
         }
 
-        return false;
+        return this.cubeUV.dragging();
     }
 
     /**
@@ -1184,6 +1205,53 @@ public class UIModelGeometryEditor extends UIElement
             this.loadCube(cube);
             this.cubeTransform.setTransform(this.standin);
         }
+    }
+
+    /**
+     * An edit of the picked cube's own numbers made from outside — the unwrap rows under it:
+     * snapshot, change, mark what it draws as for rebuilding, one undo step. {@code key} merges the
+     * steps of a drag, with the cube's address added to it, so a drag on one cube never merges into
+     * a drag on another; null for a change that stands on its own.
+     */
+    void editCube(IKey label, String key, Runnable mutation)
+    {
+        ModelNode leader = this.leaderNode();
+
+        if (this.model == null || leader == null || !leader.isCube())
+        {
+            return;
+        }
+
+        MapType before = this.snapshot();
+
+        mutation.run();
+        this.dirty.add(this.model.getGroup(leader.group()));
+        this.modelPanel.pushModelEdit(new ModelEditUndo(this.modelPanel, label.get(), key == null ? null : key + ":" + leader.key(), before, this.snapshot()));
+    }
+
+    /** The end of such an edit: its undo step closes and the model settles. */
+    void closeCubeEdit()
+    {
+        this.endEdit();
+    }
+
+    /**
+     * The sheet every unwrap is measured against. It belongs to the model rather than to any one
+     * cube — it is the file's {@code texture}, not the size of the PNG — so the whole model's quads
+     * follow it and every group's bake is rebuilt.
+     */
+    void setTextureSize(int width, int height)
+    {
+        if (this.model == null || width <= 0 || height <= 0 || (this.model.textureWidth == width && this.model.textureHeight == height))
+        {
+            return;
+        }
+
+        MapType before = this.snapshot();
+
+        this.model.setTextureSize(width, height);
+        this.dirty.addAll(this.model.getOrderedGroups());
+        this.modelPanel.pushModelEdit(new ModelEditUndo(this.modelPanel, UIKeys.MODEL_EDITOR_MODEL_UNDO_TEXTURE_SIZE.format(width, height).get(), "texture_size", before, this.snapshot()));
     }
 
     /* The structure: rows added, copied, removed, renamed, moved — each one undo step, settled and
