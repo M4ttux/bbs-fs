@@ -21,6 +21,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformOp;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UISearchList;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
+import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIConfirmOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.utils.Gizmo;
@@ -136,6 +137,13 @@ public class UIModelGeometryEditor extends UIElement
     private final UIPropTransform transform;
     private final Transform anchor = new Transform();
 
+    /** The group stand-in as it was last carried into the model, so only its own changes are carried. */
+    private final Transform anchorApplied = new Transform();
+
+    /** What the two sections are called, shown while both of them are: a group picked together with cubes. */
+    private final UILabel groupCaption;
+    private final UILabel cubesCaption;
+
     /** The picked cube's position, size and rotation, edited through a stand-in of their own. */
     private final UIPropTransform cubeTransform;
     private final Transform standin = new Transform();
@@ -222,7 +230,7 @@ public class UIModelGeometryEditor extends UIElement
         /* The translate row of a group's rest is its pivot, and it moves the point alone — while the
          * gizmo beside it moves the whole group — so it says so instead of the generic "Position". */
         this.transform.labels(UIKeys.MODEL_EDITOR_MODEL_PIVOT, UIKeys.TRANSFORMS_SCALE, UIKeys.MODEL_EDITOR_MODEL_ROTATION);
-        this.transform.callbacks(this::beginEdit, this::commitEdit, this::endEdit);
+        this.transform.callbacks(this::beginEdit, this::commitGroupEdit, this::endEdit);
         this.transform.hotkeyDrag(() ->
         {
             ModelSlotTarget target = this.shownTarget();
@@ -230,8 +238,10 @@ public class UIModelGeometryEditor extends UIElement
             return target == null ? null : this.modelPanel.renderer.buildGizmoDrag(target);
         });
         /* The hotkeys answer to the same rule as the gizmo's handles: a rest never scales, and it
-         * only turns while one group is picked. */
-        this.transform.enableHotkeys(() -> this.shownTarget() != null, (op) -> op == TransformOp.TRANSLATE || (op == TransformOp.ROTATE && this.singleGroup()));
+         * only turns while one group is picked. They are the group rows' only while the gizmo stands
+         * on the group — with a group picked together with cubes both editors show, and a key
+         * must not reach the one the gizmo isn't on. */
+        this.transform.enableHotkeys(() -> this.targetIs(ModelSlotKind.ANCHOR), (op) -> op == TransformOp.TRANSLATE || (op == TransformOp.ROTATE && this.singleGroup()));
         this.transform.translateAction(UIKeys.MODEL_EDITOR_MODEL_GROUP_CENTER_ANCHOR, this::centerAnchor);
 
         /* A cube's rows: its position (the corner it starts from), its size and its rotation, in
@@ -240,7 +250,7 @@ public class UIModelGeometryEditor extends UIElement
          * numbers: a cube square on every side is the common case, not a reason to fold the row. */
         this.cubeTransform = new UICubeTransform().noUniformScale();
         this.cubeTransform.labels(UIKeys.MODEL_EDITOR_MODEL_CUBE_POSITION, UIKeys.MODEL_EDITOR_MODEL_CUBE_SIZE, UIKeys.MODEL_EDITOR_MODEL_ROTATION);
-        this.cubeTransform.callbacks(this::beginEdit, this::commitEdit, this::endEdit);
+        this.cubeTransform.callbacks(this::beginEdit, this::commitCubeEdit, this::endEdit);
         this.cubeTransform.hotkeyDrag(() ->
         {
             ModelSlotTarget target = this.shownTarget();
@@ -249,7 +259,7 @@ public class UIModelGeometryEditor extends UIElement
         });
         /* A cube takes all three operations — unlike a group's rest it does have a size. With several
          * picked the gizmo offers moving alone for now, and the hotkeys answer to the same rule. */
-        this.cubeTransform.enableHotkeys(() -> this.shownTarget() != null, (op) -> op == TransformOp.TRANSLATE || this.single());
+        this.cubeTransform.enableHotkeys(() -> this.targetIs(ModelSlotKind.CUBE), (op) -> op == TransformOp.TRANSLATE || this.single());
 
         IKey raw = IKey.constant("%s (%s)");
         IKey[] axes = {UIKeys.GENERAL_X, UIKeys.GENERAL_Y, UIKeys.GENERAL_Z};
@@ -280,9 +290,12 @@ public class UIModelGeometryEditor extends UIElement
 
         this.cubeUV = new UIModelCubeUV(this);
 
+        this.groupCaption = UI.label(UIKeys.MODEL_EDITOR_MODEL_SECTION_GROUP);
+        this.cubesCaption = UI.label(UIKeys.MODEL_EDITOR_MODEL_SECTION_CUBES);
+
         this.body = new UIElement();
         this.body.column(UIConstants.MARGIN).vertical().stretch();
-        this.body.add(UI.labelRow(UIKeys.MODEL_EDITOR_MODEL_GROUP_NAME, this.name), this.transform, this.cubeTransform, this.inflateRow);
+        this.body.add(UI.labelRow(UIKeys.MODEL_EDITOR_MODEL_GROUP_NAME, this.name), this.groupCaption, this.transform, this.cubesCaption, this.cubeTransform, this.inflateRow);
 
         /* The strip over the tree stands at an icon button's size, as the unwrap pane's side icons do:
          * it is what the page is worked with, not a list's small print. */
@@ -439,6 +452,71 @@ public class UIModelGeometryEditor extends UIElement
         ModelGroup group = node != null && node.isCube() ? this.model.getGroup(node.group()) : null;
 
         return group != null && node.cube() < group.cubes.size() ? group.cubes.get(node.cube()) : null;
+    }
+
+    /**
+     * The group the group rows show: the leading row when it is a group, else the first group of
+     * the pick. Null when the pick has no group.
+     */
+    private ModelGroup sectionGroup()
+    {
+        ModelGroup lead = this.leadGroup();
+
+        if (lead != null || this.model == null)
+        {
+            return lead;
+        }
+
+        for (ModelNode node : this.tree.getCurrent())
+        {
+            ModelGroup group = node.isGroup() ? this.model.getGroup(node.group()) : null;
+
+            if (group != null)
+            {
+                return group;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The cube the cube rows show, by address: the leading row when it is a cube — the gizmo stands
+     * on it — else the first cube of the pick, which for a picked group is the first cube of its
+     * branch. Null when the pick has no cube at all.
+     */
+    private ModelNode sectionCubeNode()
+    {
+        ModelNode leader = this.leaderNode();
+
+        if (leader == null)
+        {
+            return null;
+        }
+
+        if (leader.isCube())
+        {
+            return this.leadCube() == null ? null : leader;
+        }
+
+        List<ModelNode> cubes = this.pickedCubes();
+
+        return cubes.isEmpty() ? null : cubes.get(0);
+    }
+
+    private ModelCube sectionCube()
+    {
+        ModelNode node = this.sectionCubeNode();
+
+        return node == null ? null : this.model.getGroup(node.group()).cubes.get(node.cube());
+    }
+
+    /** Whether the gizmo stands on a target of this kind — the section whose editor its hotkeys belong to. */
+    private boolean targetIs(ModelSlotKind kind)
+    {
+        ModelSlotTarget target = this.shownTarget();
+
+        return target != null && target.kind() == kind;
     }
 
     /** Bind to a model (null for none); the tree keeps its pick by address. */
@@ -647,37 +725,47 @@ public class UIModelGeometryEditor extends UIElement
     }
 
     /**
-     * The leading row under the tree: a group's name and rest, or a cube's name and numbers — one
-     * of the two editors shows. With nothing picked the fields stand empty and disabled, so the
-     * page keeps its height and the scroll doesn't jump on every pick. With several picked the
-     * position stays live — it moves the whole pick — and so do a cube's other rows, which change
-     * every cube of the pick by the same amount; the name, and a group's rest rotation, belong to
-     * one row each and go dead. The verbs act on the groups of the pick, however the pick is mixed.
+     * The rows under the tree, in two sections: the group rows — a group's rest — while the pick
+     * has a group, and the cube rows — a cube's numbers — while it has a cube, its own row or one a
+     * picked group carries. A group picked alone shows both, so its cubes can be sized from their
+     * rows while the gizmo still moves and turns the group. With nothing picked the group rows stand
+     * empty and disabled, so the page keeps its height and the scroll doesn't jump on every pick.
+     * With several picked the position stays live — it moves the whole pick — and so do a cube's
+     * other rows, which change every cube of the pick by the same amount; the name, and a group's
+     * rest rotation, belong to one row each and go dead. The verbs act on the groups of the pick,
+     * however the pick is mixed.
      */
     private void fillSelection()
     {
         ModelNode leader = this.leaderNode();
-        ModelGroup group = this.leadGroup();
-        ModelCube cube = this.leadCube();
+        ModelGroup lead = this.leadGroup();
+        ModelCube leadCube = this.leadCube();
+        ModelGroup group = this.sectionGroup();
+        ModelCube cube = this.sectionCube();
 
         boolean any = group != null || cube != null;
+        boolean both = group != null && cube != null;
         boolean single = this.single();
         boolean singleGroup = this.singleGroup();
 
         /* A new pick is a new set of cubes: an edit of the old one has nothing left to say. */
         this.cubeEdit = null;
 
-        /* An unnamed cube shows the name it goes by as a hint, so typing over it names the cube. */
-        this.name.setText(group != null ? group.id : cube != null ? cube.name : "");
-        this.name.textbox.setPlaceholder(cube != null && cube.name.isEmpty() ? IKey.constant(UIModelTree.cubeLabel(cube, leader.cube())) : IKey.EMPTY);
+        /* The name is the leading row's. An unnamed cube shows the name it goes by as a hint, so
+         * typing over it names the cube. */
+        this.name.setText(lead != null ? lead.id : leadCube != null ? leadCube.name : "");
+        this.name.textbox.setPlaceholder(leadCube != null && leadCube.name.isEmpty() ? IKey.constant(UIModelTree.cubeLabel(leadCube, leader.cube())) : IKey.EMPTY);
         this.loadAnchor(group);
         this.transform.setTransform(this.anchor);
         this.loadCube(cube);
         this.cubeTransform.setTransform(this.standin);
 
-        this.transform.setVisible(cube == null);
+        this.transform.setVisible(group != null || cube == null);
         this.cubeTransform.setVisible(cube != null);
         this.inflateRow.setVisible(cube != null);
+        this.groupCaption.setVisible(both);
+        this.cubesCaption.setVisible(both);
+        this.cubesCaption.label = UIKeys.MODEL_EDITOR_MODEL_SECTION_CUBES.format(both ? this.pickedCubes().size() : 0);
 
         UIUtils.setEnabledDeep(this.body, any);
         this.transform.setRotationEnabled(singleGroup);
@@ -743,6 +831,15 @@ public class UIModelGeometryEditor extends UIElement
             this.anchor.translate.set(group.initial.translate);
             this.anchor.rotate.set(MathUtils.toRad(rotate.x), MathUtils.toRad(rotate.y), MathUtils.toRad(rotate.z));
         }
+
+        this.anchorApplied.copy(this.anchor);
+    }
+
+    /** Whether the group already rests where its stand-in says — within a hair, as the round trip through radians leaves it. */
+    private boolean anchorMatches(ModelGroup group)
+    {
+        return group.initial.translate.equals(this.anchor.translate, EPSILON)
+            && group.initial.rotate.equals(degreesOf(this.anchor, group.initial.rotate), EPSILON);
     }
 
     /**
@@ -761,23 +858,32 @@ public class UIModelGeometryEditor extends UIElement
      * <p>A rest already within a hair of the numbers is left alone: the round trip through radians
      * isn't exact, and the file must not pick up the noise. The rotation is the leader's alone —
      * with several picked, neither the gizmo nor the row offers it (see {@link #MANY_MASK}).</p>
+     *
+     * <p>Only the stand-in's OWN changes are carried — what it moved by since it was last carried
+     * in ({@link #anchorApplied}). A cube leading the pick moves the picked groups from the other
+     * section, and the group rows must not read that as a move of theirs and walk them back; they
+     * read the group again once nothing drives ({@link #syncStandins}). The gizmo moves the whole
+     * pick, cubes and all; the pivot row moves the groups' points, and the cubes have rows of their
+     * own for theirs.</p>
      */
     private void applyAnchor()
     {
-        ModelGroup group = this.leadGroup();
+        ModelGroup group = this.sectionGroup();
 
-        if (group == null)
+        if (group == null || sameTransform(this.anchor, this.anchorApplied))
         {
             return;
         }
 
+        boolean gesture = this.transform.isEditing();
         Vector3f degrees = degreesOf(this.anchor, group.initial.rotate);
+        Vector3f step = new Vector3f(this.anchor.translate).sub(this.anchorApplied.translate);
 
-        if (!group.initial.translate.equals(this.anchor.translate, EPSILON))
+        this.anchorApplied.copy(this.anchor);
+
+        if (step.x != 0F || step.y != 0F || step.z != 0F)
         {
-            Vector3f step = new Vector3f(this.anchor.translate).sub(group.initial.translate);
-
-            this.distribute(step, !pivotOnly && this.transform.isEditing(), true);
+            this.distribute(step, !pivotOnly && gesture, gesture);
 
             /* The leader's pivot is the number shown, to the bit: the step above is a difference of
              * floats and lands a hair off it, and the row must not drift from the model over a
@@ -790,6 +896,16 @@ public class UIModelGeometryEditor extends UIElement
         {
             group.initial.rotate.set(degrees);
         }
+    }
+
+    /** Whether two stand-ins hold the very same numbers, bit for bit — nothing to carry between them. */
+    private static boolean sameTransform(Transform a, Transform b)
+    {
+        return a.translate.equals(b.translate)
+            && a.scale.equals(b.scale)
+            && a.rotate.equals(b.rotate)
+            && a.quat.equals(b.quat)
+            && a.rotationMode == b.rotationMode;
     }
 
     /**
@@ -929,7 +1045,7 @@ public class UIModelGeometryEditor extends UIElement
      */
     private void centerAnchor()
     {
-        ModelGroup leader = this.leadGroup();
+        ModelGroup leader = this.sectionGroup();
         List<ModelGroup> picked = this.pickedGroups();
 
         if (leader == null)
@@ -968,8 +1084,9 @@ public class UIModelGeometryEditor extends UIElement
         }
 
         /* The leader's new pivot is in the stand-in; the step it just took must not drag the others,
-         * which have already been centred on their own geometry. */
+         * which have already been centred on their own geometry — so it counts as carried in. */
         leader.initial.translate.set(this.anchor.translate);
+        this.anchorApplied.copy(this.anchor);
 
         IKey label = picked.size() > 1
             ? UIKeys.MODEL_EDITOR_MODEL_UNDO_CENTER_ANCHOR_MANY.format(picked.size())
@@ -1027,14 +1144,16 @@ public class UIModelGeometryEditor extends UIElement
      */
     private void applyCube()
     {
-        ModelCube cube = this.leadCube();
+        ModelCube cube = this.sectionCube();
 
         if (cube == null)
         {
             return;
         }
 
-        if (this.cubeEdit == null && this.standinMatches(cube))
+        /* Only the stand-in's own changes are carried: a picked group's move from the other section
+         * moves these cubes too, and must not be read as a move of theirs. */
+        if (this.cubeEdit == null && (sameTransform(this.standin, this.applied) || this.standinMatches(cube)))
         {
             this.applied.copy(this.standin);
 
@@ -1049,7 +1168,10 @@ public class UIModelGeometryEditor extends UIElement
         ModelCubeEdit edit = this.cubeEdit();
         Vector3f step = new Vector3f(this.standin.translate).sub(this.applied.translate);
 
-        if (step.x != 0F || step.y != 0F || step.z != 0F)
+        /* The picked groups go with a cube's move only while a cube leads the pick — the gizmo is on
+         * it then, and the rows move what it moves. Under a leading group the cube rows are the
+         * cubes' own, and the group rows have the groups. */
+        if (this.cubeLeads() && (step.x != 0F || step.y != 0F || step.z != 0F))
         {
             this.distribute(step, geometry, false);
         }
@@ -1090,7 +1212,8 @@ public class UIModelGeometryEditor extends UIElement
             return this.cubeEdit;
         }
 
-        ModelNode leader = this.leaderNode();
+        ModelNode shown = this.sectionCubeNode();
+        boolean leads = this.cubeLeads();
         Set<ModelNode> picked = new HashSet<>(this.tree.getCurrent());
         Set<ModelNode> outermost = new HashSet<>(this.outermostNodes());
         ModelCubeEdit edit = new ModelCubeEdit(this.applied);
@@ -1099,10 +1222,20 @@ public class UIModelGeometryEditor extends UIElement
         {
             ModelGroup group = this.model.getGroup(node.group());
 
-            edit.add(group, group.cubes.get(node.cube()), picked.contains(node), outermost.contains(node), node.equals(leader));
+            /* While a cube leads, the picked groups carry their own cubes; under a leading group
+             * nothing moves them but these rows, so every cube is its own. */
+            edit.add(group, group.cubes.get(node.cube()), !leads || picked.contains(node), !leads || outermost.contains(node), node.equals(shown));
         }
 
         return this.cubeEdit = edit;
+    }
+
+    /** Whether the first of the pick is a cube — the gizmo is on the cube rows then, not on the group rows. */
+    private boolean cubeLeads()
+    {
+        ModelNode leader = this.leaderNode();
+
+        return leader != null && leader.isCube();
     }
 
     /**
@@ -1113,7 +1246,7 @@ public class UIModelGeometryEditor extends UIElement
      */
     private void centerCubePivots()
     {
-        if (this.leadCube() == null)
+        if (this.sectionCube() == null)
         {
             return;
         }
@@ -1164,8 +1297,8 @@ public class UIModelGeometryEditor extends UIElement
     /** The pivot alone: the point the cubes turn about, with the cubes left where they stand. */
     private void setCubePivot(int axis, float value)
     {
-        ModelNode leader = this.leaderNode();
-        ModelCube cube = this.leadCube();
+        ModelNode shown = this.sectionCubeNode();
+        ModelCube cube = this.sectionCube();
 
         if (cube == null || cube.pivot.get(axis) == value)
         {
@@ -1180,14 +1313,14 @@ public class UIModelGeometryEditor extends UIElement
             this.dirty.addAll(edit.groups());
         }
 
-        this.modelPanel.pushModelEdit(new ModelEditUndo(this.modelPanel, this.cubesLabel(UIKeys.MODEL_EDITOR_MODEL_UNDO_CUBE_PIVOT, edit.size()).get(), "pivot:" + leader.key(), before, this.snapshot()));
+        this.modelPanel.pushModelEdit(new ModelEditUndo(this.modelPanel, this.cubesLabel(UIKeys.MODEL_EDITOR_MODEL_UNDO_CUBE_PIVOT, edit.size()).get(), "pivot:" + shown.key(), before, this.snapshot()));
     }
 
     /** How far the cubes grow past their corners on every side. */
     private void setInflate(float value)
     {
-        ModelNode leader = this.leaderNode();
-        ModelCube cube = this.leadCube();
+        ModelNode shown = this.sectionCubeNode();
+        ModelCube cube = this.sectionCube();
 
         if (cube == null || cube.inflate == value)
         {
@@ -1202,18 +1335,18 @@ public class UIModelGeometryEditor extends UIElement
             this.dirty.addAll(edit.groups());
         }
 
-        this.modelPanel.pushModelEdit(new ModelEditUndo(this.modelPanel, this.cubesLabel(UIKeys.MODEL_EDITOR_MODEL_UNDO_CUBE_INFLATE, edit.size()).get(), "inflate:" + leader.key(), before, this.snapshot()));
+        this.modelPanel.pushModelEdit(new ModelEditUndo(this.modelPanel, this.cubesLabel(UIKeys.MODEL_EDITOR_MODEL_UNDO_CUBE_INFLATE, edit.size()).get(), "inflate:" + shown.key(), before, this.snapshot()));
     }
 
-    /** What an edit of the cubes is called on the undo stack: the leading cube's own label, or how many cubes it took. */
+    /** What an edit of the cubes is called on the undo stack: the shown cube's own label, or how many cubes it took. */
     private IKey cubesLabel(IKey single, int cubes)
     {
-        ModelNode leader = this.leaderNode();
-        ModelCube cube = this.leadCube();
+        ModelNode shown = this.sectionCubeNode();
+        ModelCube cube = this.sectionCube();
 
         return cubes > 1 || cube == null
             ? UIKeys.MODEL_EDITOR_MODEL_UNDO_CUBE_TRANSFORM_MANY.format(cubes)
-            : single.format(UIModelTree.cubeLabel(cube, leader.cube()));
+            : single.format(UIModelTree.cubeLabel(cube, shown.cube()));
     }
 
     /**
@@ -1224,7 +1357,7 @@ public class UIModelGeometryEditor extends UIElement
      */
     private void pasteCubes(Vector3d corner, Vector3d size, Vector3d rotation)
     {
-        if (this.leadCube() == null)
+        if (this.sectionCube() == null)
         {
             return;
         }
@@ -1337,14 +1470,8 @@ public class UIModelGeometryEditor extends UIElement
     @Override
     public void render(UIContext context)
     {
-        if (this.leadCube() != null)
-        {
-            this.applyCube();
-        }
-        else
-        {
-            this.applyAnchor();
-        }
+        this.applyAnchor();
+        this.applyCube();
 
         if (this.gestureRunning() || this.padDragging())
         {
@@ -1354,9 +1481,35 @@ public class UIModelGeometryEditor extends UIElement
         {
             this.settle();
             this.cubeEdit = null;
+            this.syncStandins();
         }
 
         super.render(context);
+    }
+
+    /**
+     * The rows read their numbers back once nothing drives them, if something else changed those
+     * numbers meanwhile — the other section's move of the pick, a group's gizmo carrying the cubes
+     * the cube rows show. Only on a real difference, so a stand-in switched to quaternions keeps its
+     * mode while nothing touches it.
+     */
+    private void syncStandins()
+    {
+        ModelGroup group = this.sectionGroup();
+
+        if (group != null && !this.anchorMatches(group))
+        {
+            this.loadAnchor(group);
+            this.transform.setTransform(this.anchor);
+        }
+
+        ModelCube cube = this.sectionCube();
+
+        if (cube != null && !this.standinMatches(cube))
+        {
+            this.loadCube(cube);
+            this.cubeTransform.setTransform(this.standin);
+        }
     }
 
     /* An edit of the numbers: the model before it, the model after it, one step on the stack — the
@@ -1375,39 +1528,44 @@ public class UIModelGeometryEditor extends UIElement
         }
     }
 
-    private void commitEdit()
+    /** A change of the group rows: their group's rest, and the pick's step with it. */
+    private void commitGroupEdit()
     {
-        ModelNode leader = this.leaderNode();
+        ModelGroup group = this.sectionGroup();
 
-        if (leader == null || this.before == null)
+        if (group == null || this.before == null)
         {
             this.before = null;
 
             return;
         }
 
-        ModelCube cube = this.leadCube();
-        IKey label;
-        String key;
+        int picked = this.pickedGroups().size();
 
-        if (cube != null)
+        this.applyAnchor();
+
+        IKey label = picked > 1
+            ? UIKeys.MODEL_EDITOR_MODEL_UNDO_TRANSFORM_MANY.format(picked)
+            : UIKeys.MODEL_EDITOR_MODEL_UNDO_TRANSFORM.format(group.id);
+
+        this.modelPanel.pushModelEdit(new ModelEditUndo(this.modelPanel, label.get(), "transform:" + group.id, this.before, this.snapshot()));
+        this.before = null;
+    }
+
+    /** A change of the cube rows: every cube of the pick by it. */
+    private void commitCubeEdit()
+    {
+        ModelNode shown = this.sectionCubeNode();
+
+        if (shown == null || this.before == null)
         {
-            this.applyCube();
-            label = this.cubesLabel(UIKeys.MODEL_EDITOR_MODEL_UNDO_CUBE_TRANSFORM, this.pickedCubes().size());
-            key = "transform:" + leader.key();
-        }
-        else
-        {
-            int picked = this.pickedGroups().size();
+            this.before = null;
 
-            this.applyAnchor();
-            label = picked > 1
-                ? UIKeys.MODEL_EDITOR_MODEL_UNDO_TRANSFORM_MANY.format(picked)
-                : UIKeys.MODEL_EDITOR_MODEL_UNDO_TRANSFORM.format(leader.group());
-            key = "transform:" + leader.group();
+            return;
         }
 
-        this.modelPanel.pushModelEdit(new ModelEditUndo(this.modelPanel, label.get(), key, this.before, this.snapshot()));
+        this.applyCube();
+        this.modelPanel.pushModelEdit(new ModelEditUndo(this.modelPanel, this.cubesLabel(UIKeys.MODEL_EDITOR_MODEL_UNDO_CUBE_TRANSFORM, this.pickedCubes().size()).get(), "transform:" + shown.key(), this.before, this.snapshot()));
         this.before = null;
     }
 
@@ -1415,7 +1573,8 @@ public class UIModelGeometryEditor extends UIElement
      * The end of a gesture or a pad's drag: its undo step closes, and the model settles. The cube's
      * stand-in is read back from the cube afterwards — a gesture can leave it ahead of the numbers
      * it shows, growing the cube from its pivot without the position row, or moving the pivot alone
-     * while the row followed the gizmo.
+     * while the row followed the gizmo — and the group rows are read back too if the move they
+     * didn't make shifted their group.
      */
     private void endEdit()
     {
@@ -1423,12 +1582,20 @@ public class UIModelGeometryEditor extends UIElement
         this.modelPanel.closeModelEdit();
         this.settle();
 
-        ModelCube cube = this.leadCube();
+        ModelCube cube = this.sectionCube();
 
         if (cube != null)
         {
             this.loadCube(cube);
             this.cubeTransform.setTransform(this.standin);
+        }
+
+        ModelGroup group = this.sectionGroup();
+
+        if (group != null && !this.anchorMatches(group))
+        {
+            this.loadAnchor(group);
+            this.transform.setTransform(this.anchor);
         }
     }
 
