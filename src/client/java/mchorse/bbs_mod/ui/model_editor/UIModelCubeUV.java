@@ -48,6 +48,13 @@ public class UIModelCubeUV extends UIElement
     /** How tall the strip of sides over the picture stands: a row's height, like every strip of icons. */
     private static final int FACES_HEIGHT = UIConstants.CONTROL_HEIGHT;
 
+    /**
+     * The side's own icons stand at the size of an icon button rather than squeezed to a row's height
+     * like a list's verbs: they are what the pane is worked with, and a glyph drawn at its own size
+     * reads cramped in a box no bigger than itself.
+     */
+    private static final int ACTION_SIZE = 20;
+
     private final UIModelGeometryEditor editor;
 
     private final UIModelUVEditor canvas;
@@ -147,9 +154,14 @@ public class UIModelCubeUV extends UIElement
         this.sheetWidth.getEvents().register(UITrackpadDragEndEvent.class, (e) -> this.editor.closeCubeEdit());
         this.sheetHeight.getEvents().register(UITrackpadDragEndEvent.class, (e) -> this.editor.closeCubeEdit());
 
+        UIElement actions = new UIElement();
+
+        actions.row(0).height(ACTION_SIZE);
+        actions.add(drawn.wh(ACTION_SIZE, ACTION_SIZE), flipX.wh(ACTION_SIZE, ACTION_SIZE), flipY.wh(ACTION_SIZE, ACTION_SIZE), rotate.wh(ACTION_SIZE, ACTION_SIZE));
+
         this.rows = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING,
             this.cornerRows,
-            UI.strip(drawn, flipX, flipY, rotate),
+            actions,
             UI.label(UIKeys.MODEL_EDITOR_MODEL_UV_BOX),
             box,
             UI.label(UIKeys.MODEL_EDITOR_MODEL_UV_SHEET),
