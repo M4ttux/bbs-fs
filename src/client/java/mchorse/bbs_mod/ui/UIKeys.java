@@ -1078,6 +1078,7 @@ public class UIKeys
     public static final IKey MODEL_EDITOR_MODEL_UNDO_CENTER_ANCHOR = L10n.lang("bbs.ui.model_editor.model.undo.center_anchor");
     public static final IKey MODEL_EDITOR_MODEL_UNDO_CENTER_ANCHOR_MANY = L10n.lang("bbs.ui.model_editor.model.undo.center_anchor_many");
     public static final IKey MODEL_EDITOR_MODEL_UNDO_IK_BONES = L10n.lang("bbs.ui.model_editor.model.undo.ik_bones");
+    public static final IKey MODEL_EDITOR_MODEL_CUBE_LABEL = L10n.lang("bbs.ui.model_editor.model.cube.label");
     public static final IKey MODEL_EDITOR_PROCEDURAL = L10n.lang("bbs.ui.model_editor.procedural");
     public static final IKey MODEL_EDITOR_CULLING = L10n.lang("bbs.ui.model_editor.culling");
     public static final IKey MODEL_EDITOR_ON_CPU = L10n.lang("bbs.ui.model_editor.on_cpu");

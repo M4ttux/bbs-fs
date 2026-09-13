@@ -1432,6 +1432,7 @@
 	"bbs.ui.model_editor.model.undo.center_anchor": "Center pivot: %s",
 	"bbs.ui.model_editor.model.undo.center_anchor_many": "Center pivots: %s groups",
 	"bbs.ui.model_editor.model.undo.ik_bones": "IK bones: %s",
+	"bbs.ui.model_editor.model.cube.label": "Cube %s",
 	"bbs.ui.model_editor.procedural": "Procedural",
 	"bbs.ui.model_editor.culling": "Culling",
 	"bbs.ui.model_editor.on_cpu": "Compute on CPU",

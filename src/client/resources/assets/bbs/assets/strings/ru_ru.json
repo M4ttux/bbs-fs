@@ -1426,6 +1426,7 @@
 	"bbs.ui.model_editor.model.undo.center_anchor": "Якорь в центр: %s",
 	"bbs.ui.model_editor.model.undo.center_anchor_many": "Якоря в центр (%s)",
 	"bbs.ui.model_editor.model.undo.ik_bones": "Кости для ИК: %s",
+	"bbs.ui.model_editor.model.cube.label": "Куб %s",
 	"bbs.ui.model_editor.procedural": "Процедурная",
 	"bbs.ui.model_editor.culling": "Отсечение граней",
 	"bbs.ui.model_editor.on_cpu": "Считать на CPU",

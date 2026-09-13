@@ -141,7 +141,8 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
 
         this.renderer = new UIModelEditorRenderer()
             .target(this::shownTarget)
-            .onBoneClick(this::selectBone);
+            .onPick(this::selectPick)
+            .outlines(() -> lastEditor == Editor.MODEL ? this.modelEditor.outlines() : List.of());
         this.renderer.form = this.form;
 
         /* Two panes: the preview and, to its right, the settings — each keeping at least 160px. */
@@ -295,6 +296,9 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
             renderer.setRest(lastEditor == Editor.MODEL);
         }
 
+        /* The model editor picks cubes off the model; the config editor picks bones. */
+        this.renderer.setCubePicking(lastEditor == Editor.MODEL);
+
         if (lastEditor == Editor.CONFIG)
         {
             this.configEditor.applyPreview();
@@ -328,12 +332,13 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     }
 
     /**
-     * A bone clicked in the viewport goes to the open editor, which picks it where a bone is picked;
-     * where nothing picks it the click is left alone, so the orbit starts.
+     * A click on the model in the viewport goes to the open editor, which picks it where a bone is
+     * picked — the config editor the bone, the model editor the bone or the cube of it under the
+     * cursor; where nothing picks it the click is left alone, so the orbit starts.
      */
-    private boolean selectBone(String bone)
+    private boolean selectPick(String bone, int cube)
     {
-        return lastEditor == Editor.CONFIG ? this.configEditor.selectBone(bone) : this.modelEditor.selectBone(bone);
+        return lastEditor == Editor.CONFIG ? this.configEditor.selectBone(bone) : this.modelEditor.selectPick(bone, cube);
     }
 
     /** Whether the open model is one the model editor may edit — see {@link ModelInstance#isEditable()}. */

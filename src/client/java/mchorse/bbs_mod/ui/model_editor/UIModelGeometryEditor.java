@@ -1,10 +1,12 @@
 package mchorse.bbs_mod.ui.model_editor;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelCube;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -15,7 +17,6 @@ import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformOp;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UISearchList;
-import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIConfirmOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
@@ -29,6 +30,7 @@ import mchorse.bbs_mod.ui.utils.context.MenuVerb;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.pose.Transform;
 import org.joml.Vector3f;
 
@@ -41,32 +43,36 @@ import java.util.function.Supplier;
 
 /**
  * The model editor of the model panel: the model itself rather than its configuration. Its groups
- * as a tree — added, duplicated, removed, renamed, dragged among their siblings or into another
- * group — and for the picked one its rest, the pivot it turns about and the rotation it rests at,
- * on the viewport gizmo and in a transform editor. Edits land in the live model (the preview shows
- * them at once), go on the panel's undo stack as snapshots of the model ({@link ModelEditUndo}),
- * and the panel writes the file on save.
+ * and their cubes as one tree ({@link UIModelTree}); the groups added, duplicated, removed,
+ * renamed, dragged among their siblings or into another group — and for the picked one its rest,
+ * the pivot it turns about and the rotation it rests at, on the viewport gizmo and in a transform
+ * editor. Edits land in the live model (the preview shows them at once), go on the panel's undo
+ * stack as snapshots of the model ({@link ModelEditUndo}), and the panel writes the file on save.
  *
  * <p>The transform editor works in radians on a stand-in transform; the group rests in degrees.
  * The stand-in is loaded from the group on every fill and pushed back into the group after every
  * edit — and every frame while the group is picked, since a gizmo drag's sampling nudges the
  * stand-in and re-evaluates the model through it.</p>
  *
- * <p>Several groups can be picked at once (ctrl / shift, as in every list here): the verbs — copy,
- * remove — then work on all of them as one undo step, and so does moving them. The fields, the
- * viewport's marker and the gizmo sit on the FIRST of the pick, and what the pivot is moved by is
- * added to every other picked pivot — they travel together, keeping the distances between them.
- * Only the pivot: a name and a rest rotation are each bone's own, so those two go dead while more
- * than one is picked rather than pretending to edit the first of them.</p>
+ * <p>Several rows can be picked at once (ctrl / shift, as in every list here): the verbs — copy,
+ * remove — then work on all the picked groups as one undo step, and so does moving them. The
+ * fields and the gizmo sit on the FIRST of the pick, and what the pivot is moved by is added to
+ * every other picked pivot — they travel together, keeping the distances between them. Only the
+ * pivot: a name and a rest rotation are each bone's own, so those two go dead while more than one
+ * is picked rather than pretending to edit the first of them. The picked cubes light up in the
+ * viewport ({@link #outlines}); what can be done to them comes with the cube editor.</p>
  *
- * <p>Bound per fill: the tree keeps its pick across one by name, since a save reloads the model
- * and every group object with it — and so does every edit of the structure, which settles the
- * model again through the panel.</p>
+ * <p>Bound per fill: the tree keeps its pick across one by address, since a save reloads the
+ * model and every group object with it — and so does every edit of the structure, which settles
+ * the model again through the panel.</p>
  */
 public class UIModelGeometryEditor extends UIElement
 {
     /** How close a group's rest already is to the stand-in's numbers to be left alone — the round trip through radians isn't exact. */
     private static final float EPSILON = 1E-4F;
+
+    /** How faintly the cubes under a picked group are outlined, next to a picked cube's full outline. */
+    private static final float UNDER_GROUP_ALPHA = 0.35F;
 
     /** What a group's rest can take: moving and turning, no scale. */
     private static final Gizmo.HandleMask ANCHOR_MASK = Gizmo.HandleMask.of(
@@ -87,8 +93,8 @@ public class UIModelGeometryEditor extends UIElement
     private final UIModelEditorPanel modelPanel;
 
     private final UIScrollView page;
-    private final UIModelGroupList groups;
-    private final UISearchList<String> search;
+    private final UIModelTree tree;
+    private final UISearchList<ModelNode> search;
     private final UIIcon dupe;
     private final UIIcon remove;
     private final UIIcon ikBones;
@@ -109,13 +115,13 @@ public class UIModelGeometryEditor extends UIElement
     {
         this.modelPanel = panel;
 
-        this.groups = new UIModelGroupList((list) -> this.fillGroup(), () -> this.model)
-            .onMove(this::moveGroup)
-            .onReparent(this::reparentGroup);
-        this.groups.context(this::fillGroupMenu);
-        this.search = new UISearchList<>(this.groups);
+        this.tree = new UIModelTree((list) -> this.fillGroup())
+            .onReorder(this::moveNode)
+            .onDrop(this::dropNode);
+        this.tree.context(this::fillGroupMenu);
+        this.search = new UISearchList<>(this.tree);
         this.search.label(UIKeys.GENERAL_SEARCH);
-        this.search.h(UIStringList.DEFAULT_HEIGHT * 8 - 8).expand();
+        this.search.h(20 + UIModelTree.ROW * 6).expand();
 
         /* The verbs over the tree, the list idiom of the panel: add goes under the picked group */
         UIIcon add = new UIIcon(Icons.ADD, (b) -> this.addGroup());
@@ -168,14 +174,14 @@ public class UIModelGeometryEditor extends UIElement
     {
         IKey category = UIKeys.MODEL_EDITOR_TITLE;
         Supplier<Boolean> open = () -> this.model != null;
-        Supplier<Boolean> any = () -> this.model != null && !this.groups.getCurrent().isEmpty();
+        Supplier<Boolean> any = () -> !this.pickedGroups().isEmpty();
         Supplier<Boolean> single = this::single;
 
-        this.groups.keys().register(Keys.MODEL_EDITOR_GROUP_ADD, this::addGroup).inside().active(open).category(category);
-        this.groups.keys().register(Keys.MODEL_EDITOR_GROUP_DUPE, () -> this.duplicateGroups(this.pickedGroups())).inside().active(any).category(category);
-        this.groups.keys().register(Keys.DELETE, () -> this.askRemoveGroups(this.pickedGroups())).inside().active(any).category(category);
-        this.groups.keys().register(Keys.MODEL_EDITOR_GROUP_RENAME, this::editName).inside().active(single).category(category);
-        this.groups.keys().register(Keys.MODEL_EDITOR_GROUP_IK_BONES, this::pickIKParent).inside().active(single).category(category);
+        this.tree.keys().register(Keys.MODEL_EDITOR_GROUP_ADD, this::addGroup).inside().active(open).category(category);
+        this.tree.keys().register(Keys.MODEL_EDITOR_GROUP_DUPE, () -> this.duplicateGroups(this.pickedGroups())).inside().active(any).category(category);
+        this.tree.keys().register(Keys.DELETE, () -> this.askRemoveGroups(this.pickedGroups())).inside().active(any).category(category);
+        this.tree.keys().register(Keys.MODEL_EDITOR_GROUP_RENAME, this::editName).inside().active(single).category(category);
+        this.tree.keys().register(Keys.MODEL_EDITOR_GROUP_IK_BONES, this::pickIKParent).inside().active(single).category(category);
     }
 
     /** F2: the name field takes the caret, since the tree renames through it rather than in place. */
@@ -184,13 +190,23 @@ public class UIModelGeometryEditor extends UIElement
         this.getContext().focus(this.name);
     }
 
+    /* The pick */
+
+    /** The first of the pick — what the fields, the gizmo and the verbs start from; null with nothing picked. */
+    private ModelNode leaderNode()
+    {
+        return this.model == null ? null : this.tree.getCurrentFirst();
+    }
+
     /**
      * The picked group, by name — what the viewport marks and the fields edit; null with nothing
-     * picked, and null with several, which belong to no single group.
+     * picked, with a cube, and with several rows, which belong to no single group.
      */
     public String getSelected()
     {
-        return this.model == null || this.groups.getCurrent().size() != 1 ? null : this.groups.getCurrentFirst();
+        ModelNode node = this.leaderNode();
+
+        return node != null && node.isGroup() && this.tree.getCurrent().size() == 1 ? node.group() : null;
     }
 
     /** What the viewport gizmo is on: the leading group's rest, through the stand-in. */
@@ -206,10 +222,12 @@ public class UIModelGeometryEditor extends UIElement
         return new ModelSlotTarget(id, ModelSlotKind.ANCHOR, this.transform, this::applyAnchor, this.single() ? ANCHOR_MASK : ANCHOR_MANY_MASK);
     }
 
-    /** The group the fields and the gizmo sit on: the first of the pick, which the rest follows. */
+    /** The group the fields and the gizmo sit on: the first of the pick, when it is a group, which the rest follows. */
     private String leader()
     {
-        return this.model == null ? null : this.groups.getCurrentFirst();
+        ModelNode node = this.leaderNode();
+
+        return node != null && node.isGroup() ? node.group() : null;
     }
 
     /** Whether the pick is one group — what a name and a rest rotation need to mean anything. */
@@ -225,54 +243,79 @@ public class UIModelGeometryEditor extends UIElement
         return id == null ? null : this.model.getGroup(id);
     }
 
-    /** Bind to a model (null for none); the tree keeps its pick by name. */
+    /** Bind to a model (null for none); the tree keeps its pick by address. */
     public void fill(ModelInstance instance)
     {
         this.model = instance != null && instance.getModel() instanceof Model model ? model : null;
 
-        String picked = this.groups.getCurrentFirst();
+        List<ModelNode> picked = new ArrayList<>(this.tree.getCurrent());
 
-        this.groups.fillBones(this.model, null);
-
-        if (picked != null)
-        {
-            this.groups.setCurrent(picked);
-        }
-
+        this.tree.fill(this.model);
+        this.tree.setCurrent(picked);
         this.fillGroup();
     }
 
-    /** A bone clicked in the preview picks its group in the tree. */
-    public boolean selectBone(String bone)
+    /**
+     * A click on the model in the preview: the bone, and the cube of it under the cursor (-1 for
+     * the bone itself) — picked in the tree, or added to the pick with ctrl held, as a click on a
+     * row would. Whether the click was taken.
+     */
+    public boolean selectPick(String bone, int cube)
     {
-        if (this.model == null || this.model.getGroup(bone) == null)
+        ModelGroup group = this.model == null ? null : this.model.getGroup(bone);
+
+        if (group == null)
         {
             return false;
         }
 
+        ModelNode node = cube >= 0 && cube < group.cubes.size() ? ModelNode.cube(bone, cube) : ModelNode.group(bone);
+
         this.search.filter("", true);
-        this.select(bone);
+        this.tree.reveal(node);
+
+        if (Window.isCtrlPressed())
+        {
+            this.tree.toggleIndex(this.tree.getList().indexOf(node));
+        }
+        else
+        {
+            this.tree.setCurrent(node);
+        }
+
+        this.fillGroup();
 
         return true;
     }
 
-    private void select(String id)
+    private void select(String group)
     {
-        this.groups.setCurrent(id);
-        this.groups.reveal(id);
+        this.select(ModelNode.group(group));
+    }
+
+    private void select(ModelNode node)
+    {
+        this.tree.reveal(node);
+        this.tree.setCurrent(node);
         this.fillGroup();
     }
 
     /** Pick several groups at once — what a verb on several leaves behind. */
     private void selectAll(List<String> ids)
     {
-        this.groups.setCurrent(ids);
+        List<ModelNode> nodes = new ArrayList<>();
 
-        if (!ids.isEmpty())
+        for (String id : ids)
         {
-            this.groups.reveal(ids.get(0));
+            nodes.add(ModelNode.group(id));
         }
 
+        if (!nodes.isEmpty())
+        {
+            this.tree.reveal(nodes.get(0));
+        }
+
+        this.tree.setCurrent(nodes);
         this.fillGroup();
     }
 
@@ -283,7 +326,7 @@ public class UIModelGeometryEditor extends UIElement
         return id == null ? null : this.model.getGroup(id);
     }
 
-    /** Every picked group, in the order the tree lists them; empty with nothing picked. */
+    /** Every picked group, in the order the tree lists them; empty with nothing picked. Picked cubes aren't groups. */
     private List<ModelGroup> pickedGroups()
     {
         List<ModelGroup> groups = new ArrayList<>();
@@ -293,9 +336,9 @@ public class UIModelGeometryEditor extends UIElement
             return groups;
         }
 
-        for (String id : this.groups.getCurrent())
+        for (ModelNode node : this.tree.getCurrent())
         {
-            ModelGroup group = this.model.getGroup(id);
+            ModelGroup group = node.isGroup() ? this.model.getGroup(node.group()) : null;
 
             if (group != null)
             {
@@ -307,16 +350,70 @@ public class UIModelGeometryEditor extends UIElement
     }
 
     /**
-     * The leading group under the tree: its name and its rest. With nothing picked the fields stand
-     * empty and disabled, so the page keeps its height and the scroll doesn't jump on every pick.
-     * With several picked the pivot stays live — it moves the whole pick — while the name and the
-     * rotation, which belong to one bone each, go dead.
+     * What the viewport outlines: every picked cube, and — fainter — every cube under a picked
+     * group, so a group reads as the shape it carries. Built for the frame being drawn; the
+     * addresses are looked up on the model as it stands.
+     */
+    public List<UIModelEditorRenderer.Outline> outlines()
+    {
+        List<UIModelEditorRenderer.Outline> outlines = new ArrayList<>();
+
+        if (this.model == null)
+        {
+            return outlines;
+        }
+
+        int accent = BBSSettings.primaryColor.get();
+        List<ModelNode> picked = this.tree.getCurrent();
+
+        /* The groups' cubes first, so a picked cube's own outline draws over its group's fainter one. */
+        for (ModelNode node : picked)
+        {
+            ModelGroup group = node.isGroup() ? this.model.getGroup(node.group()) : null;
+
+            if (group != null)
+            {
+                this.outlineSubtree(group, Colors.setA(accent, UNDER_GROUP_ALPHA), outlines);
+            }
+        }
+
+        for (ModelNode node : picked)
+        {
+            if (node.isCube())
+            {
+                outlines.add(new UIModelEditorRenderer.Outline(node, Colors.A100 | accent));
+            }
+        }
+
+        return outlines;
+    }
+
+    private void outlineSubtree(ModelGroup group, int color, List<UIModelEditorRenderer.Outline> outlines)
+    {
+        for (int i = 0; i < group.cubes.size(); i++)
+        {
+            outlines.add(new UIModelEditorRenderer.Outline(ModelNode.cube(group.id, i), color));
+        }
+
+        for (ModelGroup child : group.children)
+        {
+            this.outlineSubtree(child, color, outlines);
+        }
+    }
+
+    /**
+     * The leading group under the tree: its name and its rest. With nothing picked — or a cube, which
+     * has no fields yet — the fields stand empty and disabled, so the page keeps its height and the
+     * scroll doesn't jump on every pick. With several picked the pivot stays live — it moves the
+     * whole pick — while the name and the rotation, which belong to one bone each, go dead. The
+     * verbs act on the groups of the pick, however the pick is mixed.
      */
     private void fillGroup()
     {
         ModelGroup group = this.leadGroup();
 
-        boolean any = !this.groups.getCurrent().isEmpty();
+        boolean any = group != null;
+        boolean groups = !this.pickedGroups().isEmpty();
         boolean single = this.single();
 
         this.name.setText(group == null ? "" : group.id);
@@ -325,8 +422,8 @@ public class UIModelGeometryEditor extends UIElement
         UIUtils.setEnabledDeep(this.body, any);
         this.transform.setRotationEnabled(single);
         this.name.setEnabled(single);
-        this.dupe.setEnabled(any);
-        this.remove.setEnabled(any);
+        this.dupe.setEnabled(groups);
+        this.remove.setEnabled(groups);
         this.ikBones.setEnabled(single);
 
         this.page.resize();
@@ -339,24 +436,27 @@ public class UIModelGeometryEditor extends UIElement
      */
     private void fillGroupMenu(ContextMenuManager menu)
     {
-        String id = this.model == null ? null : this.groups.atCursor(this.getContext());
-        ModelGroup group = id == null ? null : this.model.getGroup(id);
+        ModelNode node = this.model == null ? null : this.tree.atCursor(this.getContext());
 
-        if (group == null)
+        if (node == null)
         {
             return;
         }
 
-        if (!this.groups.getCurrent().contains(id))
+        if (!this.tree.getCurrent().contains(node))
         {
-            this.select(id);
+            this.select(node);
         }
 
         List<ModelGroup> picked = this.pickedGroups();
 
         menu.icon(MenuVerb.ADD, this::addGroup).label(UIKeys.MODEL_EDITOR_MODEL_GROUP_ADD);
-        menu.action(Icons.DUPE, UIKeys.MODEL_EDITOR_MODEL_GROUP_DUPLICATE, () -> this.duplicateGroups(picked));
-        menu.icon(MenuVerb.REMOVE, () -> this.askRemoveGroups(picked)).label(UIKeys.MODEL_EDITOR_MODEL_GROUP_REMOVE);
+
+        if (!picked.isEmpty())
+        {
+            menu.action(Icons.DUPE, UIKeys.MODEL_EDITOR_MODEL_GROUP_DUPLICATE, () -> this.duplicateGroups(picked));
+            menu.icon(MenuVerb.REMOVE, () -> this.askRemoveGroups(picked)).label(UIKeys.MODEL_EDITOR_MODEL_GROUP_REMOVE);
+        }
 
         if (this.getSelected() != null)
         {
@@ -517,7 +617,7 @@ public class UIModelGeometryEditor extends UIElement
         }
 
         String id = this.leader();
-        int picked = this.groups.getCurrent().size();
+        int picked = this.pickedGroups().size();
         IKey label = picked > 1
             ? UIKeys.MODEL_EDITOR_MODEL_UNDO_TRANSFORM_MANY.format(picked)
             : UIKeys.MODEL_EDITOR_MODEL_UNDO_TRANSFORM.format(id);
@@ -566,7 +666,7 @@ public class UIModelGeometryEditor extends UIElement
         return name;
     }
 
-    /** A new, empty group under the picked one (at its pivot), or at the root with nothing picked. */
+    /** A new, empty group under the picked one (at its pivot) — under a picked cube's group — or at the root with nothing picked. */
     private void addGroup()
     {
         if (this.model == null)
@@ -574,8 +674,8 @@ public class UIModelGeometryEditor extends UIElement
             return;
         }
 
-        String first = this.groups.getCurrentFirst();
-        ModelGroup parent = first == null ? null : this.model.getGroup(first);
+        ModelNode first = this.leaderNode();
+        ModelGroup parent = first == null ? null : this.model.getGroup(first.group());
         String name = this.uniqueName("group", new HashSet<>());
 
         this.edit(UIKeys.MODEL_EDITOR_MODEL_UNDO_ADD.format(name), () -> this.addBone(name, parent, parent == null ? null : parent.initial.translate));
@@ -745,7 +845,7 @@ public class UIModelGeometryEditor extends UIElement
 
     private void removeGroups(List<ModelGroup> groups)
     {
-        this.groups.deselect();
+        this.tree.deselect();
         this.edit(label(UIKeys.MODEL_EDITOR_MODEL_UNDO_REMOVE, UIKeys.MODEL_EDITOR_MODEL_UNDO_REMOVE_MANY, groups), () ->
         {
             for (ModelGroup group : groups)
@@ -816,16 +916,37 @@ public class UIModelGeometryEditor extends UIElement
         this.select(to);
     }
 
+    /* Drops, as the tree reports them */
+
+    /** A row dropped between rows; only groups travel for now. */
+    private void moveNode(ModelNode dragged, ModelNode before)
+    {
+        if (dragged.isGroup())
+        {
+            this.moveGroup(dragged.group(), before);
+        }
+    }
+
+    /** A row dropped onto a group's row; only groups travel for now. */
+    private void dropNode(ModelNode dragged, String parentId)
+    {
+        if (dragged.isGroup())
+        {
+            this.reparentGroup(dragged.group(), parentId);
+        }
+    }
+
     /**
      * A group dropped between rows becomes the sibling right before {@code before} — at whatever
-     * depth that row sits, since changing a parent is allowed here; {@code before} null sends it
-     * to the end of the roots. A drop inside the group's own subtree is refused: it would take the
-     * group out of the model with it.
+     * depth that row sits, since changing a parent is allowed here — or, above a cube's row, the
+     * first group inside that cube's group: that is where the caret sits; {@code before} null sends
+     * it to the end of the roots. A drop inside the group's own subtree is refused: it would take
+     * the group out of the model with it.
      */
-    private void moveGroup(String id, String before)
+    private void moveGroup(String id, ModelNode before)
     {
         ModelGroup group = this.model == null ? null : this.model.getGroup(id);
-        ModelGroup target = before == null || this.model == null ? null : this.model.getGroup(before);
+        ModelGroup target = before == null || this.model == null ? null : this.model.getGroup(before.group());
 
         if (group == null || (before != null && target == null) || (target != null && inside(target, group)))
         {
@@ -839,6 +960,10 @@ public class UIModelGeometryEditor extends UIElement
             if (target == null)
             {
                 this.model.topGroups.add(group);
+            }
+            else if (before.isCube())
+            {
+                target.children.add(0, group);
             }
             else
             {
