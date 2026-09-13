@@ -425,6 +425,15 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
         RenderSystem.enableDepthTest();
     }
 
+    /**
+     * How wide an outline is on screen: the width vanilla outlines the block the player looks at
+     * with, and wider on a screen bigger than 1080p the same way it grows there.
+     */
+    private static float outlineWidth()
+    {
+        return Math.max(2.5F, MinecraftClient.getInstance().getWindow().getFramebufferWidth() / 1920F * 2.5F);
+    }
+
     /** A group read as the shape it carries: every cube of it and of every group under it. */
     private void renderSubtreeOutline(MatrixStack stack, Model model, ModelGroup group, int color)
     {
@@ -460,7 +469,7 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
 
         stack.push();
         MatrixStackUtils.multiply(stack, ModelCubeFrames.cubeFrame(ModelCubeFrames.groupFrame(entry, group), cube));
-        Draw.renderBoxLines(stack, min.x, min.y, min.z, max.x - min.x, max.y - min.y, max.z - min.z, Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
+        Draw.renderBoxLines(stack, min.x, min.y, min.z, max.x - min.x, max.y - min.y, max.z - min.z, Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color), outlineWidth());
         stack.pop();
     }
 

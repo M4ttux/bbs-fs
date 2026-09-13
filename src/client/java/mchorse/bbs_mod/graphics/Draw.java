@@ -15,6 +15,7 @@ import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.RotationAxis;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 public class Draw
 {
@@ -66,11 +67,12 @@ public class Draw
     }
 
     /**
-     * The twelve edges of a box as hairlines, a pixel wide on screen at any distance — where
-     * {@link #renderBox}'s bars have a thickness in the world, and swell as the camera closes in
-     * until a small box reads as a solid lump. For outlining something the eye must see through.
+     * The twelve edges of a box as lines {@code width} pixels wide on screen, whatever the distance
+     * — where {@link #renderBox}'s bars have a thickness in the world, and swell as the camera
+     * closes in until a small box reads as a solid lump. Drawn with vanilla's line program, the one
+     * that outlines the block the player looks at, so a wide line holds on every driver.
      */
-    public static void renderBoxLines(MatrixStack stack, double x, double y, double z, double w, double h, double d, float r, float g, float b, float a)
+    public static void renderBoxLines(MatrixStack stack, double x, double y, double z, double w, double h, double d, float r, float g, float b, float a, float width)
     {
         Matrix4f matrix = stack.peek().getPositionMatrix();
         float x1 = (float) x;
@@ -81,9 +83,10 @@ public class Draw
         float z2 = (float) (z + d);
 
         BufferBuilder builder = Tessellator.getInstance().getBuffer();
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+        RenderSystem.setShader(GameRenderer::getRenderTypeLinesProgram);
+        RenderSystem.lineWidth(width);
 
-        builder.begin(VertexFormat.DrawMode.DEBUG_LINES, VertexFormats.POSITION_COLOR);
+        builder.begin(VertexFormat.DrawMode.LINES, VertexFormats.LINES);
 
         for (float y0 : new float[] {y1, y2})
         {
@@ -99,12 +102,30 @@ public class Draw
         line(builder, matrix, x1, y1, z2, x1, y2, z2, r, g, b, a);
 
         BufferRenderer.drawWithGlobalProgram(builder.end());
+        RenderSystem.lineWidth(1F);
     }
 
+    /**
+     * One edge for the line program. It widens a line across its direction on screen, which it
+     * reads from the vertex normal — so the ends are placed here already transformed, and the
+     * normal is the direction between them in that same space; a flat edge has none and is left
+     * out rather than handed a zero direction.
+     */
     private static void line(BufferBuilder builder, Matrix4f matrix, float x1, float y1, float z1, float x2, float y2, float z2, float r, float g, float b, float a)
     {
-        builder.vertex(matrix, x1, y1, z1).color(r, g, b, a).next();
-        builder.vertex(matrix, x2, y2, z2).color(r, g, b, a).next();
+        Vector3f start = matrix.transformPosition(x1, y1, z1, new Vector3f());
+        Vector3f end = matrix.transformPosition(x2, y2, z2, new Vector3f());
+        Vector3f direction = new Vector3f(end).sub(start);
+
+        if (direction.lengthSquared() < 1.0E-12F)
+        {
+            return;
+        }
+
+        direction.normalize();
+
+        builder.vertex(start.x, start.y, start.z).color(r, g, b, a).normal(direction.x, direction.y, direction.z).next();
+        builder.vertex(end.x, end.y, end.z).color(r, g, b, a).normal(direction.x, direction.y, direction.z).next();
     }
 
     /**
