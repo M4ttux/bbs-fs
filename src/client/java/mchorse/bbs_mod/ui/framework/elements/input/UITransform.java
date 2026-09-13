@@ -14,6 +14,7 @@ import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.WorldTransformClipboard;
+import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -233,6 +234,13 @@ public abstract class UITransform extends UIElement
         this.iconT.callback = (b) -> action.run();
         this.iconT.tooltip(tooltip);
         this.iconT.setEnabled(true);
+    }
+
+    /** The same with an icon of its own, for a translate row that stands for something else — a pivot. */
+    public void translateAction(IKey tooltip, Icon icon, Runnable action)
+    {
+        this.iconT.both(icon);
+        this.translateAction(tooltip, action);
     }
 
     protected void toggleUniformScale()

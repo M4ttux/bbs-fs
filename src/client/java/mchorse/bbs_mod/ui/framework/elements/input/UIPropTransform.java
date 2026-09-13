@@ -60,6 +60,10 @@ public class UIPropTransform extends UITransform implements TransformGesture.Hos
 
     /** The frame every edit is expressed in, and the dropdown that picks it. */
     private UIChoiceButton<TransformSpace> spacePicker;
+    private UIElement spaceRow;
+
+    /** The editor whose space picker stands for this one's (see {@link #shareSpace}); null while this one shows its own. */
+    private UIPropTransform spaceSource;
 
     /* Quaternion rotation pads (w, x, y, z), shown in place of the euler x/y/z pads
      * while the edited bone is in QUATERNION mode. Editing any of them rebuilds a
@@ -124,7 +128,8 @@ public class UIPropTransform extends UITransform implements TransformGesture.Hos
             .callback(this::pickSpace)
             .setValue(TransformSpace.load());
         this.spacePicker.tooltip(UIKeys.TRANSFORMS_SPACE_TOOLTIP);
-        this.prepend(UI.labelRow(UIKeys.TRANSFORMS_SPACE_TITLE, this.spacePicker));
+        this.spaceRow = UI.labelRow(UIKeys.TRANSFORMS_SPACE_TITLE, this.spacePicker);
+        this.prepend(this.spaceRow);
         /* Four uniform rows: the space picker above translate / scale / rotate.
          * (Was 3×CONTROL_HEIGHT + 20 — the 20 being the rotate row, which its
          * oversized toggle icon pushed past the others.) */
@@ -326,7 +331,41 @@ public class UIPropTransform extends UITransform implements TransformGesture.Hos
     @Override
     public TransformSpace pickedSpace()
     {
-        return this.spacePicker.getValue();
+        return this.spaceSource != null ? this.spaceSource.pickedSpace() : this.spacePicker.getValue();
+    }
+
+    /**
+     * Pick the frame with another editor's space picker and hide this one's — for a host that
+     * stands two editors one under the other as a single panel, where a second picker would be one
+     * too many and could disagree with the first. Null gives this editor its own picker back.
+     */
+    public void shareSpace(UIPropTransform source)
+    {
+        this.spaceSource = source == this ? null : source;
+        this.setRowVisible(this.spaceRow, this.spaceSource == null);
+    }
+
+    /**
+     * Show or hide one of the editor's rows — the rotate row, or one a host added — keeping the
+     * editor as tall as the rows it shows. For a host whose target decides whether a row means
+     * anything at the moment.
+     */
+    public void setRowVisible(UIElement row, boolean visible)
+    {
+        if (row.isVisible() == visible)
+        {
+            return;
+        }
+
+        row.setVisible(visible);
+        this.rows += visible ? 1 : -1;
+        this.applyRows();
+    }
+
+    /** The same for the rotate row, which a host has no hold of. */
+    public void setRotationVisible(boolean visible)
+    {
+        this.setRowVisible(this.rotateRow, visible);
     }
 
     /** The frame the gizmo and constrained edits operate in — the session's one accessor,
@@ -429,7 +468,7 @@ public class UIPropTransform extends UITransform implements TransformGesture.Hos
         this.keys().register(Keys.TRANSFORMATIONS_X, () -> this.gesture.setAxis(Axis.X)).active(active).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_Y, () -> this.gesture.setAxis(Axis.Y)).active(active).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_Z, () -> this.gesture.setAxis(Axis.Z)).active(active).category(category);
-        this.keys().register(Keys.TRANSFORMATIONS_SPACE_MENU, this.spacePicker::open).active(enabled).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_SPACE_MENU, () -> (this.spaceSource != null ? this.spaceSource.spacePicker : this.spacePicker).open()).active(enabled).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_ROTATION_MODE, this::toggleRotationMode).active(enabled).category(category);
 
         return this;

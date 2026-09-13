@@ -1442,8 +1442,6 @@
 	"bbs.ui.model_editor.model.rotation": "Rotation",
 	"bbs.ui.model_editor.model.cube.inflate": "Inflate",
 	"bbs.ui.model_editor.model.cube.center_pivot": "Center the pivot on the cube",
-	"bbs.ui.model_editor.model.section.group": "Group",
-	"bbs.ui.model_editor.model.section.cubes": "Cubes (%s)",
 	"bbs.ui.model_editor.model.uv.drawn": "The side is drawn",
 	"bbs.ui.model_editor.model.uv.x1": "Where the side starts, across the sheet",
 	"bbs.ui.model_editor.model.uv.y1": "Where the side starts, down the sheet",

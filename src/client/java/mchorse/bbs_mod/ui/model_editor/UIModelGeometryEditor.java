@@ -21,7 +21,6 @@ import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformOp;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UISearchList;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
-import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIConfirmOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.utils.Gizmo;
@@ -49,6 +48,7 @@ import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -140,9 +140,14 @@ public class UIModelGeometryEditor extends UIElement
     /** The group stand-in as it was last carried into the model, so only its own changes are carried. */
     private final Transform anchorApplied = new Transform();
 
-    /** What the two sections are called, shown while both of them are: a group picked together with cubes. */
-    private final UILabel groupCaption;
-    private final UILabel cubesCaption;
+    /**
+     * Set while a change comes from one of the rows' own pads — dragged, typed, scrolled or stepped —
+     * rather than from the gizmo, its hotkeys or its probes, which reach the same stand-ins; and
+     * whether that pad was typed into. The rows and the gizmo mean different things by the same
+     * number: the position row moves the picked cubes, the gizmo the whole pick.
+     */
+    private boolean rowEdit;
+    private boolean typedEdit;
 
     /** The picked cube's position, size and rotation, edited through a stand-in of their own. */
     private final UIPropTransform cubeTransform;
@@ -242,7 +247,9 @@ public class UIModelGeometryEditor extends UIElement
          * on the group — with a group picked together with cubes both editors show, and a key
          * must not reach the one the gizmo isn't on. */
         this.transform.enableHotkeys(() -> this.targetIs(ModelSlotKind.ANCHOR), (op) -> op == TransformOp.TRANSLATE || (op == TransformOp.ROTATE && this.singleGroup()));
-        this.transform.translateAction(UIKeys.MODEL_EDITOR_MODEL_GROUP_CENTER_ANCHOR, this::centerAnchor);
+        /* The group's pivot row wears the sphere, as a cube's pivot row does — in a pick of a group
+         * and its cubes it stands right where a cube's pivot row would. */
+        this.transform.translateAction(UIKeys.MODEL_EDITOR_MODEL_GROUP_CENTER_ANCHOR, Icons.SPHERE, this::centerAnchor);
 
         /* A cube's rows: its position (the corner it starts from), its size and its rotation, in
          * the same editor a group's rest sits in — the pads and the write path are the same — plus
@@ -290,12 +297,23 @@ public class UIModelGeometryEditor extends UIElement
 
         this.cubeUV = new UIModelCubeUV(this);
 
-        this.groupCaption = UI.label(UIKeys.MODEL_EDITOR_MODEL_SECTION_GROUP);
-        this.cubesCaption = UI.label(UIKeys.MODEL_EDITOR_MODEL_SECTION_CUBES);
+        this.trackRowEdits(
+            this.cubeTransform.tx, this.cubeTransform.ty, this.cubeTransform.tz,
+            this.cubeTransform.sx, this.cubeTransform.sy, this.cubeTransform.sz,
+            this.cubeTransform.rx, this.cubeTransform.ry, this.cubeTransform.rz,
+            this.transform.tx, this.transform.ty, this.transform.tz,
+            this.transform.rx, this.transform.ry, this.transform.rz,
+            this.pivotFields[0], this.pivotFields[1], this.pivotFields[2],
+            this.inflate
+        );
 
+        /* One panel, the way Blockbench's is: the cube rows on top, the group rows under them. A
+         * pick of cubes shows the cube rows whole; a pick with a group lends its pivot and rotation
+         * rows to the group, so a group and its cubes read as position, size, pivot, rotation,
+         * inflate — the cubes' position and size, the group's pivot and rotation. */
         this.body = new UIElement();
         this.body.column(UIConstants.MARGIN).vertical().stretch();
-        this.body.add(UI.labelRow(UIKeys.MODEL_EDITOR_MODEL_GROUP_NAME, this.name), this.groupCaption, this.transform, this.cubesCaption, this.cubeTransform, this.inflateRow);
+        this.body.add(UI.labelRow(UIKeys.MODEL_EDITOR_MODEL_GROUP_NAME, this.name), this.cubeTransform, this.transform, this.inflateRow);
 
         /* The strip over the tree stands at an icon button's size, as the unwrap pane's side icons do:
          * it is what the page is worked with, not a list's small print. */
@@ -332,6 +350,38 @@ public class UIModelGeometryEditor extends UIElement
         this.keys().register(Keys.MODEL_EDITOR_EXPAND_ALL, () -> this.tree.setAllExpanded(true)).active(open).category(category);
         this.keys().register(Keys.MODEL_EDITOR_COLLAPSE_ALL, () -> this.tree.setAllExpanded(false)).active(open).category(category);
         this.keys().register(Keys.MODEL_EDITOR_PIVOT_ONLY, UIModelGeometryEditor::togglePivotOnly).active(open).category(category);
+    }
+
+    /**
+     * Mark the changes these pads make as the rows' own ({@link #rowEdit}) — wrapped around their
+     * callbacks, so every way a pad changes its number counts, a drag, a typed digit, the wheel or
+     * its steppers. Typed is told by the pad's text box having the caret while it isn't dragged.
+     */
+    private void trackRowEdits(UITrackpad... pads)
+    {
+        for (UITrackpad pad : pads)
+        {
+            Consumer<Double> callback = pad.callback;
+
+            pad.callback = (value) ->
+            {
+                boolean row = this.rowEdit;
+                boolean typed = this.typedEdit;
+
+                this.rowEdit = true;
+                this.typedEdit = pad.textbox.isFocused() && !pad.isDragging();
+
+                try
+                {
+                    callback.accept(value);
+                }
+                finally
+                {
+                    this.rowEdit = row;
+                    this.typedEdit = typed;
+                }
+            };
+        }
     }
 
     /** F2: the name field takes the caret, since the tree renames through it rather than in place. */
@@ -725,15 +775,16 @@ public class UIModelGeometryEditor extends UIElement
     }
 
     /**
-     * The rows under the tree, in two sections: the group rows — a group's rest — while the pick
-     * has a group, and the cube rows — a cube's numbers — while it has a cube, its own row or one a
-     * picked group carries. A group picked alone shows both, so its cubes can be sized from their
-     * rows while the gizmo still moves and turns the group. With nothing picked the group rows stand
-     * empty and disabled, so the page keeps its height and the scroll doesn't jump on every pick.
-     * With several picked the position stays live — it moves the whole pick — and so do a cube's
-     * other rows, which change every cube of the pick by the same amount; the name, and a group's
-     * rest rotation, belong to one row each and go dead. The verbs act on the groups of the pick,
-     * however the pick is mixed.
+     * The rows under the tree — one panel, the way Blockbench lays it out. The cube rows (position,
+     * size, rotation, pivot, inflate) while the pick has a cube, its own row or one a picked group
+     * carries; the group rows (pivot, rotation) while it has a group. A pick with a group lends its
+     * pivot and rotation to the group, so the cube rows keep position, size and inflate and the
+     * group rows stand in the middle, sharing the cube rows' space picker: the cubes' position and
+     * size, the group's pivot and rotation. With nothing picked the group rows stand empty and
+     * disabled, so the page keeps its height and the scroll doesn't jump on every pick. With several
+     * picked every row stays live and changes all of them — a drag by the same amount, a typed
+     * number to that number; the name belongs to one row and goes dead. The verbs act on the groups
+     * of the pick, however the pick is mixed.
      */
     private void fillSelection()
     {
@@ -744,7 +795,6 @@ public class UIModelGeometryEditor extends UIElement
         ModelCube cube = this.sectionCube();
 
         boolean any = group != null || cube != null;
-        boolean both = group != null && cube != null;
         boolean single = this.single();
         boolean singleGroup = this.singleGroup();
 
@@ -760,15 +810,15 @@ public class UIModelGeometryEditor extends UIElement
         this.loadCube(cube);
         this.cubeTransform.setTransform(this.standin);
 
-        this.transform.setVisible(group != null || cube == null);
         this.cubeTransform.setVisible(cube != null);
+        this.cubeTransform.setRotationVisible(group == null);
+        this.cubeTransform.setRowVisible(this.pivotRow, group == null);
+        this.transform.setVisible(group != null || cube == null);
+        this.transform.shareSpace(group != null && cube != null ? this.cubeTransform : null);
         this.inflateRow.setVisible(cube != null);
-        this.groupCaption.setVisible(both);
-        this.cubesCaption.setVisible(both);
-        this.cubesCaption.label = UIKeys.MODEL_EDITOR_MODEL_SECTION_CUBES.format(both ? this.pickedCubes().size() : 0);
 
         UIUtils.setEnabledDeep(this.body, any);
-        this.transform.setRotationEnabled(singleGroup);
+        this.transform.setRotationEnabled(group != null);
         this.cubeTransform.setScaleEnabled(cube != null);
         this.cubeTransform.setRotationEnabled(cube != null);
         UIUtils.setEnabledDeep(this.pivotRow, cube != null);
@@ -856,15 +906,16 @@ public class UIModelGeometryEditor extends UIElement
      * been.</p>
      *
      * <p>A rest already within a hair of the numbers is left alone: the round trip through radians
-     * isn't exact, and the file must not pick up the noise. The rotation is the leader's alone —
-     * with several picked, neither the gizmo nor the row offers it (see {@link #MANY_MASK}).</p>
+     * isn't exact, and the file must not pick up the noise. The gizmo turns one group only (see
+     * {@link #MANY_MASK}); the rotation row turns every picked group, as the pivot row moves every
+     * picked group's point — a drag by the same amount, a typed number to that number, as in
+     * Blockbench.</p>
      *
      * <p>Only the stand-in's OWN changes are carried — what it moved by since it was last carried
-     * in ({@link #anchorApplied}). A cube leading the pick moves the picked groups from the other
-     * section, and the group rows must not read that as a move of theirs and walk them back; they
-     * read the group again once nothing drives ({@link #syncStandins}). The gizmo moves the whole
-     * pick, cubes and all; the pivot row moves the groups' points, and the cubes have rows of their
-     * own for theirs.</p>
+     * in ({@link #anchorApplied}). A cube leading the pick moves the picked groups through the cube
+     * rows, and the group rows must not read that as a move of theirs and walk them back; they read
+     * the group again once nothing drives ({@link #syncStandins}). The gizmo moves the whole pick,
+     * cubes and all; the pivot row moves the groups' points, and the cubes have rows of their own.</p>
      */
     private void applyAnchor()
     {
@@ -876,14 +927,34 @@ public class UIModelGeometryEditor extends UIElement
         }
 
         boolean gesture = this.transform.isEditing();
+        boolean typed = this.rowEdit && this.typedEdit;
         Vector3f degrees = degreesOf(this.anchor, group.initial.rotate);
         Vector3f step = new Vector3f(this.anchor.translate).sub(this.anchorApplied.translate);
+        Vector3f turned = new Vector3f(this.anchor.rotate).sub(this.anchorApplied.rotate);
+        boolean euler = this.anchor.rotationMode == Transform.RotationMode.EULER && this.anchorApplied.rotationMode == Transform.RotationMode.EULER;
 
         this.anchorApplied.copy(this.anchor);
 
         if (step.x != 0F || step.y != 0F || step.z != 0F)
         {
-            this.distribute(step, !pivotOnly && gesture, gesture);
+            if (typed)
+            {
+                /* A typed pivot is every picked group's pivot on that axis. */
+                for (ModelGroup picked : this.pickedGroups())
+                {
+                    for (int i = 0; i < 3; i++)
+                    {
+                        if (step.get(i) != 0F)
+                        {
+                            picked.initial.translate.setComponent(i, this.anchor.translate.get(i));
+                        }
+                    }
+                }
+            }
+            else
+            {
+                this.distribute(step, !pivotOnly && gesture, gesture);
+            }
 
             /* The leader's pivot is the number shown, to the bit: the step above is a difference of
              * floats and lands a hair off it, and the row must not drift from the model over a
@@ -895,6 +966,27 @@ public class UIModelGeometryEditor extends UIElement
         if (!group.initial.rotate.equals(degrees, EPSILON))
         {
             group.initial.rotate.set(degrees);
+        }
+
+        /* The rotation row turns the other picked groups too — only the row: the gizmo turns one
+         * group, and its probes must not nudge the rest. */
+        if (this.rowEdit && euler && (turned.x != 0F || turned.y != 0F || turned.z != 0F))
+        {
+            for (ModelGroup picked : this.pickedGroups())
+            {
+                if (picked == group)
+                {
+                    continue;
+                }
+
+                for (int i = 0; i < 3; i++)
+                {
+                    if (turned.get(i) != 0F)
+                    {
+                        picked.initial.rotate.setComponent(i, typed ? degrees.get(i) : picked.initial.rotate.get(i) + MathUtils.toDeg(turned.get(i)));
+                    }
+                }
+            }
         }
     }
 
@@ -1168,15 +1260,15 @@ public class UIModelGeometryEditor extends UIElement
         ModelCubeEdit edit = this.cubeEdit();
         Vector3f step = new Vector3f(this.standin.translate).sub(this.applied.translate);
 
-        /* The picked groups go with a cube's move only while a cube leads the pick — the gizmo is on
-         * it then, and the rows move what it moves. Under a leading group the cube rows are the
-         * cubes' own, and the group rows have the groups. */
-        if (this.cubeLeads() && (step.x != 0F || step.y != 0F || step.z != 0F))
+        /* The picked groups go with a cube's move only when the gizmo moves it — the gizmo moves the
+         * whole pick. The position row, as in Blockbench, moves the picked cubes alone; the groups
+         * have rows of their own. */
+        if (this.cubeLeads() && !this.rowEdit && (step.x != 0F || step.y != 0F || step.z != 0F))
         {
             this.distribute(step, geometry, false);
         }
 
-        if (edit.carry(this.standin, geometry, gesture))
+        if (edit.carry(this.standin, geometry, gesture, this.rowEdit && this.typedEdit))
         {
             this.dirty.addAll(edit.groups());
         }
@@ -1213,7 +1305,7 @@ public class UIModelGeometryEditor extends UIElement
         }
 
         ModelNode shown = this.sectionCubeNode();
-        boolean leads = this.cubeLeads();
+        boolean own = this.rowEdit || !this.cubeLeads();
         Set<ModelNode> picked = new HashSet<>(this.tree.getCurrent());
         Set<ModelNode> outermost = new HashSet<>(this.outermostNodes());
         ModelCubeEdit edit = new ModelCubeEdit(this.applied);
@@ -1222,9 +1314,9 @@ public class UIModelGeometryEditor extends UIElement
         {
             ModelGroup group = this.model.getGroup(node.group());
 
-            /* While a cube leads, the picked groups carry their own cubes; under a leading group
-             * nothing moves them but these rows, so every cube is its own. */
-            edit.add(group, group.cubes.get(node.cube()), !leads || picked.contains(node), !leads || outermost.contains(node), node.equals(shown));
+            /* When the gizmo moves a leading cube, the picked groups carry their own cubes along;
+             * the rows move the cubes themselves, every one of them its own. */
+            edit.add(group, group.cubes.get(node.cube()), own || picked.contains(node), own || outermost.contains(node), node.equals(shown));
         }
 
         return this.cubeEdit = edit;
@@ -1308,7 +1400,7 @@ public class UIModelGeometryEditor extends UIElement
         MapType before = this.snapshot();
         ModelCubeEdit edit = this.cubeEdit();
 
-        if (edit.pivot(axis, value))
+        if (edit.pivot(axis, value, this.rowEdit && this.typedEdit))
         {
             this.dirty.addAll(edit.groups());
         }
@@ -1330,7 +1422,7 @@ public class UIModelGeometryEditor extends UIElement
         MapType before = this.snapshot();
         ModelCubeEdit edit = this.cubeEdit();
 
-        if (edit.inflate(value))
+        if (edit.inflate(value, this.rowEdit && this.typedEdit))
         {
             this.dirty.addAll(edit.groups());
         }

@@ -17,14 +17,13 @@ import java.util.Set;
 /**
  * One edit of the numbers of a pick of cubes, carried from where the cubes stood when it began.
  *
- * <p>The cube rows show one cube of the pick — the leader — and what is typed, dragged or pulled
- * with the gizmo into them is a CHANGE, which every cube of the pick takes from its own numbers:
- * cubes two, three and six wide are four, five and eight wide once the leader's width goes from two
- * to four. It is the rule every editor of a pick in the mod already follows (the pose editor and
- * the keyframe editors, through {@code UIDeltaPropTransform}): a pick keeps its own shapes, and one
- * number for all of them is what a paste is for. The gizmo's scale handles are the one exception
- * in kind, not in spirit — they scale, so every cube grows by the leader's FACTOR, about its own
- * pivot, where the rows grow each by the leader's difference, out of its corner.</p>
+ * <p>The cube rows show one cube of the pick — the leader — and what is dragged into them, or
+ * pulled with the gizmo, is a CHANGE, which every cube of the pick takes from its own numbers:
+ * cubes two, three and six wide are four, five and eight wide once the leader's width is dragged
+ * from two to four. A number TYPED into a row is every cube's number instead — Blockbench's rule
+ * for a pick, and the way it reads: typing 4 asks for four ({@code absolute}). The gizmo's scale
+ * handles are the one exception in kind, not in spirit — they scale, so every cube grows by the
+ * leader's FACTOR, about its own pivot, where the rows grow each out of its corner.</p>
  *
  * <p>Every number is worked out afresh from the start of the edit on every change rather than
  * nudged from where the last change left it. A drag's many small steps would otherwise pile up
@@ -121,9 +120,12 @@ public class ModelCubeEdit
      * @param aboutPivot whether a resize scales each cube about its own pivot by the leader's
      *                   factor (a gesture), rather than growing it out of its corner by the
      *                   leader's difference (a number)
+     * @param absolute whether the changed numbers were typed, so every cube takes them as they are
+     *                 rather than by the leader's difference — a typed corner still moves each
+     *                 cube whole, pivot along
      * @return whether any number of any cube changed
      */
-    public boolean carry(Transform standin, boolean geometry, boolean aboutPivot)
+    public boolean carry(Transform standin, boolean geometry, boolean aboutPivot, boolean absolute)
     {
         Quaternionf now = quaternion(standin);
         Quaternionf was = quaternion(this.from);
@@ -155,19 +157,33 @@ public class ModelCubeEdit
 
                 if (moves)
                 {
-                    pivot.add(move);
-
-                    if (geometry)
+                    for (int i = 0; i < 3; i++)
                     {
-                        /* The leader's corner is the number its row shows, to the bit. */
-                        if (leader)
+                        float moved = move.get(i);
+
+                        if (moved == 0F)
                         {
-                            origin.set(standin.translate);
+                            continue;
                         }
-                        else
+
+                        if (!geometry || !(leader || absolute))
                         {
-                            origin.add(move);
+                            pivot.setComponent(i, start.pivot.get(i) + moved);
+
+                            if (geometry)
+                            {
+                                origin.setComponent(i, start.origin.get(i) + moved);
+                            }
+
+                            continue;
                         }
+
+                        /* The leader's corner is the number its row shows, to the bit; a typed corner
+                         * is every cube's, each taking its pivot along by however far that is. */
+                        float corner = standin.translate.get(i);
+
+                        pivot.setComponent(i, leader ? start.pivot.get(i) + moved : start.pivot.get(i) + (corner - start.origin.get(i)));
+                        origin.setComponent(i, corner);
                     }
                 }
 
@@ -194,20 +210,20 @@ public class ModelCubeEdit
 
             if (this.resizing)
             {
-                changed |= set(start.cube.size, this.resized(start, standin, aboutPivot));
+                changed |= set(start.cube.size, this.resized(start, standin, aboutPivot, absolute));
             }
 
             if (this.turning)
             {
-                changed |= set(start.cube.rotate, this.turned(start, standin, turn));
+                changed |= set(start.cube.rotate, this.turned(start, standin, turn, absolute));
             }
         }
 
         return changed;
     }
 
-    /** A cube's size for the editor's: the leader's as shown, the rest by its factor or its difference. */
-    private Vector3f resized(Start start, Transform standin, boolean aboutPivot)
+    /** A cube's size for the editor's: the leader's as shown, the rest by its factor, its difference, or the typed number. */
+    private Vector3f resized(Start start, Transform standin, boolean aboutPivot, boolean absolute)
     {
         Vector3f size = new Vector3f(start.size);
 
@@ -238,7 +254,7 @@ public class ModelCubeEdit
              * back to its own width with the change, since every number is taken from the start. */
             if (grown != 0F)
             {
-                size.setComponent(i, Math.max(0F, start.size.get(i) + grown));
+                size.setComponent(i, absolute ? standin.scale.get(i) : Math.max(0F, start.size.get(i) + grown));
             }
         }
 
@@ -251,7 +267,7 @@ public class ModelCubeEdit
      * own and read back on the branch nearest where the cube started. An axis — or, in quaternion
      * mode, a turn — that came back to nothing leaves the numbers as they began.
      */
-    private Vector3f turned(Start start, Transform standin, Quaternionf turn)
+    private Vector3f turned(Start start, Transform standin, Quaternionf turn, boolean absolute)
     {
         Vector3f rotate = new Vector3f(start.rotate);
         boolean leader = start == this.leader;
@@ -278,7 +294,7 @@ public class ModelCubeEdit
 
             if (turned != 0F)
             {
-                rotate.setComponent(i, leader ? MathUtils.toDeg(standin.rotate.get(i)) : start.rotate.get(i) + MathUtils.toDeg(turned));
+                rotate.setComponent(i, leader || absolute ? MathUtils.toDeg(standin.rotate.get(i)) : start.rotate.get(i) + MathUtils.toDeg(turned));
             }
         }
 
@@ -287,11 +303,12 @@ public class ModelCubeEdit
 
     /**
      * The pivot row's number on one axis: the leader's pivot to it, every other cube's pivot by the
-     * same difference. The other two axes stay as the row last left them.
+     * same difference — or, typed, to the number too. The other two axes stay as the row last left
+     * them.
      *
      * @return whether any pivot changed
      */
-    public boolean pivot(int axis, float value)
+    public boolean pivot(int axis, float value, boolean absolute)
     {
         if (this.leader == null)
         {
@@ -312,7 +329,7 @@ public class ModelCubeEdit
 
                 if (moved != 0F)
                 {
-                    pivot.setComponent(i, start == this.leader ? this.pivot.get(i) : start.pivot.get(i) + moved);
+                    pivot.setComponent(i, start == this.leader || absolute ? this.pivot.get(i) : start.pivot.get(i) + moved);
                 }
             }
 
@@ -324,11 +341,11 @@ public class ModelCubeEdit
 
     /**
      * The inflate row's number: the leader's inflate to it, every other cube's by the same
-     * difference.
+     * difference — or, typed, to the number too.
      *
      * @return whether any inflate changed
      */
-    public boolean inflate(float value)
+    public boolean inflate(float value, boolean absolute)
     {
         if (this.leader == null)
         {
@@ -340,7 +357,7 @@ public class ModelCubeEdit
 
         for (Start start : this.starts)
         {
-            float inflate = grown == 0F ? start.inflate : start == this.leader ? value : start.inflate + grown;
+            float inflate = grown == 0F ? start.inflate : start == this.leader || absolute ? value : start.inflate + grown;
 
             if (start.cube.inflate != inflate)
             {
