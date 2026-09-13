@@ -5,6 +5,7 @@ import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.pose.Transform;
+import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -21,9 +22,12 @@ import java.util.Set;
  * pulled with the gizmo, is a CHANGE, which every cube of the pick takes from its own numbers:
  * cubes two, three and six wide are four, five and eight wide once the leader's width is dragged
  * from two to four. A number TYPED into a row is every cube's number instead — Blockbench's rule
- * for a pick, and the way it reads: typing 4 asks for four ({@code absolute}). The gizmo's scale
- * handles are the one exception in kind, not in spirit — they scale, so every cube grows by the
- * leader's FACTOR, about its own pivot, where the rows grow each out of its corner.</p>
+ * for a pick, and the way it reads: typing 4 asks for four. The gizmo shares a change in its own
+ * terms ({@link Source}): its scale handles scale, so every cube grows by the leader's FACTOR,
+ * about its own pivot, where the rows grow each out of its corner; and its rings turn, so every
+ * cube turns by the leader's TURN about its own pivot, where the rows add to each angle — about
+ * the same axes, or on a ring of the leader's own frame each about its own, as Blockbench turns a
+ * pick.</p>
  *
  * <p>Every number is worked out afresh from the start of the edit on every change rather than
  * nudged from where the last change left it. A drag's many small steps would otherwise pile up
@@ -44,6 +48,47 @@ public class ModelCubeEdit
 {
     /** How near flat a side can be before it has no factor to grow by. */
     private static final float FLAT = 1E-4F;
+
+    /**
+     * How small a turn is to count as none, in radians. A gesture let go with Escape puts the
+     * editor's angles back through degrees, and radians don't make that round trip exactly — a
+     * unit in the last place either way, never near this far.
+     */
+    private static final float HAIR = 1E-5F;
+
+    /** What made a change of the editor's numbers — which decides how the cubes other than the leader take it. */
+    public enum Source
+    {
+        /**
+         * A row's pad dragged, scrolled or stepped — and anything else short of the gizmo's gesture,
+         * like its probes before one starts, which put every number back as they found it. Every
+         * cube by the leader's difference: a size out of its corner, a turn angle by angle, the way
+         * the pose editor turns a pick of euler bones.
+         */
+        ROW(false),
+
+        /** A number typed into a row: every cube to that number. */
+        TYPED(false),
+
+        /**
+         * The gizmo's gesture: a size by the leader's factor, about each cube's own pivot; a turn by
+         * the leader's turn about the same axes — a ring of the group's frame, the world's or the
+         * view's, or a free turn. A cube of another group takes the turn in its own group's frame,
+         * the way it takes a move: the same axes while the groups are turned alike.
+         */
+        GIZMO(true),
+
+        /** The gizmo turning on a ring of the leader's own frame: as {@link #GIZMO}, but every cube about its own axes. */
+        GIZMO_OWN_AXES(true);
+
+        /** Whether the gizmo made it. */
+        public final boolean gizmo;
+
+        Source(boolean gizmo)
+        {
+            this.gizmo = gizmo;
+        }
+    }
 
     /**
      * A cube as the edit found it.
@@ -117,19 +162,16 @@ public class ModelCubeEdit
      * @param geometry whether a move moves the cubes (corner and pivot) or their pivots alone;
      *                 geometry moves the cubes nothing else of the pick carries, pivots move for
      *                 every cube whose own row is picked
-     * @param aboutPivot whether a resize scales each cube about its own pivot by the leader's
-     *                   factor (a gesture), rather than growing it out of its corner by the
-     *                   leader's difference (a number)
-     * @param absolute whether the changed numbers were typed, so every cube takes them as they are
-     *                 rather than by the leader's difference — a typed corner still moves each
-     *                 cube whole, pivot along
+     * @param source what made the change, which decides how the other cubes take it — a typed
+     *               corner still moves each cube whole, pivot along
      * @return whether any number of any cube changed
      */
-    public boolean carry(Transform standin, boolean geometry, boolean aboutPivot, boolean absolute)
+    public boolean carry(Transform standin, boolean geometry, Source source)
     {
         Quaternionf now = quaternion(standin);
         Quaternionf was = quaternion(this.from);
         boolean quaternion = standin.rotationMode == Transform.RotationMode.QUATERNION;
+        boolean absolute = source == Source.TYPED;
 
         this.moving |= !standin.translate.equals(this.from.translate);
         this.resizing |= !standin.scale.equals(this.from.scale);
@@ -141,14 +183,13 @@ public class ModelCubeEdit
         }
 
         Vector3f move = new Vector3f(standin.translate).sub(this.from.translate);
-        Quaternionf turn = quaternion && !now.equals(was) ? new Quaternionf(now).mul(new Quaternionf(was).invert()) : null;
         boolean changed = false;
 
         for (Start start : this.starts)
         {
             boolean leader = start == this.leader;
             boolean moves = this.moving && (geometry ? start.outermost : start.picked);
-            boolean grows = this.resizing && aboutPivot;
+            boolean grows = this.resizing && source.gizmo;
 
             if (moves || grows)
             {
@@ -210,12 +251,12 @@ public class ModelCubeEdit
 
             if (this.resizing)
             {
-                changed |= set(start.cube.size, this.resized(start, standin, aboutPivot, absolute));
+                changed |= set(start.cube.size, this.resized(start, standin, source));
             }
 
             if (this.turning)
             {
-                changed |= set(start.cube.rotate, this.turned(start, standin, turn, absolute));
+                changed |= set(start.cube.rotate, this.turned(start, standin, now, was, source));
             }
         }
 
@@ -223,7 +264,7 @@ public class ModelCubeEdit
     }
 
     /** A cube's size for the editor's: the leader's as shown, the rest by its factor, its difference, or the typed number. */
-    private Vector3f resized(Start start, Transform standin, boolean aboutPivot, boolean absolute)
+    private Vector3f resized(Start start, Transform standin, Source source)
     {
         Vector3f size = new Vector3f(start.size);
 
@@ -236,7 +277,7 @@ public class ModelCubeEdit
                 continue;
             }
 
-            if (aboutPivot)
+            if (source.gizmo)
             {
                 float factor = this.factor(standin, i);
 
@@ -254,7 +295,7 @@ public class ModelCubeEdit
              * back to its own width with the change, since every number is taken from the start. */
             if (grown != 0F)
             {
-                size.setComponent(i, absolute ? standin.scale.get(i) : Math.max(0F, start.size.get(i) + grown));
+                size.setComponent(i, source == Source.TYPED ? standin.scale.get(i) : Math.max(0F, start.size.get(i) + grown));
             }
         }
 
@@ -262,43 +303,76 @@ public class ModelCubeEdit
     }
 
     /**
-     * A cube's rotation for the editor's. Per axis, by the leader's difference, the way the pose
-     * editor turns euler bones; in quaternion mode, by the leader's turn composed onto each cube's
-     * own and read back on the branch nearest where the cube started. An axis — or, in quaternion
-     * mode, a turn — that came back to nothing leaves the numbers as they began.
+     * A cube's rotation for the editor's. The leader takes the editor's angles as they are. The rest
+     * take the leader's change: from a row, angle by angle, the way the pose editor turns a pick of
+     * euler bones (a typed angle is every cube's); from the gizmo — or from an editor switched to
+     * quaternions, which has no angles to go by — as one turn composed onto each cube's own
+     * rotation, before it for the same axes and after it for each cube's own ({@link Source}), and
+     * read back on the branch the cube started on, wound on from where it stands now.
+     *
+     * <p>A turn within a hair of nothing leaves the numbers as they began, and so does every angle
+     * the turn leaves within a hair of its start.</p>
      */
-    private Vector3f turned(Start start, Transform standin, Quaternionf turn, boolean absolute)
+    private Vector3f turned(Start start, Transform standin, Quaternionf now, Quaternionf was, Source source)
     {
         Vector3f rotate = new Vector3f(start.rotate);
         boolean leader = start == this.leader;
+        boolean euler = standin.rotationMode == Transform.RotationMode.EULER;
 
-        if (standin.rotationMode == Transform.RotationMode.QUATERNION)
+        if (euler && (leader || !source.gizmo))
         {
-            if (turn == null)
+            for (int i = 0; i < 3; i++)
             {
-                return rotate;
+                float turned = standin.rotate.get(i) - this.from.rotate.get(i);
+
+                if (Math.abs(turned) >= HAIR)
+                {
+                    rotate.setComponent(i, leader || source == Source.TYPED ? MathUtils.toDeg(standin.rotate.get(i)) : start.rotate.get(i) + MathUtils.toDeg(turned));
+                }
             }
 
-            Vector3f reference = new Vector3f(MathUtils.toRad(start.rotate.x), MathUtils.toRad(start.rotate.y), MathUtils.toRad(start.rotate.z));
-            Quaternionf rotation = leader
-                ? new Quaternionf(standin.quat)
-                : new Quaternionf(turn).mul(Matrices.toQuaternionZYXDegrees(start.rotate.x, start.rotate.y, start.rotate.z));
-            Vector3f radians = Matrices.toCompatibleEulerZYXRadians(rotation, reference, new Vector3f());
-
-            return rotate.set(MathUtils.toDeg(radians.x), MathUtils.toDeg(radians.y), MathUtils.toDeg(radians.z));
+            return rotate;
         }
+
+        if (euler ? standin.rotate.equals(this.from.rotate, HAIR) : now.equals(was))
+        {
+            return rotate;
+        }
+
+        Quaternionf own = Matrices.toQuaternionZYXDegrees(start.rotate.x, start.rotate.y, start.rotate.z);
+        Quaternionf rotation;
+
+        if (leader)
+        {
+            rotation = new Quaternionf(now);
+        }
+        else if (source == Source.GIZMO_OWN_AXES)
+        {
+            rotation = own.mul(new Quaternionf(was).invert().mul(now));
+        }
+        else
+        {
+            rotation = new Quaternionf(now).mul(new Quaternionf(was).invert()).mul(own);
+        }
+
+        Vector3f branch = radians(start.rotate);
+        Vector3f radians = Matrices.toCompatibleEulerZYXRadians(new Matrix3f().rotation(rotation.normalize()), branch, radians(start.cube.rotate), new Vector3f());
 
         for (int i = 0; i < 3; i++)
         {
-            float turned = standin.rotate.get(i) - this.from.rotate.get(i);
-
-            if (turned != 0F)
+            if (Math.abs(radians.get(i) - branch.get(i)) >= HAIR)
             {
-                rotate.setComponent(i, leader || absolute ? MathUtils.toDeg(standin.rotate.get(i)) : start.rotate.get(i) + MathUtils.toDeg(turned));
+                rotate.setComponent(i, MathUtils.toDeg(radians.get(i)));
             }
         }
 
         return rotate;
+    }
+
+    /** Angles in degrees, in radians. */
+    private static Vector3f radians(Vector3f degrees)
+    {
+        return new Vector3f(MathUtils.toRad(degrees.x), MathUtils.toRad(degrees.y), MathUtils.toRad(degrees.z));
     }
 
     /**

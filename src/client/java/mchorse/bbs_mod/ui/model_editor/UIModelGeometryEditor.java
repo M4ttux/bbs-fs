@@ -18,6 +18,7 @@ import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.events.UITrackpadDragEndEvent;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformGesture;
 import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformOp;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UISearchList;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
@@ -86,9 +87,10 @@ import java.util.function.Supplier;
  * same terms — geometry travels with geometry, points with points, keeping the distances between
  * them. A cube's other rows — its size, rotation, pivot and inflate — change every cube of the pick
  * by the same amount, each from its own numbers, the way the pose editor edits a pick of bones; a
- * paste or a reset puts the same numbers on all of them. A name is one row's own and a group's rest
- * rotation one bone's, so those go dead while more than one is picked. The picked cubes light up
- * in the viewport ({@link #outlines}).</p>
+ * paste or a reset puts the same numbers on all of them. On a pick of cubes alone the gizmo scales
+ * and turns as well, every cube about its own pivot ({@link ModelCubeEdit}). A name is one row's
+ * own, so it goes dead while more than one is picked. The picked cubes light up in the viewport
+ * ({@link #outlines}).</p>
  *
  * <p>Changed numbers leave their groups' quads and the model's bake behind; they are rebuilt once
  * the numbers have settled ({@link #settle}) — after a typed edit at once, after a gesture at its
@@ -113,10 +115,11 @@ public class UIModelGeometryEditor extends UIElement
     );
 
     /**
-     * What a pick of several can take: moving only. One step given to every picked row is exact,
-     * whether it moves their shapes or the points they turn about; a rest rotation is each bone's
-     * own, and a ring dragged over a pick of them has no one answer — so those handles aren't
-     * offered rather than quietly turning only the first.
+     * What a pick of several with a group in it can take: moving only. One step given to every
+     * picked row is exact, whether it moves their shapes or the points they turn about; a rest
+     * rotation is each bone's own, and a ring dragged over a pick of them has no one answer — so
+     * those handles aren't offered rather than quietly turning only the first. A pick of cubes alone
+     * takes every handle: each cube scales and turns about its own pivot.
      */
     private static final Gizmo.HandleMask MANY_MASK = Gizmo.HandleMask.of(
         EnumSet.of(Gizmo.Op.MOVE, Gizmo.Op.SCREEN),
@@ -264,9 +267,10 @@ public class UIModelGeometryEditor extends UIElement
 
             return target == null ? null : this.modelPanel.renderer.buildGizmoDrag(target);
         });
-        /* A cube takes all three operations — unlike a group's rest it does have a size. With several
-         * picked the gizmo offers moving alone for now, and the hotkeys answer to the same rule. */
-        this.cubeTransform.enableHotkeys(() -> this.targetIs(ModelSlotKind.CUBE), (op) -> op == TransformOp.TRANSLATE || this.single());
+        /* A cube takes all three operations — unlike a group's rest it does have a size — and so does
+         * a pick of cubes alone; a group in the pick leaves moving only. The hotkeys answer to the
+         * same rule as the gizmo's handles. */
+        this.cubeTransform.enableHotkeys(() -> this.targetIs(ModelSlotKind.CUBE), (op) -> op == TransformOp.TRANSLATE || this.cubesOnly());
 
         IKey raw = IKey.constant("%s (%s)");
         IKey[] axes = {UIKeys.GENERAL_X, UIKeys.GENERAL_Y, UIKeys.GENERAL_Z};
@@ -438,7 +442,7 @@ public class UIModelGeometryEditor extends UIElement
         {
             return this.leadCube() == null
                 ? null
-                : new ModelSlotTarget(leader.group(), ModelSlotKind.CUBE, this.cubeTransform, this::applyCube, this.single() ? Gizmo.HandleMask.ALL : MANY_MASK, leader.cube());
+                : new ModelSlotTarget(leader.group(), ModelSlotKind.CUBE, this.cubeTransform, this::applyCube, this.cubesOnly() ? Gizmo.HandleMask.ALL : MANY_MASK, leader.cube());
         }
 
         return new ModelSlotTarget(leader.group(), ModelSlotKind.ANCHOR, this.transform, this::applyAnchor, this.single() ? ANCHOR_MASK : MANY_MASK);
@@ -456,6 +460,25 @@ public class UIModelGeometryEditor extends UIElement
     private boolean single()
     {
         return this.model != null && this.tree.getCurrent().size() == 1;
+    }
+
+    /** Whether every picked row is a cube — a pick the gizmo scales and turns, every cube about its own pivot. */
+    private boolean cubesOnly()
+    {
+        if (this.model == null || this.tree.getCurrent().isEmpty())
+        {
+            return false;
+        }
+
+        for (ModelNode node : this.tree.getCurrent())
+        {
+            if (!node.isCube())
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /** Whether the pick is one group — what a rest rotation and the IK verbs need. */
@@ -1226,13 +1249,15 @@ public class UIModelGeometryEditor extends UIElement
      * move always has ({@link #distribute}). With nothing changed and no edit running, nothing is
      * opened; a cube within a hair of its numbers is left alone, as a group's rest is.
      *
-     * <p>Two things a gesture does that the rows don't. With the sphere over the tree on, a
+     * <p>Three things a gesture does that the rows don't. With the sphere over the tree on, a
      * drag moves the pivots alone, as it does for a group — and then the position row runs ahead of
-     * the corner, which stays put, until {@link #endEdit} reads the cube back. And the scale
-     * handles grow each cube FROM ITS PIVOT, which is where they sit, by the leader's factor — the
-     * size row, typed, grows them from the corner by the leader's difference instead, which is what
-     * a corner and a size read as. Everything is taken from where the edit began, so an Escape
-     * mid-drag lands every cube back on its numbers exactly.</p>
+     * the corner, which stays put, until {@link #endEdit} reads the cube back. The scale handles
+     * grow each cube FROM ITS PIVOT, which is where they sit, by the leader's factor — the size row
+     * grows them from the corner instead, which is what a corner and a size read as. And the rings
+     * turn each cube by the leader's turn about its own pivot, about the axes the ring is drawn
+     * about — on a ring of the local frame, each cube about its own — where the rotation row adds to
+     * each angle. Everything is taken from where the edit began, so an Escape mid-drag lands every
+     * cube back on its numbers exactly.</p>
      */
     private void applyCube()
     {
@@ -1268,7 +1293,11 @@ public class UIModelGeometryEditor extends UIElement
             this.distribute(step, geometry, false);
         }
 
-        if (edit.carry(this.standin, geometry, gesture, this.rowEdit && this.typedEdit))
+        ModelCubeEdit.Source source = gesture
+            ? this.turnsOwnAxes() ? ModelCubeEdit.Source.GIZMO_OWN_AXES : ModelCubeEdit.Source.GIZMO
+            : this.rowEdit && this.typedEdit ? ModelCubeEdit.Source.TYPED : ModelCubeEdit.Source.ROW;
+
+        if (edit.carry(this.standin, geometry, source))
         {
             this.dirty.addAll(edit.groups());
         }
@@ -1279,6 +1308,19 @@ public class UIModelGeometryEditor extends UIElement
         }
 
         this.applied.copy(this.standin);
+    }
+
+    /**
+     * Whether the gesture on the cube rows turns about the leading cube's own axes — a ring, or R
+     * with an axis key, in the local frame — so every cube of the pick turns about its own, as
+     * Blockbench turns a pick in its local space. The view's ring and the sphere turn about the
+     * scene's axes whatever the frame.
+     */
+    private boolean turnsOwnAxes()
+    {
+        TransformGesture gesture = this.cubeTransform.getGesture();
+
+        return gesture.getOp() == TransformOp.ROTATE && !gesture.isViewRotate() && !gesture.isSphereRotate() && gesture.space().isLocal();
     }
 
     /** Whether the cube already has the numbers its stand-in shows — within a hair, as the round trip through radians leaves them. */
