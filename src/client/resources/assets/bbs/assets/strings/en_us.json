@@ -1441,8 +1441,6 @@
 	"bbs.ui.model_editor.model.cube.pivot": "Pivot",
 	"bbs.ui.model_editor.model.cube.rotation": "Rotation",
 	"bbs.ui.model_editor.model.cube.inflate": "Inflate",
-	"bbs.ui.model_editor.model.uv.title": "Unwrap",
-	"bbs.ui.model_editor.model.uv.face": "Which side the numbers below are of",
 	"bbs.ui.model_editor.model.uv.drawn": "The side is drawn",
 	"bbs.ui.model_editor.model.uv.x1": "Where the side starts, across the sheet",
 	"bbs.ui.model_editor.model.uv.y1": "Where the side starts, down the sheet",

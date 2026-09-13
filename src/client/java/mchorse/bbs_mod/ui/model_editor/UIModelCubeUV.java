@@ -6,10 +6,12 @@ import mchorse.bbs_mod.cubic.data.model.ModelCube;
 import mchorse.bbs_mod.cubic.data.model.ModelUV;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIChoiceButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcons;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.events.UITrackpadDragEndEvent;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
@@ -22,19 +24,22 @@ import org.joml.Vector2f;
 import java.util.function.Consumer;
 
 /**
- * The unwrap of the picked cube, in numbers: which of its six sides is being worked on, whether
- * that side is drawn at all, the two corners it covers on the texture, the two mirrors and the
- * quarter turn, the box unwrap that lays all six sides out at once, and the size of the sheet all
- * of it is measured against.
+ * The unwrap pane of the model editor: the texture with the picked cube's sides drawn over it, and
+ * under the picture everything those sides are made of — which one is being worked on, whether it
+ * is drawn at all, the two corners it covers, its mirrors and its quarter turn, the box unwrap that
+ * lays all six out at once, and the size of the sheet they are all measured against.
+ *
+ * <p>It is one pane rather than a row here and a row there: the picture is the subject and the rows
+ * under it say the same thing in numbers, so a side can be dragged into place or typed into place
+ * and the other half follows either way.</p>
  *
  * <p>A side is shown as its two CORNERS rather than as a corner and a size, because a mirrored side
- * is exactly what the format calls a NEGATIVE size: typing corners carries the mirror through an
- * edit, where typing a width would quietly straighten it out. A side with no unwrap at all isn't
- * drawn — that is what the toggle turns off and on.</p>
+ * is exactly what the format calls a NEGATIVE size: carrying the corners through an edit keeps the
+ * mirror, where carrying a width would quietly straighten it out. A side with no unwrap at all
+ * isn't drawn — that is what the toggle takes away and gives back.</p>
  *
  * <p>The sheet's size is the model's, not the cube's — the {@code texture} of the file rather than
- * the size of the PNG — so changing it re-reads every cube's unwrap against the new one. It sits
- * here because this is where the numbers it governs are.</p>
+ * the size of the PNG — so changing it re-reads every cube's unwrap against the new one.</p>
  */
 public class UIModelCubeUV extends UIElement
 {
@@ -43,7 +48,10 @@ public class UIModelCubeUV extends UIElement
 
     private final UIModelGeometryEditor editor;
 
-    private final UIChoiceButton<CubeFace> face;
+    private final UIModelUVEditor canvas;
+    private final UIScrollView rows;
+
+    private final UIIcons faces;
     private final UIToggle drawn;
     private final UITrackpad[] corners = new UITrackpad[4];
     private final UIElement cornerRows;
@@ -57,11 +65,19 @@ public class UIModelCubeUV extends UIElement
     public UIModelCubeUV(UIModelGeometryEditor editor)
     {
         this.editor = editor;
+        this.canvas = new UIModelUVEditor(this);
+        this.canvas.relative(this).x(0).y(0).w(1F);
 
-        /* Six sides don't fit as tabs in a pane that can be 160 wide, so they go in a dropdown. */
-        this.face = new UIChoiceButton<>(ModelFaces.ALL, ModelFaces::icon, ModelFaces::label);
-        this.face.callback(this::pickFace).setValue(picked);
-        this.face.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_FACE);
+        /* Six sides as six arrows, the way a weld names one: they all fit, and the lit one says
+         * which side the numbers below belong to without a dropdown to open. */
+        this.faces = new UIIcons((b) -> this.pickFace(ModelFaces.ALL.get(b.getValue())));
+
+        for (CubeFace face : ModelFaces.ALL)
+        {
+            this.faces.add(ModelFaces.icon(face), ModelFaces.label(face));
+        }
+
+        this.faces.setValue(picked.ordinal());
 
         this.drawn = new UIToggle(UIKeys.MODEL_EDITOR_MODEL_UV_DRAWN, (t) -> this.setDrawn(t.getValue()));
 
@@ -91,7 +107,7 @@ public class UIModelCubeUV extends UIElement
         this.cornerRows = UI.column(UI.row(this.corners[0], this.corners[1]), UI.row(this.corners[2], this.corners[3]));
         this.flips = UI.strip(flipX, flipY, rotate);
 
-        /* The box unwrap is a button rather than a live field: it throws away all six sides, which
+        /* The box unwrap is a button rather than a live field: it throws all six sides away, which
          * is not something a stray scroll over a pad should do. */
         this.boxU = new UITrackpad((v) -> {}).integer();
         this.boxV = new UITrackpad((v) -> {}).integer();
@@ -110,10 +126,8 @@ public class UIModelCubeUV extends UIElement
         this.sheetWidth.getEvents().register(UITrackpadDragEndEvent.class, (e) -> this.editor.closeCubeEdit());
         this.sheetHeight.getEvents().register(UITrackpadDragEndEvent.class, (e) -> this.editor.closeCubeEdit());
 
-        this.column(UIConstants.MARGIN).vertical().stretch();
-        this.add(
-            UI.label(UIKeys.MODEL_EDITOR_MODEL_UV_TITLE),
-            this.face,
+        this.rows = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING,
+            this.faces,
             this.drawn,
             this.cornerRows,
             this.flips,
@@ -124,6 +138,24 @@ public class UIModelCubeUV extends UIElement
             UI.label(UIKeys.MODEL_EDITOR_MODEL_UV_SHEET),
             UI.row(this.sheetWidth, this.sheetHeight)
         );
+        this.rows.relative(this).x(0).w(1F);
+
+        this.add(this.canvas, this.rows);
+    }
+
+    /**
+     * The picture is square — a sheet reads as the sheet it is — and takes the top of the pane, up
+     * to half its height so the rows under it are never squeezed out on a short window.
+     */
+    @Override
+    protected void afterResizeApplied()
+    {
+        super.afterResizeApplied();
+
+        int side = Math.max(0, Math.min(this.area.w, this.area.h / 2));
+
+        this.canvas.h(side);
+        this.rows.y(side).h(1F, -side);
     }
 
     /* Filling */
@@ -133,11 +165,11 @@ public class UIModelCubeUV extends UIElement
     {
         Model model = this.editor.pickedModel();
 
-        UIUtils.setEnabledDeep(this, this.editor.pickedCube() != null);
-
-        this.face.setValue(picked);
+        this.faces.setValue(picked.ordinal());
         this.sheetWidth.setValue(model == null ? 0D : model.textureWidth);
         this.sheetHeight.setValue(model == null ? 0D : model.textureHeight);
+
+        UIUtils.setEnabledDeep(this.rows, this.editor.pickedCube() != null);
 
         this.fillFace();
     }
@@ -158,7 +190,7 @@ public class UIModelCubeUV extends UIElement
         UIUtils.setEnabledDeep(this.flips, uv != null);
     }
 
-    /** Whether one of the unwrap's pads is being dragged — the model settles when it is let go. */
+    /** Whether one of the pads is being dragged — the model settles when it is let go. */
     public boolean dragging()
     {
         for (UITrackpad pad : new UITrackpad[]{this.corners[0], this.corners[1], this.corners[2], this.corners[3], this.sheetWidth, this.sheetHeight})
@@ -169,10 +201,56 @@ public class UIModelCubeUV extends UIElement
             }
         }
 
-        return false;
+        return this.canvas.dragging;
     }
 
-    /* Editing */
+    /** The picture follows the pick every frame: a sheet resized elsewhere has to reach it too. */
+    @Override
+    public void render(UIContext context)
+    {
+        this.canvas.fill(this.editor.pickedInstance(), this.editor.pickedModel(), this.editor.pickedCube());
+
+        super.render(context);
+    }
+
+    /* What the picture asks of the model */
+
+    /** The side the rows and the picture are on. */
+    CubeFace face()
+    {
+        return picked;
+    }
+
+    /** A side clicked on the picture, or picked from the arrows. */
+    void pickFace(CubeFace face)
+    {
+        picked = face;
+
+        this.faces.setValue(face.ordinal());
+        this.fillFace();
+    }
+
+    /** A drag on the picture: the side's four numbers at once, merging into one undo step. */
+    void dragFace(float x1, float y1, float x2, float y2)
+    {
+        ModelUV uv = this.uv();
+
+        if (uv == null || (uv.sx() == x1 && uv.sy() == y1 && uv.ex() == x2 && uv.ey() == y2))
+        {
+            return;
+        }
+
+        this.editor.editCube(this.faceLabel(UIKeys.MODEL_EDITOR_MODEL_UNDO_UV), "uv:" + picked.name(), () -> uv.from(x1, y1, x2, y2));
+        this.fillFace();
+    }
+
+    /** The drag is over: its undo step closes and the model settles. */
+    void endFaceDrag()
+    {
+        this.editor.closeCubeEdit();
+    }
+
+    /* Editing from the rows */
 
     /** The unwrap of the side the rows are on, or null with no cube picked or the side not drawn. */
     private ModelUV uv()
@@ -191,13 +269,6 @@ public class UIModelCubeUV extends UIElement
             case 2 -> uv.ex();
             default -> uv.ey();
         };
-    }
-
-    private void pickFace(CubeFace face)
-    {
-        picked = face;
-
-        this.fillFace();
     }
 
     /** One corner typed or dragged; the other three are written back as they stand, mirror and all. */

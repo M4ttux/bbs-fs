@@ -146,7 +146,7 @@ public class UIModelGeometryEditor extends UIElement
     private final UITrackpad inflate;
     private final UIElement inflateRow;
 
-    /** The picked cube's unwrap, under its numbers. */
+    /** The picked cube's unwrap and the texture it sits on — the pane of its own, left of the preview. */
     private final UIModelCubeUV cubeUV;
 
     /** Groups whose cubes changed numbers, waiting for their quads and their bake to be rebuilt. */
@@ -264,7 +264,7 @@ public class UIModelGeometryEditor extends UIElement
 
         this.body = new UIElement();
         this.body.column(UIConstants.MARGIN).vertical().stretch();
-        this.body.add(UI.labelRow(UIKeys.MODEL_EDITOR_MODEL_GROUP_NAME, this.name), this.transform, this.cubeTransform, this.inflateRow, this.cubeUV);
+        this.body.add(UI.labelRow(UIKeys.MODEL_EDITOR_MODEL_GROUP_NAME, this.name), this.transform, this.cubeTransform, this.inflateRow);
 
         this.page = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING, UI.strip(add, this.addCube, this.dupe, this.remove, this.ikBones), this.search, this.body);
         this.page.full(this);
@@ -387,10 +387,22 @@ public class UIModelGeometryEditor extends UIElement
         return this.leadCube();
     }
 
-    /** The model the tree is bound to, for the unwrap block's sheet row; null with none. */
+    /** The model the tree is bound to, for the unwrap pane; null with none. */
     Model pickedModel()
     {
         return this.model;
+    }
+
+    /** The instance behind it, whose texture the unwrap pane draws; null with none. */
+    ModelInstance pickedInstance()
+    {
+        return this.instance;
+    }
+
+    /** The unwrap pane, which the panel puts left of the preview. */
+    public UIElement uvPanel()
+    {
+        return this.cubeUV;
     }
 
     /** The cube the fields sit on: the first of the pick, when it is a cube; null otherwise. */
@@ -600,7 +612,6 @@ public class UIModelGeometryEditor extends UIElement
         this.transform.setVisible(cube == null);
         this.cubeTransform.setVisible(cube != null);
         this.inflateRow.setVisible(cube != null);
-        this.cubeUV.setVisible(cube != null);
 
         UIUtils.setEnabledDeep(this.body, any);
         this.transform.setRotationEnabled(singleGroup);
@@ -614,7 +625,6 @@ public class UIModelGeometryEditor extends UIElement
         this.remove.setEnabled(picked);
         this.ikBones.setEnabled(singleGroup);
 
-        /* After the body's own enabling, which would otherwise light the unwrap's rows back up. */
         this.cubeUV.fill();
 
         this.page.resize();

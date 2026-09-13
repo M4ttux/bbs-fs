@@ -119,6 +119,10 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     /** What the gizmo moves in the model editor, in the corner the thumbnail leaves free there. */
     private UIIcon pivotIcon;
 
+    /** The model editor's unwrap pane, left of the preview: the texture and the picked cube on it. */
+    private UIElement uvPane;
+    public UISplitter uvSplitter;
+
     private UIIcon folderIcon;
     private UIIcon historyIcon;
     private UIIcon animationIcon;
@@ -137,6 +141,7 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         super(dashboard);
 
         this.pane = new UIElement();
+        this.uvPane = new UIElement();
 
         /* What the tour of this panel points at; the pane's parts are built further down */
         TourAnchors.register("model_editor.preview", () -> this.renderer);
@@ -150,6 +155,15 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         this.renderer.form = this.form;
 
         /* Two panes: the preview and, to its right, the settings — each keeping at least 160px. */
+        /* The unwrap pane's grip measures from the left edge, and may not eat the preview: the two
+         * sidebars are kept apart by the room the middle needs. */
+        this.uvSplitter = new UISplitter("model_editor.uv_split", false, 240);
+        this.uvSplitter.measure(this.editor).range(160, () -> (float) (this.editor.area.w - this.splitter.getPixels() - 160)).onChange(() ->
+        {
+            this.layoutPanes();
+            this.resize();
+        });
+
         this.splitter = new UISplitter("model_editor.split", false, 280).fromEnd();
         this.splitter.measure(this.editor).range(160, () -> (float) (this.editor.area.w - 160)).onChange(() ->
         {
@@ -197,7 +211,9 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         this.pivotIcon.relative(this.renderer).x(1F, -20).y(0).wh(20, 20);
         this.renderer.add(this.pivotIcon);
 
-        this.editor.add(this.pane, this.renderer, this.splitter);
+        this.uvPane.add(this.modelEditor.uvPanel().full(this.uvPane));
+
+        this.editor.add(this.uvPane, this.pane, this.renderer, this.splitter, this.uvSplitter);
 
         this.showEditor(lastEditor);
         this.syncPreview();
@@ -304,6 +320,10 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         this.miniPreview.setVisible(lastEditor != Editor.MODEL);
         this.pivotIcon.setVisible(lastEditor == Editor.MODEL);
 
+        /* The unwrap is about the model itself, so its pane comes and goes with the model editor. */
+        this.uvPane.setVisible(lastEditor == Editor.MODEL);
+        this.layoutPanes();
+
         ModelFormRenderer renderer = this.formRenderer();
 
         if (renderer != null)
@@ -371,20 +391,25 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     private void layoutPanes()
     {
         int splitWidth = this.splitter.getPixels();
+        int uvWidth = this.uvPane.isVisible() ? this.uvSplitter.getPixels() : 0;
 
         this.pane.relative(this.editor).x(1F, -splitWidth).y(0).w(splitWidth).h(1F);
         this.splitter.relative(this.editor).x(1F, -splitWidth).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
 
+        this.uvPane.relative(this.editor).x(0).y(0).w(uvWidth).h(1F);
+        this.uvSplitter.relative(this.editor).x(uvWidth).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
+        this.uvSplitter.setVisible(uvWidth > 0);
+
         if (!this.renderer.isFirstPerson())
         {
-            this.renderer.relative(this.editor).x(0).y(0).w(1F, -splitWidth).h(1F);
+            this.renderer.relative(this.editor).x(uvWidth).y(0).w(1F, -splitWidth - uvWidth).h(1F);
 
             return;
         }
 
         MinecraftClient mc = MinecraftClient.getInstance();
         float aspect = mc.getWindow().getFramebufferWidth() / (float) Math.max(1, mc.getWindow().getFramebufferHeight());
-        int roomW = Math.max(1, this.editor.area.w - splitWidth);
+        int roomW = Math.max(1, this.editor.area.w - splitWidth - uvWidth);
         int roomH = Math.max(1, this.editor.area.h);
         int w = roomW;
         int h = Math.round(w / aspect);
@@ -395,7 +420,7 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
             w = Math.round(h * aspect);
         }
 
-        this.renderer.relative(this.editor).x((roomW - w) / 2).y((roomH - h) / 2).w(w).h(h);
+        this.renderer.relative(this.editor).x(uvWidth + (roomW - w) / 2).y((roomH - h) / 2).w(w).h(h);
     }
 
     /**
