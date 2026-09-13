@@ -31,6 +31,7 @@ import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.ui.utils.context.MenuVerb;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Axis;
+import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Matrices;
@@ -68,7 +69,7 @@ import java.util.function.Supplier;
  * — and moving it means one of two things. The gizmo MOVES THE GROUP: its cubes and its whole
  * subtree's go along, since a cubic model's cubes are absolute and the hierarchy passes down
  * rotations alone. The row under the tree moves THE POINT ALONE, leaving the geometry where it
- * stands, so the group turns about somewhere else. The sphere over the preview puts the gizmo on
+ * stands, so the group turns about somewhere else. The sphere over the tree puts the gizmo on
  * the point too, for when that is what's wanted. A cube's rows read the same way round: its
  * position row moves the cube as a whole, the pivot row below moves its point alone. Its gizmo
  * stands on that pivot and turns as the cube does — the rings turn the cube about it, and unlike a
@@ -164,7 +165,7 @@ public class UIModelGeometryEditor extends UIElement
     private ModelInstance instance;
 
     /**
-     * Whether THE GIZMO moves the pivot alone — the sphere over the preview. The rows under the
+     * Whether THE GIZMO moves the pivot alone — the sphere over the tree, or its key. The rows under the
      * tree say what they move on their own and pay it no mind. Kept across picks and across opening
      * the panel, the way the open editor is: it's a mode of working, not a property of a group.
      */
@@ -192,6 +193,14 @@ public class UIModelGeometryEditor extends UIElement
         this.addCube.tooltip(UIKeys.MODEL_EDITOR_MODEL_CUBE_ADD);
         this.ikBones = new UIIcon(Icons.IK, (b) -> this.pickIKParent());
         this.ikBones.tooltip(UIKeys.MODEL_EDITOR_MODEL_GROUP_IK_BONES);
+
+        /* Last in the strip, apart from the verbs: not something done to the pick but what the gizmo
+         * moves — a group's or a cube's geometry, or its pivot alone. Drawn active as a bar, like
+         * every other toggle. */
+        UIIcon pivot = new UIIcon(Icons.SPHERE, (b) -> togglePivotOnly());
+
+        pivot.highlight(UIModelGeometryEditor::isPivotOnly, Direction.BOTTOM);
+        pivot.tooltip(UIKeys.MODEL_EDITOR_MODEL_PIVOT_ONLY);
 
         /* The name is committed as a whole (enter, leaving the field): every keystroke would be a rename. */
         this.name = new UITextbox(64, this::rename);
@@ -265,7 +274,7 @@ public class UIModelGeometryEditor extends UIElement
         this.body.column(UIConstants.MARGIN).vertical().stretch();
         this.body.add(UI.labelRow(UIKeys.MODEL_EDITOR_MODEL_GROUP_NAME, this.name), this.transform, this.cubeTransform, this.inflateRow);
 
-        this.page = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING, UI.strip(add, this.addCube, this.ikBones), this.search, this.body);
+        this.page = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING, UI.strip(add, this.addCube, this.ikBones, pivot), this.search, this.body);
         this.page.full(this);
         this.add(this.page);
 
@@ -293,9 +302,11 @@ public class UIModelGeometryEditor extends UIElement
         this.tree.keys().register(Keys.MODEL_EDITOR_GROUP_IK_BONES, this::pickIKParent).inside().active(this::singleGroup).category(category);
 
         /* Unfolding is the panel's own key, as it is on the config editor's pages — no need to be
-         * over the tree for it. */
+         * over the tree for it. Nor for what the gizmo moves, which is wanted with the cursor over
+         * the preview, where the gizmo is. */
         this.keys().register(Keys.MODEL_EDITOR_EXPAND_ALL, () -> this.tree.setAllExpanded(true)).active(open).category(category);
         this.keys().register(Keys.MODEL_EDITOR_COLLAPSE_ALL, () -> this.tree.setAllExpanded(false)).active(open).category(category);
+        this.keys().register(Keys.MODEL_EDITOR_PIVOT_ONLY, UIModelGeometryEditor::togglePivotOnly).active(open).category(category);
     }
 
     /** F2: the name field takes the caret, since the tree renames through it rather than in place. */
@@ -304,7 +315,7 @@ public class UIModelGeometryEditor extends UIElement
         this.getContext().focus(this.name);
     }
 
-    /** Whether the gizmo moves the pivot alone — read by the sphere over the preview. */
+    /** Whether the gizmo moves the pivot alone — read by the sphere over the tree. */
     public static boolean isPivotOnly()
     {
         return pivotOnly;
@@ -964,7 +975,7 @@ public class UIModelGeometryEditor extends UIElement
      * the pick moves by the same step; its size and rotation as they are. A cube already within a
      * hair of the numbers is left alone, as a group's rest is.
      *
-     * <p>Two things a gesture does that the rows don't. With the sphere over the preview on, a
+     * <p>Two things a gesture does that the rows don't. With the sphere over the tree on, a
      * drag moves the pivot alone, as it does for a group — and then the position row runs ahead of
      * the corner, which stays put, until {@link #endEdit} reads the cube back. And the scale
      * handles grow the cube FROM ITS PIVOT, which is where they sit, by walking the corner in with

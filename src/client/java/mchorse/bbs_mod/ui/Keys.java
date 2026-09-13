@@ -222,6 +222,10 @@ public class Keys
     public static final KeyCombo MODEL_EDITOR_GROUP_RENAME = new KeyCombo("group_rename", UIKeys.MODEL_EDITOR_MODEL_GROUP_RENAME, GLFW.GLFW_KEY_F2).categoryKey("model_editor");
     public static final KeyCombo MODEL_EDITOR_GROUP_IK_BONES = new KeyCombo("group_ik_bones", UIKeys.MODEL_EDITOR_MODEL_GROUP_IK_BONES, GLFW.GLFW_KEY_I, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("model_editor");
 
+    /* What the gizmo moves, geometry or the pivot alone: P, Blockbench's pivot tool. Nothing else
+     * the model editor shows takes a bare P. */
+    public static final KeyCombo MODEL_EDITOR_PIVOT_ONLY = new KeyCombo("pivot_only", UIKeys.MODEL_EDITOR_MODEL_PIVOT_ONLY, GLFW.GLFW_KEY_P).categoryKey("model_editor");
+
     /* Texture picker */
     public static final KeyCombo TEXTURE_PICKER_FIND = new KeyCombo("find", UIKeys.TEXTURE_KEYS_FIND_ALL, GLFW.GLFW_KEY_F, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("texture_picker");
 }
