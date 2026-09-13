@@ -67,7 +67,7 @@ public class UIModelCubeUV extends UIElement
     private final UITrackpad[] corners = new UITrackpad[4];
     private final UIElement cornerRows;
 
-    /** What can be done to a drawn side — mirrored or turned; they go dead on a side that isn't drawn. */
+    /** What can be done to a drawn side — mirrored, turned, fitted, spread; they go dead on a side that isn't drawn. */
     private final UIIcon[] sideActions;
     private final UITrackpad boxU;
     private final UITrackpad boxV;
@@ -120,13 +120,22 @@ public class UIModelCubeUV extends UIElement
         UIIcon flipY = new UIIcon(Icons.VERTICAL, (b) -> this.change(UIKeys.MODEL_EDITOR_MODEL_UNDO_UV_FLIP, ModelUV::flipY));
         UIIcon rotate = new UIIcon(Icons.REFRESH, (b) -> this.change(UIKeys.MODEL_EDITOR_MODEL_UNDO_UV_ROTATE, ModelUV::rotate90));
 
+        /* Blockbench's shortcuts for one side's unwrap, after the mirrors and the turn: as big as the
+         * side itself, over the whole sheet, and this side's unwrap on every side. */
+        UIIcon fit = new UIIcon(Icons.SCALE, (b) -> this.fitToSide());
+        UIIcon maximize = new UIIcon(Icons.FULLSCREEN, (b) -> this.maximize());
+        UIIcon applyAll = new UIIcon(Icons.GALLERY, (b) -> this.applyToAll());
+
         drawn.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_DRAWN);
         flipX.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_FLIP_X);
         flipY.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_FLIP_Y);
         rotate.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_ROTATE);
+        fit.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_FIT);
+        maximize.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_MAXIMIZE);
+        applyAll.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_APPLY_ALL);
 
         this.cornerRows = UI.row(this.corners[0], this.corners[1], this.corners[2], this.corners[3]);
-        this.sideActions = new UIIcon[]{flipX, flipY, rotate};
+        this.sideActions = new UIIcon[]{flipX, flipY, rotate, fit, maximize, applyAll};
 
         /* The box unwrap: its name on a line of its own, and under it one row says the rest — from
          * where, mirrored or not, go. Going is a press rather than a live field: it throws all six
@@ -160,7 +169,12 @@ public class UIModelCubeUV extends UIElement
         UIElement actions = new UIElement();
 
         actions.row(0).height(ACTION_SIZE);
-        actions.add(drawn.wh(ACTION_SIZE, ACTION_SIZE), flipX.wh(ACTION_SIZE, ACTION_SIZE), flipY.wh(ACTION_SIZE, ACTION_SIZE), rotate.wh(ACTION_SIZE, ACTION_SIZE));
+        actions.add(drawn.wh(ACTION_SIZE, ACTION_SIZE));
+
+        for (UIIcon action : this.sideActions)
+        {
+            actions.add(action.wh(ACTION_SIZE, ACTION_SIZE));
+        }
 
         this.rows = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING,
             this.cornerRows,
@@ -369,6 +383,113 @@ public class UIModelCubeUV extends UIElement
         this.editor.editCube(this.faceLabel(label), null, () -> change.accept(uv));
         this.fillFace();
         this.editor.closeCubeEdit();
+    }
+
+    /**
+     * Blockbench's auto UV: the side's unwrap as big as the side itself — a pixel of the sheet per
+     * pixel of the model — from the same first corner and mirrored the same way. A side turned a
+     * quarter lies across the sheet the other way round, so its width and height swap.
+     */
+    private void fitToSide()
+    {
+        ModelCube cube = this.editor.pickedCube();
+        ModelUV uv = this.uv();
+
+        if (uv == null)
+        {
+            return;
+        }
+
+        Vector2f size = cube.faceSize(picked);
+        boolean turned = uv.rotation % 180F != 0F;
+        float width = turned ? size.y : size.x;
+        float height = turned ? size.x : size.y;
+        float x2 = uv.sx() + (uv.size.x < 0 ? -width : width);
+        float y2 = uv.sy() + (uv.size.y < 0 ? -height : height);
+
+        if (!same(uv, uv.sx(), uv.sy(), x2, y2))
+        {
+            this.change(UIKeys.MODEL_EDITOR_MODEL_UNDO_UV_FIT, (side) -> side.from(side.sx(), side.sy(), x2, y2));
+        }
+    }
+
+    /** Blockbench's maximize: the side's unwrap over the whole sheet, mirrored the same way. */
+    private void maximize()
+    {
+        Model model = this.editor.pickedModel();
+        ModelUV uv = this.uv();
+
+        if (uv == null || model == null)
+        {
+            return;
+        }
+
+        float width = model.textureWidth;
+        float height = model.textureHeight;
+        float x1 = uv.size.x < 0 ? width : 0F;
+        float y1 = uv.size.y < 0 ? height : 0F;
+        float x2 = width - x1;
+        float y2 = height - y1;
+
+        if (!same(uv, x1, y1, x2, y2))
+        {
+            this.change(UIKeys.MODEL_EDITOR_MODEL_UNDO_UV_MAXIMIZE, (side) -> side.from(x1, y1, x2, y2));
+        }
+    }
+
+    /**
+     * Blockbench's apply to all faces: every other drawn side takes this side's unwrap — its corners
+     * and its turn — for a cube that wears one patch of the sheet all over. A side that isn't drawn
+     * keeps the place it will come back to.
+     */
+    private void applyToAll()
+    {
+        ModelCube cube = this.editor.pickedCube();
+        ModelUV uv = this.uv();
+
+        if (uv == null)
+        {
+            return;
+        }
+
+        float x1 = uv.sx();
+        float y1 = uv.sy();
+        float x2 = uv.ex();
+        float y2 = uv.ey();
+        float rotation = uv.rotation;
+        List<ModelUV> others = new ArrayList<>();
+
+        for (CubeFace face : ModelFaces.ALL)
+        {
+            ModelUV other = cube.getUV(face);
+
+            if (face != picked && other != null && (!same(other, x1, y1, x2, y2) || other.rotation != rotation))
+            {
+                others.add(other);
+            }
+        }
+
+        if (others.isEmpty())
+        {
+            return;
+        }
+
+        this.editor.editCube(this.faceLabel(UIKeys.MODEL_EDITOR_MODEL_UNDO_UV_APPLY_ALL), null, () ->
+        {
+            for (ModelUV other : others)
+            {
+                other.from(x1, y1, x2, y2);
+                other.rotation = rotation;
+            }
+        });
+        this.fillFace();
+        this.editor.closeCubeEdit();
+    }
+
+    /** Whether a side's unwrap already has these two corners. */
+    private static boolean same(ModelUV uv, float x1, float y1, float x2, float y2)
+    {
+        return uv.sx() == x1 && uv.sy() == y1 && uv.ex() == x2 && uv.ey() == y2;
     }
 
     /**

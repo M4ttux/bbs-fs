@@ -1096,6 +1096,9 @@ public class UIKeys
     public static final IKey MODEL_EDITOR_MODEL_UV_FLIP_X = L10n.lang("bbs.ui.model_editor.model.uv.flip_x");
     public static final IKey MODEL_EDITOR_MODEL_UV_FLIP_Y = L10n.lang("bbs.ui.model_editor.model.uv.flip_y");
     public static final IKey MODEL_EDITOR_MODEL_UV_ROTATE = L10n.lang("bbs.ui.model_editor.model.uv.rotate");
+    public static final IKey MODEL_EDITOR_MODEL_UV_FIT = L10n.lang("bbs.ui.model_editor.model.uv.fit");
+    public static final IKey MODEL_EDITOR_MODEL_UV_MAXIMIZE = L10n.lang("bbs.ui.model_editor.model.uv.maximize");
+    public static final IKey MODEL_EDITOR_MODEL_UV_APPLY_ALL = L10n.lang("bbs.ui.model_editor.model.uv.apply_all");
     public static final IKey MODEL_EDITOR_MODEL_UV_BOX = L10n.lang("bbs.ui.model_editor.model.uv.box");
     public static final IKey MODEL_EDITOR_MODEL_UV_BOX_U = L10n.lang("bbs.ui.model_editor.model.uv.box_u");
     public static final IKey MODEL_EDITOR_MODEL_UV_BOX_V = L10n.lang("bbs.ui.model_editor.model.uv.box_v");
@@ -1108,6 +1111,9 @@ public class UIKeys
     public static final IKey MODEL_EDITOR_MODEL_UNDO_UV_DRAWN = L10n.lang("bbs.ui.model_editor.model.undo.uv_drawn");
     public static final IKey MODEL_EDITOR_MODEL_UNDO_UV_FLIP = L10n.lang("bbs.ui.model_editor.model.undo.uv_flip");
     public static final IKey MODEL_EDITOR_MODEL_UNDO_UV_ROTATE = L10n.lang("bbs.ui.model_editor.model.undo.uv_rotate");
+    public static final IKey MODEL_EDITOR_MODEL_UNDO_UV_FIT = L10n.lang("bbs.ui.model_editor.model.undo.uv_fit");
+    public static final IKey MODEL_EDITOR_MODEL_UNDO_UV_MAXIMIZE = L10n.lang("bbs.ui.model_editor.model.undo.uv_maximize");
+    public static final IKey MODEL_EDITOR_MODEL_UNDO_UV_APPLY_ALL = L10n.lang("bbs.ui.model_editor.model.undo.uv_apply_all");
     public static final IKey MODEL_EDITOR_MODEL_UNDO_UV_BOX = L10n.lang("bbs.ui.model_editor.model.undo.uv_box");
     public static final IKey MODEL_EDITOR_MODEL_UNDO_TEXTURE_SIZE = L10n.lang("bbs.ui.model_editor.model.undo.texture_size");
     public static final IKey MODEL_EDITOR_MODEL_UNDO_CUBE_ADD = L10n.lang("bbs.ui.model_editor.model.undo.cube_add");
