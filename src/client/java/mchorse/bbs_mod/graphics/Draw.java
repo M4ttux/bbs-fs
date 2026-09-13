@@ -66,6 +66,48 @@ public class Draw
     }
 
     /**
+     * The twelve edges of a box as hairlines, a pixel wide on screen at any distance — where
+     * {@link #renderBox}'s bars have a thickness in the world, and swell as the camera closes in
+     * until a small box reads as a solid lump. For outlining something the eye must see through.
+     */
+    public static void renderBoxLines(MatrixStack stack, double x, double y, double z, double w, double h, double d, float r, float g, float b, float a)
+    {
+        Matrix4f matrix = stack.peek().getPositionMatrix();
+        float x1 = (float) x;
+        float y1 = (float) y;
+        float z1 = (float) z;
+        float x2 = (float) (x + w);
+        float y2 = (float) (y + h);
+        float z2 = (float) (z + d);
+
+        BufferBuilder builder = Tessellator.getInstance().getBuffer();
+        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+
+        builder.begin(VertexFormat.DrawMode.DEBUG_LINES, VertexFormats.POSITION_COLOR);
+
+        for (float y0 : new float[] {y1, y2})
+        {
+            line(builder, matrix, x1, y0, z1, x2, y0, z1, r, g, b, a);
+            line(builder, matrix, x2, y0, z1, x2, y0, z2, r, g, b, a);
+            line(builder, matrix, x2, y0, z2, x1, y0, z2, r, g, b, a);
+            line(builder, matrix, x1, y0, z2, x1, y0, z1, r, g, b, a);
+        }
+
+        line(builder, matrix, x1, y1, z1, x1, y2, z1, r, g, b, a);
+        line(builder, matrix, x2, y1, z1, x2, y2, z1, r, g, b, a);
+        line(builder, matrix, x2, y1, z2, x2, y2, z2, r, g, b, a);
+        line(builder, matrix, x1, y1, z2, x1, y2, z2, r, g, b, a);
+
+        BufferRenderer.drawWithGlobalProgram(builder.end());
+    }
+
+    private static void line(BufferBuilder builder, Matrix4f matrix, float x1, float y1, float z1, float x2, float y2, float z2, float r, float g, float b, float a)
+    {
+        builder.vertex(matrix, x1, y1, z1).color(r, g, b, a).next();
+        builder.vertex(matrix, x2, y2, z2).color(r, g, b, a).next();
+    }
+
+    /**
      * Fill a quad for {@link net.minecraft.client.render.VertexFormats#POSITION_TEXTURE_COLOR_NORMAL}. Points should
      * be supplied in this order:
      *

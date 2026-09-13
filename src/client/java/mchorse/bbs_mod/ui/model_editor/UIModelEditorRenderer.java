@@ -18,6 +18,7 @@ import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.graphics.Draw;
+import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.utils.UIFormRenderer;
@@ -68,8 +69,9 @@ import java.util.function.Supplier;
  * cursor of a row that names it ({@link #highlight}), the bone pickers' eyedropper works
  * ({@link UIBonePicker.Viewport}), and a click on a bone reports it to the panel. With cube
  * picking on ({@link #setCubePicking}), the click also says which cube of the bone it landed
- * on — the stencil names the bone, a ray through its cubes names the cube — and the cubes the
- * panel has picked are outlined ({@link #outlines}), the one under the cursor faintly.</li>
+ * on — the stencil names the bone, a ray through its cubes names the cube; with shift held it
+ * names the bone alone — and the cubes the panel has picked are outlined ({@link #outlines}),
+ * what a click would pick faintly.</li>
  * <li>The transform gizmo on the picked attachment slot or pose bone ({@link #target}): drawn
  * in the frame the renderer applies the transform in, so dragging a handle moves the item
  * (or the bone) exactly as the numbers would.</li>
@@ -118,7 +120,7 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
     /** Whether a click names the cube it landed on, and the cube under the cursor is outlined. */
     private boolean cubePicking;
 
-    /** The cube under the cursor this frame, when cube picking is on; null off the model. */
+    /** What a click would pick this frame, when cube picking is on — a cube, or its group with shift held; null off the model. */
     private ModelNode hovered;
 
     /** The stencil id the model's first bone was drawn with; a bone's id is that plus its index. */
@@ -355,12 +357,27 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
         return ModelCubeFrames.pick(entry, group, origin, direction);
     }
 
-    /** The cube under the cursor, as an address; null off the model, or with cube picking off. */
-    private ModelNode hoveredCube(UIContext context)
+    /**
+     * What a click would pick right now, as an address: the cube under the cursor — or, with shift
+     * held, the group whose geometry it is, the way a click with shift picks it. Null off the model,
+     * or with cube picking off.
+     */
+    private ModelNode hoveredNode(UIContext context)
     {
         Model model = this.cubePicking && this.area.isInside(context) ? this.cubicModel() : null;
         ModelGroup group = model == null ? null : this.hoveredGroup(model);
-        int cube = group == null ? -1 : this.pickCube(context, group);
+
+        if (group == null)
+        {
+            return null;
+        }
+
+        if (Window.isShiftPressed())
+        {
+            return ModelNode.group(group.id);
+        }
+
+        int cube = this.pickCube(context, group);
 
         return cube < 0 ? null : ModelNode.cube(group.id, cube);
     }
@@ -396,12 +413,35 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
             this.renderOutline(stack, model, outline.node(), outline.color());
         }
 
-        if (this.hovered != null)
+        if (this.hovered != null && this.hovered.isGroup())
+        {
+            this.renderSubtreeOutline(stack, model, model.getGroup(this.hovered.group()), HOVER_COLOR);
+        }
+        else if (this.hovered != null)
         {
             this.renderOutline(stack, model, this.hovered, HOVER_COLOR);
         }
 
         RenderSystem.enableDepthTest();
+    }
+
+    /** A group read as the shape it carries: every cube of it and of every group under it. */
+    private void renderSubtreeOutline(MatrixStack stack, Model model, ModelGroup group, int color)
+    {
+        if (group == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < group.cubes.size(); i++)
+        {
+            this.renderOutline(stack, model, ModelNode.cube(group.id, i), color);
+        }
+
+        for (ModelGroup child : group.children)
+        {
+            this.renderSubtreeOutline(stack, model, child, color);
+        }
     }
 
     private void renderOutline(MatrixStack stack, Model model, ModelNode node, int color)
@@ -420,7 +460,7 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
 
         stack.push();
         MatrixStackUtils.multiply(stack, ModelCubeFrames.cubeFrame(ModelCubeFrames.groupFrame(entry, group), cube));
-        Draw.renderBox(stack, min.x, min.y, min.z, max.x - min.x, max.y - min.y, max.z - min.z, Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
+        Draw.renderBoxLines(stack, min.x, min.y, min.z, max.x - min.x, max.y - min.y, max.z - min.z, Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
         stack.pop();
     }
 
@@ -803,7 +843,7 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
 
         /* The cube under the cursor is found on the bones just captured and the bone the last
          * frame's stencil found — a frame behind at most, which the eye doesn't see. */
-        this.hovered = this.hoveredCube(context);
+        this.hovered = this.hoveredNode(context);
         this.renderOutlines(context);
 
         /* Keep the gizmo the same on-screen size as in the film preview; set before both the
@@ -1026,10 +1066,11 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
                 Model model = this.cubePicking ? this.cubicModel() : null;
                 ModelGroup group = model == null ? null : this.hoveredGroup(model);
 
+                /* Shift picks the group itself rather than the cube of it under the cursor. */
                 if (group != null)
                 {
                     bone = group.id;
-                    cube = this.pickCube(context, group);
+                    cube = Window.isShiftPressed() ? -1 : this.pickCube(context, group);
                 }
 
                 if (this.onPick.pick(bone, cube))

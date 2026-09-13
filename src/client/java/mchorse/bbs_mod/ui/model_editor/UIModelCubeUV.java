@@ -45,8 +45,8 @@ public class UIModelCubeUV extends UIElement
     /** Which side the rows are on. Kept across picks and models: it is a mode of working. */
     private static CubeFace picked = CubeFace.FRONT;
 
-    /** How tall the strip of sides over the picture stands — a size above the rows, as the pane's main choice. */
-    private static final int FACES_HEIGHT = 20;
+    /** How tall the strip of sides over the picture stands: a row's height, like every strip of icons. */
+    private static final int FACES_HEIGHT = UIConstants.CONTROL_HEIGHT;
 
     private final UIModelGeometryEditor editor;
 

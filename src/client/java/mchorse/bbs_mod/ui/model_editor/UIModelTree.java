@@ -364,7 +364,7 @@ public class UIModelTree extends UIList<ModelNode>
         }
 
         this.renderArrow(context, node, x, y, lit);
-        context.batcher.icon(node.isCube() ? Icons.BLOCK : Icons.LIMB, RowStyle.iconColor(lit), iconX, y + (h - 16) / 2);
+        context.batcher.icon(node.isCube() ? Icons.BLOCK : Icons.FOLDER, RowStyle.iconColor(lit), iconX, y + (h - 16) / 2);
 
         /* Flat search results say where a cube is; a row in the tree is under its group already. */
         String label = meta == null ? this.elementToString(context, i, node) : meta.label;
