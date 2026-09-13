@@ -9,10 +9,8 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
-import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcons;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.events.UITrackpadDragEndEvent;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.utils.UI;
@@ -37,7 +35,7 @@ import java.util.function.Consumer;
  * <p>A side is shown as its two CORNERS rather than as a corner and a size, because a mirrored side
  * is exactly what the format calls a NEGATIVE size: carrying the corners through an edit keeps the
  * mirror, where carrying a width would quietly straighten it out. A side with no unwrap at all
- * isn't drawn — that is what the toggle takes away and gives back.</p>
+ * isn't drawn — that is what the eye in the side's icons takes away and gives back.</p>
  *
  * <p>The sheet's size is the model's, not the cube's — the {@code texture} of the file rather than
  * the size of the PNG — so changing it re-reads every cube's unwrap against the new one.</p>
@@ -56,10 +54,11 @@ public class UIModelCubeUV extends UIElement
     private final UIScrollView rows;
 
     private final UIIcons faces;
-    private final UIToggle drawn;
     private final UITrackpad[] corners = new UITrackpad[4];
     private final UIElement cornerRows;
-    private final UIElement flips;
+
+    /** What can be done to a drawn side — mirrored or turned; they go dead on a side that isn't drawn. */
+    private final UIIcon[] sideActions;
     private final UITrackpad boxU;
     private final UITrackpad boxV;
     private final UITrackpad sheetWidth;
@@ -88,8 +87,6 @@ public class UIModelCubeUV extends UIElement
         this.faces.relative(this).x(0).y(0).w(1F).h(FACES_HEIGHT);
         this.faces.setValue(picked.ordinal());
 
-        this.drawn = new UIToggle(UIKeys.MODEL_EDITOR_MODEL_UV_DRAWN, (t) -> this.setDrawn(t.getValue()));
-
         IKey[] labels = {
             UIKeys.MODEL_EDITOR_MODEL_UV_X1, UIKeys.MODEL_EDITOR_MODEL_UV_Y1,
             UIKeys.MODEL_EDITOR_MODEL_UV_X2, UIKeys.MODEL_EDITOR_MODEL_UV_Y2
@@ -105,20 +102,25 @@ public class UIModelCubeUV extends UIElement
             this.corners[i] = pad;
         }
 
+        /* Whether the side is drawn leads the side's own icons: the eye the rest of the editor shows
+         * visibility with, open or shut as the side is. It stays live on a side that isn't drawn — it
+         * is how that side comes back. */
+        UIIcon drawn = new UIIcon(() -> this.uv() != null ? Icons.VISIBLE : Icons.INVISIBLE, (b) -> this.setDrawn(this.uv() == null));
         UIIcon flipX = new UIIcon(Icons.HORIZONTAL, (b) -> this.change(UIKeys.MODEL_EDITOR_MODEL_UNDO_UV_FLIP, ModelUV::flipX));
         UIIcon flipY = new UIIcon(Icons.VERTICAL, (b) -> this.change(UIKeys.MODEL_EDITOR_MODEL_UNDO_UV_FLIP, ModelUV::flipY));
         UIIcon rotate = new UIIcon(Icons.REFRESH, (b) -> this.change(UIKeys.MODEL_EDITOR_MODEL_UNDO_UV_ROTATE, ModelUV::rotate90));
 
+        drawn.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_DRAWN);
         flipX.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_FLIP_X);
         flipY.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_FLIP_Y);
         rotate.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_ROTATE);
 
         this.cornerRows = UI.row(this.corners[0], this.corners[1], this.corners[2], this.corners[3]);
-        this.flips = UI.strip(flipX, flipY, rotate);
+        this.sideActions = new UIIcon[]{flipX, flipY, rotate};
 
-        /* The box unwrap is a section of its own: its name heads it, and under the name one row says
-         * the rest — from where, mirrored or not, go. Going is a press rather than a live field: it
-         * throws all six sides away, which is not something a stray scroll over a pad should do. */
+        /* The box unwrap: its name on a line of its own, and under it one row says the rest — from
+         * where, mirrored or not, go. Going is a press rather than a live field: it throws all six
+         * sides away, which is not something a stray scroll over a pad should do. */
         this.boxU = new UITrackpad((v) -> {}).integer();
         this.boxV = new UITrackpad((v) -> {}).integer();
         this.boxU.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_BOX_U);
@@ -131,14 +133,12 @@ public class UIModelCubeUV extends UIElement
         mirror.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_BOX_MIRROR);
         apply.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_BOX_TIP);
 
-        UISection box = new UISection(UIKeys.MODEL_EDITOR_MODEL_UV_BOX);
-
-        box.fields.add(UI.row(
+        UIElement box = UI.row(
             this.boxU,
             this.boxV,
             mirror.wh(UIConstants.CONTROL_HEIGHT, UIConstants.CONTROL_HEIGHT),
             apply.wh(UIConstants.CONTROL_HEIGHT, UIConstants.CONTROL_HEIGHT)
-        ));
+        );
 
         this.sheetWidth = new UITrackpad((v) -> this.setSheet()).integer().limit(1);
         this.sheetHeight = new UITrackpad((v) -> this.setSheet()).integer().limit(1);
@@ -148,9 +148,9 @@ public class UIModelCubeUV extends UIElement
         this.sheetHeight.getEvents().register(UITrackpadDragEndEvent.class, (e) -> this.editor.closeCubeEdit());
 
         this.rows = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING,
-            this.drawn,
             this.cornerRows,
-            this.flips,
+            UI.strip(drawn, flipX, flipY, rotate),
+            UI.label(UIKeys.MODEL_EDITOR_MODEL_UV_BOX),
             box,
             UI.label(UIKeys.MODEL_EDITOR_MODEL_UV_SHEET),
             UI.row(this.sheetWidth, this.sheetHeight)
@@ -198,15 +198,17 @@ public class UIModelCubeUV extends UIElement
     {
         ModelUV uv = this.uv();
 
-        this.drawn.setValue(uv != null);
-
         for (int i = 0; i < this.corners.length; i++)
         {
             this.corners[i].setValue(uv == null ? 0D : this.corner(uv, i));
         }
 
         UIUtils.setEnabledDeep(this.cornerRows, uv != null);
-        UIUtils.setEnabledDeep(this.flips, uv != null);
+
+        for (UIIcon action : this.sideActions)
+        {
+            action.setEnabled(uv != null);
+        }
     }
 
     /** Whether one of the pads is being dragged — the model settles when it is let go. */
