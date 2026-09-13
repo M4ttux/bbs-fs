@@ -1099,7 +1099,6 @@ public class UIKeys
     public static final IKey MODEL_EDITOR_MODEL_UV_BOX_U = L10n.lang("bbs.ui.model_editor.model.uv.box_u");
     public static final IKey MODEL_EDITOR_MODEL_UV_BOX_V = L10n.lang("bbs.ui.model_editor.model.uv.box_v");
     public static final IKey MODEL_EDITOR_MODEL_UV_BOX_MIRROR = L10n.lang("bbs.ui.model_editor.model.uv.box_mirror");
-    public static final IKey MODEL_EDITOR_MODEL_UV_BOX_APPLY = L10n.lang("bbs.ui.model_editor.model.uv.box_apply");
     public static final IKey MODEL_EDITOR_MODEL_UV_BOX_TIP = L10n.lang("bbs.ui.model_editor.model.uv.box_tip");
     public static final IKey MODEL_EDITOR_MODEL_UV_SHEET = L10n.lang("bbs.ui.model_editor.model.uv.sheet");
     public static final IKey MODEL_EDITOR_MODEL_UV_SHEET_WIDTH = L10n.lang("bbs.ui.model_editor.model.uv.sheet_width");

@@ -9,7 +9,6 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcons;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
@@ -19,6 +18,7 @@ import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.Direction;
 import org.joml.Vector2f;
 
 import java.util.function.Consumer;
@@ -46,6 +46,9 @@ public class UIModelCubeUV extends UIElement
     /** Which side the rows are on. Kept across picks and models: it is a mode of working. */
     private static CubeFace picked = CubeFace.FRONT;
 
+    /** How wide the box row's two fields are; the name before them takes what is left. */
+    private static final int BOX_FIELD = 36;
+
     private final UIModelGeometryEditor editor;
 
     private final UIModelUVEditor canvas;
@@ -58,9 +61,11 @@ public class UIModelCubeUV extends UIElement
     private final UIElement flips;
     private final UITrackpad boxU;
     private final UITrackpad boxV;
-    private final UIToggle boxMirror;
     private final UITrackpad sheetWidth;
     private final UITrackpad sheetHeight;
+
+    /** Whether the box unwrap lays the sides out mirrored — a switch on the box row, not a live edit. */
+    private boolean boxMirror;
 
     public UIModelCubeUV(UIModelGeometryEditor editor)
     {
@@ -69,7 +74,8 @@ public class UIModelCubeUV extends UIElement
         this.canvas.relative(this).x(0).y(0).w(1F);
 
         /* Six sides as six arrows, the way a weld names one: they all fit, and the lit one says
-         * which side the numbers below belong to without a dropdown to open. */
+         * which side the numbers below belong to without a dropdown to open. It is the pane's main
+         * choice, so it spans the pane and stands a size taller than the rows under it. */
         this.faces = new UIIcons((b) -> this.pickFace(ModelFaces.ALL.get(b.getValue())));
 
         for (CubeFace face : ModelFaces.ALL)
@@ -77,6 +83,8 @@ public class UIModelCubeUV extends UIElement
             this.faces.add(ModelFaces.icon(face), ModelFaces.label(face));
         }
 
+        this.faces.stretch();
+        this.faces.h(20);
         this.faces.setValue(picked.ordinal());
 
         this.drawn = new UIToggle(UIKeys.MODEL_EDITOR_MODEL_UV_DRAWN, (t) -> this.setDrawn(t.getValue()));
@@ -107,17 +115,31 @@ public class UIModelCubeUV extends UIElement
         this.cornerRows = UI.column(UI.row(this.corners[0], this.corners[1]), UI.row(this.corners[2], this.corners[3]));
         this.flips = UI.strip(flipX, flipY, rotate);
 
-        /* The box unwrap is a button rather than a live field: it throws all six sides away, which
-         * is not something a stray scroll over a pad should do. */
+        /* The box unwrap reads as one sentence on one row — lay out as a box from here, mirrored or
+         * not, go. Going is a press rather than a live field: it throws all six sides away, which is
+         * not something a stray scroll over a pad should do. */
         this.boxU = new UITrackpad((v) -> {}).integer();
         this.boxV = new UITrackpad((v) -> {}).integer();
         this.boxU.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_BOX_U);
         this.boxV.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_BOX_V);
-        this.boxMirror = new UIToggle(UIKeys.MODEL_EDITOR_MODEL_UV_BOX_MIRROR, (t) -> {});
 
-        UIButton apply = new UIButton(UIKeys.MODEL_EDITOR_MODEL_UV_BOX_APPLY, (b) -> this.applyBoxUV());
+        UIIcon mirror = new UIIcon(Icons.EXCHANGE, (b) -> this.boxMirror = !this.boxMirror);
+        UIIcon apply = new UIIcon(Icons.CHECKMARK, (b) -> this.applyBoxUV());
 
+        mirror.highlight(() -> this.boxMirror, Direction.BOTTOM);
+        mirror.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_BOX_MIRROR);
         apply.tooltip(UIKeys.MODEL_EDITOR_MODEL_UV_BOX_TIP);
+
+        UIElement box = new UIElement();
+
+        box.row(UIConstants.MARGIN).preferred(0).height(UIConstants.CONTROL_HEIGHT);
+        box.add(
+            UI.label(UIKeys.MODEL_EDITOR_MODEL_UV_BOX, UIConstants.CONTROL_HEIGHT).labelAnchor(0, 0.5F),
+            this.boxU.w(BOX_FIELD),
+            this.boxV.w(BOX_FIELD),
+            mirror.wh(UIConstants.CONTROL_HEIGHT, UIConstants.CONTROL_HEIGHT),
+            apply.wh(UIConstants.CONTROL_HEIGHT, UIConstants.CONTROL_HEIGHT)
+        );
 
         this.sheetWidth = new UITrackpad((v) -> this.setSheet()).integer().limit(1);
         this.sheetHeight = new UITrackpad((v) -> this.setSheet()).integer().limit(1);
@@ -131,10 +153,7 @@ public class UIModelCubeUV extends UIElement
             this.drawn,
             this.cornerRows,
             this.flips,
-            UI.label(UIKeys.MODEL_EDITOR_MODEL_UV_BOX),
-            UI.row(this.boxU, this.boxV),
-            this.boxMirror,
-            apply,
+            box,
             UI.label(UIKeys.MODEL_EDITOR_MODEL_UV_SHEET),
             UI.row(this.sheetWidth, this.sheetHeight)
         );
@@ -330,7 +349,7 @@ public class UIModelCubeUV extends UIElement
         }
 
         Vector2f at = new Vector2f((float) this.boxU.getValue(), (float) this.boxV.getValue());
-        boolean mirror = this.boxMirror.getValue();
+        boolean mirror = this.boxMirror;
 
         this.editor.editCube(UIKeys.MODEL_EDITOR_MODEL_UNDO_UV_BOX, null, () -> cube.setupBoxUV(at, mirror));
         this.fillFace();
