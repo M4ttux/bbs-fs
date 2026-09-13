@@ -96,9 +96,6 @@ public class UIModelGeometryEditor extends UIElement
     /** How close a rest already is to the stand-in's numbers to be left alone — the round trip through radians isn't exact. */
     private static final float EPSILON = 1E-4F;
 
-    /** How faintly the cubes under a picked group are outlined, next to a picked cube's full outline. */
-    private static final float UNDER_GROUP_ALPHA = 0.35F;
-
     /** How big a new cube is, in the model's pixels — a quarter of a block, centred on its group's pivot. */
     private static final float NEW_CUBE_SIDE = 4F;
 
@@ -548,9 +545,47 @@ public class UIModelGeometryEditor extends UIElement
     }
 
     /**
-     * What the viewport outlines: every picked cube, and — fainter — every cube under a picked
-     * group, so a group reads as the shape it carries. Built for the frame being drawn; the
-     * addresses are looked up on the model as it stands.
+     * Every cube in the pick, in the tree's order: the picked cube rows, and every cube under a
+     * picked group — its own and its groups' all the way down, the way an outliner reads a picked
+     * group. What a group carries is worked out here rather than kept in the tree's pick, so a
+     * folded branch still counts and a rebuilt model can't drop it.
+     */
+    private List<ModelNode> pickedCubes()
+    {
+        List<ModelNode> cubes = new ArrayList<>();
+
+        if (this.model != null)
+        {
+            this.collectPickedCubes(this.model.topGroups, false, new HashSet<>(this.tree.getCurrent()), cubes);
+        }
+
+        return cubes;
+    }
+
+    private void collectPickedCubes(List<ModelGroup> groups, boolean carried, Set<ModelNode> picked, List<ModelNode> out)
+    {
+        for (ModelGroup group : groups)
+        {
+            boolean whole = carried || picked.contains(ModelNode.group(group.id));
+
+            for (int i = 0; i < group.cubes.size(); i++)
+            {
+                ModelNode cube = ModelNode.cube(group.id, i);
+
+                if (whole || picked.contains(cube))
+                {
+                    out.add(cube);
+                }
+            }
+
+            this.collectPickedCubes(group.children, whole, picked, out);
+        }
+    }
+
+    /**
+     * What the viewport outlines: every cube in the pick ({@link #pickedCubes}) alike, whether
+     * picked itself or carried by a picked group. Built for the frame being drawn; the addresses
+     * are looked up on the model as it stands.
      */
     public List<UIModelEditorRenderer.Outline> outlines()
     {
@@ -562,25 +597,10 @@ public class UIModelGeometryEditor extends UIElement
         }
 
         int accent = BBSSettings.primaryColor.get();
-        List<ModelNode> picked = this.tree.getCurrent();
 
-        /* The groups' cubes first, so a picked cube's own outline draws over its group's fainter one. */
-        for (ModelNode node : picked)
+        for (ModelNode node : this.pickedCubes())
         {
-            ModelGroup group = node.isGroup() ? this.model.getGroup(node.group()) : null;
-
-            if (group != null)
-            {
-                this.outlineSubtree(group, Colors.setA(accent, UNDER_GROUP_ALPHA), outlines);
-            }
-        }
-
-        for (ModelNode node : picked)
-        {
-            if (node.isCube())
-            {
-                outlines.add(new UIModelEditorRenderer.Outline(node, Colors.A100 | accent));
-            }
+            outlines.add(new UIModelEditorRenderer.Outline(node, Colors.A100 | accent));
         }
 
         /* Last, so it draws over the pick: the row under the cursor in the tree lights up the way a

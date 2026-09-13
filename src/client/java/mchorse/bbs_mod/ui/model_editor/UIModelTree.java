@@ -14,9 +14,11 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -39,6 +41,11 @@ import java.util.function.Consumer;
  *
  * <p>A search shows its matches flat: without the rows above them, branches would be a lie about
  * the structure — and there is nothing to fold in a flat list, so the arrows go too.</p>
+ *
+ * <p>A picked group takes its whole branch along — the cubes and groups under it are in the pick
+ * without being picked rows themselves, and wear the pick's wash without its bar
+ * ({@link RowStyle#carried}). They are worked out from the picked groups rather than added to
+ * the list's pick, so a folded branch, a search or a rebuilt model can't lose them.</p>
  */
 public class UIModelTree extends UIList<ModelNode>
 {
@@ -64,6 +71,9 @@ public class UIModelTree extends UIList<ModelNode>
 
     /** The model the rows were last built from, for building them again on a fold. */
     private Model model;
+
+    /** The picked groups by name, gathered once per frame of rows, for telling which rows they carry. */
+    private final Set<String> pickedGroups = new HashSet<>();
 
     private BiConsumer<ModelNode, ModelNode> onReorder;
     private BiConsumer<ModelNode, String> onDrop;
@@ -337,6 +347,55 @@ public class UIModelTree extends UIList<ModelNode>
 
     /* Rendering */
 
+    /**
+     * Whether a picked group takes the row along: a cube whose own group, or a row with any group
+     * above it, is picked. Read off the model rather than the rows' layout, so it holds in a flat
+     * search too.
+     */
+    private boolean isCarried(ModelNode node)
+    {
+        ModelGroup group = this.pickedGroups.isEmpty() || this.model == null ? null : this.model.getGroup(node.group());
+
+        for (ModelGroup above = group == null ? null : node.isCube() ? group : group.parent; above != null; above = above.parent)
+        {
+            if (this.pickedGroups.contains(above.id))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** The picked groups are gathered once for the whole pass, not asked of the pick row by row. */
+    @Override
+    public void renderList(UIContext context)
+    {
+        this.pickedGroups.clear();
+
+        for (ModelNode node : this.getCurrent())
+        {
+            if (node.isGroup())
+            {
+                this.pickedGroups.add(node.group());
+            }
+        }
+
+        super.renderList(context);
+    }
+
+    /** A carried row wears the pick's wash under the row's own marks — see {@link RowStyle#carried}. */
+    @Override
+    public void renderListElement(UIContext context, ModelNode node, int i, int x, int y, boolean hover, boolean selected)
+    {
+        if (!selected && this.isCarried(node))
+        {
+            RowStyle.carried(context.batcher, x, y, this.area.w, this.scroll.scrollItemSize);
+        }
+
+        super.renderListElement(context, node, i, x, y, hover, selected);
+    }
+
     /** What a search runs over: a cube is found by its group's name too, since that is where it is. */
     @Override
     protected String elementToString(UIContext context, int i, ModelNode node)
@@ -356,7 +415,7 @@ public class UIModelTree extends UIList<ModelNode>
         int contentX = x + this.rowContentX(node);
         int iconX = contentX + ARROW_SLOT;
         int textX = iconRowTextX(contentX);
-        boolean lit = hover || selected;
+        boolean lit = hover || selected || this.isCarried(node);
 
         if (meta != null)
         {
