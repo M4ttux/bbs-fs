@@ -34,6 +34,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.UIUndoKeys;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import net.minecraft.client.MinecraftClient;
@@ -115,6 +116,9 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     /** Thumbnail in the preview's corner showing the model as it appears in UI slots (form pickers). */
     private UIElement miniPreview;
 
+    /** What the gizmo moves in the model editor, in the corner the thumbnail leaves free there. */
+    private UIIcon pivotIcon;
+
     private UIIcon folderIcon;
     private UIIcon historyIcon;
     private UIIcon animationIcon;
@@ -182,6 +186,16 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         };
         this.miniPreview.relative(this.renderer).x(1F, -6).y(6).wh(64, 64).anchor(1F, 0F);
         this.renderer.add(this.miniPreview);
+
+        /* The model editor's own corner control, where the thumbnail would be: whether the gizmo
+         * moves a group's geometry or its pivot alone (the rows under the tree say what they move
+         * on their own). Flush against the pane beside it, and drawn active as a bar, like every
+         * other toggle. */
+        this.pivotIcon = new UIIcon(Icons.SPHERE, (b) -> UIModelGeometryEditor.togglePivotOnly());
+        this.pivotIcon.highlight(UIModelGeometryEditor::isPivotOnly, Direction.RIGHT);
+        this.pivotIcon.tooltip(UIKeys.MODEL_EDITOR_MODEL_PIVOT_ONLY, Direction.LEFT);
+        this.pivotIcon.relative(this.renderer).x(1F, -20).y(0).wh(20, 20);
+        this.renderer.add(this.pivotIcon);
 
         this.editor.add(this.pane, this.renderer, this.splitter);
 
@@ -286,8 +300,9 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     public void syncPreview()
     {
         /* The model editor is about the model itself: the thumbnail of how it looks in a form
-         * picker has nothing to say there, so its corner of the preview stays clear. */
+         * picker has nothing to say there, and its corner goes to the gizmo's pivot toggle. */
         this.miniPreview.setVisible(lastEditor != Editor.MODEL);
+        this.pivotIcon.setVisible(lastEditor == Editor.MODEL);
 
         ModelFormRenderer renderer = this.formRenderer();
 

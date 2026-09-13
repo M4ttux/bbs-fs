@@ -1066,6 +1066,7 @@ public class UIKeys
     public static final IKey MODEL_EDITOR_MODEL_GROUP_CENTER_ANCHOR = L10n.lang("bbs.ui.model_editor.model.group.center_anchor");
     public static final IKey MODEL_EDITOR_MODEL_GROUP_IK_BONES = L10n.lang("bbs.ui.model_editor.model.group.ik_bones");
     public static final IKey MODEL_EDITOR_MODEL_GROUP_RENAME = L10n.lang("bbs.ui.model_editor.model.group.rename");
+    public static final IKey MODEL_EDITOR_MODEL_PIVOT_ONLY = L10n.lang("bbs.ui.model_editor.model.pivot_only");
     public static final IKey MODEL_EDITOR_MODEL_UNDO_TRANSFORM = L10n.lang("bbs.ui.model_editor.model.undo.transform");
     public static final IKey MODEL_EDITOR_MODEL_UNDO_TRANSFORM_MANY = L10n.lang("bbs.ui.model_editor.model.undo.transform_many");
     public static final IKey MODEL_EDITOR_MODEL_UNDO_ADD = L10n.lang("bbs.ui.model_editor.model.undo.add");

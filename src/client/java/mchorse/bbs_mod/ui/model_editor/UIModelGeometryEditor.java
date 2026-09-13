@@ -62,13 +62,21 @@ import java.util.function.Supplier;
  * since it was last carried into the cube, so a move of the cube's corner takes its pivot along
  * (the cube moves as a whole), and the pivot on its own row moves the point alone.</p>
  *
+ * <p>A group has one point — the pivot it turns about, which is also where it stands in the model
+ * — and moving it means one of two things. The gizmo MOVES THE GROUP: its cubes and its whole
+ * subtree's go along, since a cubic model's cubes are absolute and the hierarchy passes down
+ * rotations alone. The row under the tree moves THE POINT ALONE, leaving the geometry where it
+ * stands, so the group turns about somewhere else. The sphere over the preview puts the gizmo on
+ * the point too, for when that is what's wanted. A cube's rows read the same way round: its
+ * position row moves the cube as a whole, the pivot row below moves its point alone.</p>
+ *
  * <p>Several rows can be picked at once (ctrl / shift, as in every list here): the verbs — copy,
  * remove — then work on all the picked groups as one undo step, and so does moving them. The
- * fields and the gizmo sit on the FIRST of the pick, and what it is moved by is added to every
- * other picked row — pivots and cubes travel together, keeping the distances between them. Only
- * moving: a name, a size and a rotation are each row's own, so those go dead while more than one
- * is picked rather than pretending to edit the first of them. The picked cubes light up in the
- * viewport ({@link #outlines}).</p>
+ * fields and the gizmo sit on the FIRST of the pick, and what it is moved by is given to every
+ * other picked row, in the same terms — geometry travels with geometry, points with points,
+ * keeping the distances between them. Only moving: a name, a size and a rotation are each row's
+ * own, so those go dead while more than one is picked rather than pretending to edit the first of
+ * them. The picked cubes light up in the viewport ({@link #outlines}).</p>
  *
  * <p>Changed numbers leave their groups' quads and the model's bake behind; they are rebuilt once
  * the numbers have settled ({@link #settle}) — after a typed edit at once, after a gesture at its
@@ -93,9 +101,10 @@ public class UIModelGeometryEditor extends UIElement
     );
 
     /**
-     * What a pick of several can take: moving only. Pivots are points, and one step added to all of
-     * them is exact; a rest rotation is each bone's own, and a ring dragged over a pick of them has
-     * no one answer — so those handles aren't offered rather than quietly turning only the first.
+     * What a pick of several can take: moving only. One step given to every picked row is exact,
+     * whether it moves their shapes or the points they turn about; a rest rotation is each bone's
+     * own, and a ring dragged over a pick of them has no one answer — so those handles aren't
+     * offered rather than quietly turning only the first.
      */
     private static final Gizmo.HandleMask ANCHOR_MANY_MASK = Gizmo.HandleMask.of(
         EnumSet.of(Gizmo.Op.MOVE, Gizmo.Op.SCREEN),
@@ -144,6 +153,13 @@ public class UIModelGeometryEditor extends UIElement
 
     /** The instance behind the model, whose bake changed numbers invalidate. */
     private ModelInstance instance;
+
+    /**
+     * Whether THE GIZMO moves the pivot alone — the sphere over the preview. The rows under the
+     * tree say what they move on their own and pay it no mind. Kept across picks and across opening
+     * the panel, the way the open editor is: it's a mode of working, not a property of a group.
+     */
+    private static boolean pivotOnly;
 
     public UIModelGeometryEditor(UIModelEditorPanel panel)
     {
@@ -256,6 +272,18 @@ public class UIModelGeometryEditor extends UIElement
     private void editName()
     {
         this.getContext().focus(this.name);
+    }
+
+    /** Whether the gizmo moves the pivot alone — read by the sphere over the preview. */
+    public static boolean isPivotOnly()
+    {
+        return pivotOnly;
+    }
+
+    /** Flip what the gizmo moves; the rows under the tree are unaffected. */
+    public static void togglePivotOnly()
+    {
+        pivotOnly = !pivotOnly;
     }
 
     /* The pick */
@@ -585,9 +613,17 @@ public class UIModelGeometryEditor extends UIElement
     }
 
     /**
-     * The leading group takes the stand-in's numbers, and the rest of the pick takes the same STEP
-     * rather than the leader's pivot — several picked pivots move together and keep the distances
-     * between them, which is what makes a controller stay on the tip it was created on.
+     * The leading group takes the stand-in's numbers, and the whole pick takes the same STEP rather
+     * than the leader's pivot — the picked rows move together and keep the distances between them,
+     * which is what makes a controller stay on the tip it was created on.
+     *
+     * <p>What the step moves — the group's geometry, or its pivot alone — is the gizmo's question,
+     * not the call site's: the gizmo pushes the stand-in through {@link ModelSlotTarget#apply()}
+     * while sampling its jacobian, but the move itself lands like any other, read back from the
+     * stand-in on the frame. So "is a gesture doing this" is answered by the editor
+     * ({@link UIPropTransform#isEditing()}), which is on for a gizmo drag and for the G/R hotkeys,
+     * and off while the row is typed or dragged — and a typed pivot is a pivot, as it has always
+     * been.</p>
      *
      * <p>A rest already within a hair of the numbers is left alone: the round trip through radians
      * isn't exact, and the file must not pick up the noise. The rotation is the leader's alone —
@@ -595,7 +631,6 @@ public class UIModelGeometryEditor extends UIElement
      */
     private void applyAnchor()
     {
-        ModelNode leader = this.leaderNode();
         ModelGroup group = this.leadGroup();
 
         if (group == null)
@@ -610,8 +645,13 @@ public class UIModelGeometryEditor extends UIElement
         {
             Vector3f step = new Vector3f(this.anchor.translate).sub(group.initial.translate);
 
+            this.distribute(step, !pivotOnly && this.transform.isEditing());
+
+            /* The leader's pivot is the number shown, to the bit: the step above is a difference of
+             * floats and lands a hair off it, and the row must not drift from the model over a
+             * drag. Whether the step reached the group directly or through a picked ancestor
+             * carrying it, this is where it was going. */
             group.initial.translate.set(this.anchor.translate);
-            this.distributeStep(step, leader);
         }
 
         if (!group.initial.rotate.equals(degrees, EPSILON))
@@ -621,14 +661,22 @@ public class UIModelGeometryEditor extends UIElement
     }
 
     /**
-     * Every picked row but the leader takes the step the leader took: a group's pivot moves by it,
-     * a cube moves as a whole by it — they travel together, keeping the distances between them.
+     * Every picked row takes the step the leader took, in the same terms. With {@code geometry},
+     * the shapes move: a group's whole subtree goes with it (a cubic model's cubes are absolute),
+     * a cube moves corner and pivot together. Without it, the points do: a pivot is a point and one
+     * step added to all of them is exact, so the geometry stays and what changes is where the rows
+     * turn about.
+     *
+     * <p>Moving geometry counts only the rows nothing else in the pick carries — a group inside a
+     * picked group, or a cube of one, travels with it already, and moving it again would move it
+     * twice. Points don't nest: a parent's pivot doesn't drag its child's, so every picked row
+     * takes the step itself.</p>
      */
-    private void distributeStep(Vector3f step, ModelNode leader)
+    private void distribute(Vector3f step, boolean geometry)
     {
-        for (ModelNode node : this.tree.getCurrent())
+        for (ModelNode node : geometry ? this.outermostNodes() : this.tree.getCurrent())
         {
-            ModelGroup group = node.equals(leader) ? null : this.model.getGroup(node.group());
+            ModelGroup group = this.model.getGroup(node.group());
 
             if (group == null)
             {
@@ -637,14 +685,77 @@ public class UIModelGeometryEditor extends UIElement
 
             if (node.isGroup())
             {
-                group.initial.translate.add(step);
+                if (geometry)
+                {
+                    this.model.shiftGroup(group, step);
+                    this.dirty.addAll(this.model.collectSubtree(group, new ArrayList<>()));
+                }
+                else
+                {
+                    group.initial.translate.add(step);
+                }
             }
             else if (node.cube() < group.cubes.size())
             {
-                group.cubes.get(node.cube()).shift(step);
+                ModelCube cube = group.cubes.get(node.cube());
+
+                if (geometry)
+                {
+                    cube.shift(step);
+                }
+                else
+                {
+                    cube.pivot.add(step);
+                }
+
+                /* Either way the bake owes a rebuild: a cube's quads are built about its pivot. */
                 this.dirty.add(group);
             }
         }
+    }
+
+    /**
+     * The picked rows that no other picked row carries — see {@link #distribute}. A group's subtree
+     * carries the groups and the cubes below it; a cube carries nothing.
+     */
+    private List<ModelNode> outermostNodes()
+    {
+        Set<String> picked = new HashSet<>();
+
+        for (ModelNode node : this.tree.getCurrent())
+        {
+            if (node.isGroup())
+            {
+                picked.add(node.group());
+            }
+        }
+
+        List<ModelNode> outer = new ArrayList<>();
+
+        for (ModelNode node : this.tree.getCurrent())
+        {
+            ModelGroup group = this.model.getGroup(node.group());
+
+            if (group == null)
+            {
+                continue;
+            }
+
+            /* A cube is carried by its own group; a group is carried only by one above it. */
+            boolean carried = false;
+
+            for (ModelGroup above = node.isGroup() ? group.parent : group; above != null && !carried; above = above.parent)
+            {
+                carried = picked.contains(above.id);
+            }
+
+            if (!carried)
+            {
+                outer.add(node);
+            }
+        }
+
+        return outer;
     }
 
     /**
@@ -759,9 +870,9 @@ public class UIModelGeometryEditor extends UIElement
 
         if (step.length() > EPSILON)
         {
-            cube.shift(step);
-            this.distributeStep(step, leader);
-            changed = true;
+            /* The row is the cube's corner, and a corner moved is the cube moved — the pivot
+             * toggle over the preview is the gizmo's, and the cube has no gizmo yet. */
+            this.distribute(step, true);
         }
 
         if (!cube.size.equals(this.standin.scale, EPSILON))
@@ -866,10 +977,14 @@ public class UIModelGeometryEditor extends UIElement
         return this.transform.isEditing() || this.cubeTransform.isEditing();
     }
 
-    /** Whether a pad of the cube's rows is being dragged — the numbers move on every step of it. */
+    /**
+     * Whether a pad of the rows under the tree is being dragged — the numbers move on every step of
+     * it, and the model settles when it's let go. The group's own pivot row is in here too: with a
+     * cube picked along with the group, the step it hands out reaches the cube.
+     */
     private boolean padDragging()
     {
-        for (UITrackpad pad : new UITrackpad[]{this.cubeTransform.tx, this.cubeTransform.ty, this.cubeTransform.tz, this.cubeTransform.sx, this.cubeTransform.sy, this.cubeTransform.sz, this.cubeTransform.rx, this.cubeTransform.ry, this.cubeTransform.rz, this.pivotFields[0], this.pivotFields[1], this.pivotFields[2], this.inflate})
+        for (UITrackpad pad : new UITrackpad[]{this.transform.tx, this.transform.ty, this.transform.tz, this.cubeTransform.tx, this.cubeTransform.ty, this.cubeTransform.tz, this.cubeTransform.sx, this.cubeTransform.sy, this.cubeTransform.sz, this.cubeTransform.rx, this.cubeTransform.ry, this.cubeTransform.rz, this.pivotFields[0], this.pivotFields[1], this.pivotFields[2], this.inflate})
         {
             if (pad.isDragging())
             {

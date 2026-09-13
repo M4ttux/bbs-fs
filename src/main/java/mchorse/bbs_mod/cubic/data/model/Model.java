@@ -126,6 +126,69 @@ public class Model implements IMapSerializable, IModel
         }
     }
 
+    /**
+     * Move a group and everything under it by {@code delta}, in the model's own units: the pivot it
+     * rests at, the cubes and meshes it carries, and the same for every group below it. A cubic
+     * model's geometry is absolute — a group's cubes stand where the file puts them, and the
+     * hierarchy passes down rotations alone — so moving a group's geometry means moving its whole
+     * subtree's along with it.
+     *
+     * <p>Only the numbers move here. The quads the cubes draw as are rebuilt by
+     * {@link #refreshGeometry(Collection)} over {@link #collectSubtree}, once the numbers of a
+     * gesture have settled, rather than on every sample of a drag.</p>
+     */
+    public void shiftGroup(ModelGroup group, Vector3f delta)
+    {
+        group.initial.translate.add(delta);
+
+        /* The pose rides along, so the bone doesn't jump by the delta over the frames between here
+         * and the next reset — which copies the rest into it again. */
+        group.current.translate.add(delta);
+
+        for (ModelCube cube : group.cubes)
+        {
+            cube.shift(delta);
+        }
+
+        /* A mesh moves by its vertices alone, and its origin — the point it turns about — stays.
+         * ModelMesh reads its vertices relative to that origin and writes them back absolute, so an
+         * origin this editor moved off zero would shift the mesh again on every reload; the pivot of
+         * a mesh is left to whatever authored it. */
+        for (ModelMesh mesh : group.meshes)
+        {
+            for (Vector3f vertex : mesh.baseData.vertices)
+            {
+                vertex.add(delta);
+            }
+
+            for (ModelData shapeKey : mesh.data.values())
+            {
+                for (Vector3f vertex : shapeKey.vertices)
+                {
+                    vertex.add(delta);
+                }
+            }
+        }
+
+        for (ModelGroup child : group.children)
+        {
+            this.shiftGroup(child, delta);
+        }
+    }
+
+    /** A group and every group under it, parents before children. */
+    public List<ModelGroup> collectSubtree(ModelGroup group, List<ModelGroup> out)
+    {
+        out.add(group);
+
+        for (ModelGroup child : group.children)
+        {
+            this.collectSubtree(child, out);
+        }
+
+        return out;
+    }
+
     /* IModel implementation */
 
     @Override
