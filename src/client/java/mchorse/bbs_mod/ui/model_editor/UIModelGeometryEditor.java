@@ -275,7 +275,9 @@ public class UIModelGeometryEditor extends UIElement
         this.body.column(UIConstants.MARGIN).vertical().stretch();
         this.body.add(UI.labelRow(UIKeys.MODEL_EDITOR_MODEL_GROUP_NAME, this.name), this.transform, this.cubeTransform, this.inflateRow);
 
-        this.page = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING, UI.strip(add, this.addCube, this.ikBones, pivot), this.search, this.body);
+        /* The strip over the tree stands at an icon button's size, as the unwrap pane's side icons do:
+         * it is what the page is worked with, not a list's small print. */
+        this.page = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING, UI.strip(UIConstants.ICON_SIZE, add, this.addCube, this.ikBones, pivot), this.search, this.body);
         this.page.full(this);
         this.add(this.page);
 
