@@ -91,10 +91,10 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
     static final int HOVER_COLOR = Colors.setA(Colors.WHITE, 0.6F);
 
     /**
-     * Half the thickness of a cube's outline bars, in blocks: half of what {@link Draw#renderBox}
+     * Half the thickness of a cube's outline bars, in blocks: well under what {@link Draw#renderBox}
      * draws by default, whose bars outweigh a cube of a few pixels.
      */
-    private static final float OUTLINE_THICKNESS = 1 / 192F;
+    private static final float OUTLINE_THICKNESS = 1 / 256F;
 
     /** A click on the model: the bone, and the cube of it under the cursor (-1 without cube picking); whether the click was taken. */
     @FunctionalInterface
