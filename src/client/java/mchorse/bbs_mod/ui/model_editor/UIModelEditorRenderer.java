@@ -293,13 +293,40 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
         return Gizmo.INSTANCE.start(stencilIndex, context.mouseX, context.mouseY, target.editor(), this.buildGizmoDrag(target));
     }
 
+    /**
+     * A click on the model inside the gizmo's sphere, which takes the press first and hands it over
+     * on release if it didn't turn into a drag. It picks what a click anywhere else on the model
+     * picks ({@link #pickAt}) — with the bone alone, a ctrl-click on a cube near the gizmo would
+     * add its whole group to the pick instead.
+     */
     @Override
     public void pickGizmoForm(UIContext context, Form form, String bone)
     {
         if (this.onPick != null && form == this.form && bone != null && !bone.isEmpty())
         {
-            this.onPick.pick(bone, -1);
+            this.pickAt(context, bone);
         }
+    }
+
+    /**
+     * Hand a click on {@code bone} to the panel's tree — with cube picking on, the cube of the bone
+     * under the cursor, on the geometry itself, and with shift held the group whose geometry it is.
+     * Whether the panel took it.
+     */
+    private boolean pickAt(UIContext context, String bone)
+    {
+        int cube = -1;
+        Model model = this.cubePicking ? this.cubicModel() : null;
+        ModelGroup group = model == null ? null : this.hoveredGroup(model);
+
+        /* Shift picks the group itself rather than the cube of it under the cursor. */
+        if (group != null)
+        {
+            bone = group.id;
+            cube = Window.isShiftPressed() ? -1 : this.pickCube(context, group);
+        }
+
+        return this.onPick.pick(bone, cube);
     }
 
     /* Cubes: which one the cursor is on, and outlining the picked ones */
@@ -1065,24 +1092,9 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
         {
             Pair<Form, String> pair = this.stencil.getPicked();
 
-            if (pair != null && pair.a == this.form && !pair.b.isEmpty())
+            if (pair != null && pair.a == this.form && !pair.b.isEmpty() && this.pickAt(context, pair.b))
             {
-                String bone = pair.b;
-                int cube = -1;
-                Model model = this.cubePicking ? this.cubicModel() : null;
-                ModelGroup group = model == null ? null : this.hoveredGroup(model);
-
-                /* Shift picks the group itself rather than the cube of it under the cursor. */
-                if (group != null)
-                {
-                    bone = group.id;
-                    cube = Window.isShiftPressed() ? -1 : this.pickCube(context, group);
-                }
-
-                if (this.onPick.pick(bone, cube))
-                {
-                    return true;
-                }
+                return true;
             }
         }
 
