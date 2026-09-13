@@ -140,8 +140,9 @@ public class UIModelGeometryEditor extends UIElement
     /** What of the stand-in has already been carried into the cube, so a change reads as a step. */
     private final Transform applied = new Transform();
 
-    /** The cube's pivot and inflate, on rows of their own. */
+    /** The cube's pivot and inflate, on rows of their own; the pivot row's icon centres the pivot on the cube. */
     private final UIElement pivotRow;
+    private final UIIcon pivotIcon;
     private final UITrackpad[] pivotFields = new UITrackpad[3];
     private final UITrackpad inflate;
     private final UIElement inflateRow;
@@ -257,12 +258,12 @@ public class UIModelGeometryEditor extends UIElement
             this.pivotFields[i] = field;
         }
 
-        /* Decorative, like the icons of the rows above it. */
-        UIIcon pivotIcon = new UIIcon(Icons.SPHERE, null);
-
-        pivotIcon.disabledColor = pivotIcon.hoverColor = Colors.WHITE;
-        pivotIcon.setEnabled(false);
-        this.pivotRow = this.cubeTransform.addRow(pivotIcon, this.pivotFields[0], this.pivotFields[1], this.pivotFields[2]);
+        /* Drawn like the icons of the rows above it, and a button the way a group's pivot row icon
+         * is: the pivot to the middle of the cube. */
+        this.pivotIcon = new UIIcon(Icons.SPHERE, (b) -> this.centerCubePivots());
+        this.pivotIcon.disabledColor = this.pivotIcon.hoverColor = Colors.WHITE;
+        this.pivotIcon.tooltip(UIKeys.MODEL_EDITOR_MODEL_CUBE_CENTER_PIVOT);
+        this.pivotRow = this.cubeTransform.addRow(this.pivotIcon, this.pivotFields[0], this.pivotFields[1], this.pivotFields[2]);
 
         this.inflate = new UITrackpad((v) -> this.setInflate(v.floatValue()));
         this.inflate.getEvents().register(UITrackpadDragEndEvent.class, (e) -> this.endEdit());
@@ -646,6 +647,8 @@ public class UIModelGeometryEditor extends UIElement
         this.cubeTransform.setScaleEnabled(singleCube);
         this.cubeTransform.setRotationEnabled(singleCube);
         UIUtils.setEnabledDeep(this.pivotRow, singleCube);
+        /* Centring is each cube on its own middle, so unlike the pivot's numbers it works on a pick of several. */
+        this.pivotIcon.setEnabled(cube != null);
         this.inflate.setEnabled(singleCube);
         this.name.setEnabled(single);
         this.addCube.setEnabled(leader != null);
@@ -1057,6 +1060,64 @@ public class UIModelGeometryEditor extends UIElement
 
             cube.origin.setComponent(i, pivot + (cube.origin.get(i) - pivot) * (size.get(i) / was));
         }
+    }
+
+    /**
+     * Every picked cube's pivot to the middle of that cube, as the pivot row's icon — what the
+     * translate row's icon does for a group. Only the point moves: the cube stays exactly where it
+     * stands, and what changes is where it turns about. Picked groups are left to their own icon.
+     */
+    private void centerCubePivots()
+    {
+        if (this.leadCube() == null)
+        {
+            return;
+        }
+
+        MapType before = this.snapshot();
+        ModelNode first = null;
+        int centered = 0;
+
+        for (ModelNode node : this.tree.getCurrent())
+        {
+            ModelGroup group = node.isCube() ? this.model.getGroup(node.group()) : null;
+
+            if (group == null || node.cube() >= group.cubes.size())
+            {
+                continue;
+            }
+
+            ModelCube cube = group.cubes.get(node.cube());
+            Vector3f center = new Vector3f(cube.size).mul(0.5F).add(cube.origin);
+
+            if (cube.pivot.equals(center, EPSILON))
+            {
+                continue;
+            }
+
+            cube.pivot.set(center);
+            this.dirty.add(group);
+
+            if (first == null)
+            {
+                first = node;
+            }
+
+            centered++;
+        }
+
+        if (centered == 0)
+        {
+            return;
+        }
+
+        ModelGroup group = this.model.getGroup(first.group());
+        IKey label = centered > 1
+            ? UIKeys.MODEL_EDITOR_MODEL_UNDO_CENTER_ANCHOR_MANY.format(centered)
+            : UIKeys.MODEL_EDITOR_MODEL_UNDO_CENTER_ANCHOR.format(UIModelTree.cubeLabel(group.cubes.get(first.cube()), first.cube()));
+
+        this.modelPanel.pushModelEdit(new ModelEditUndo(this.modelPanel, label.get(), null, before, this.snapshot()));
+        this.endEdit();
     }
 
     /** The pivot alone: the point the cube turns about, with the cube left where it stands. */

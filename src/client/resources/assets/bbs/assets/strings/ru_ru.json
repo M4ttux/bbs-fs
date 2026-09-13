@@ -1435,6 +1435,7 @@
 	"bbs.ui.model_editor.model.pivot": "Якорь",
 	"bbs.ui.model_editor.model.rotation": "Поворот",
 	"bbs.ui.model_editor.model.cube.inflate": "Раздутие",
+	"bbs.ui.model_editor.model.cube.center_pivot": "Якорь в центр геометрии куба",
 	"bbs.ui.model_editor.model.uv.drawn": "Грань рисуется",
 	"bbs.ui.model_editor.model.uv.x1": "Где грань начинается по горизонтали",
 	"bbs.ui.model_editor.model.uv.y1": "Где грань начинается по вертикали",
