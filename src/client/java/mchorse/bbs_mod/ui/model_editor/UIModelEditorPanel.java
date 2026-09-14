@@ -488,6 +488,12 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     }
 
     @Override
+    public IKey getCreateLabel()
+    {
+        return UIKeys.MODEL_EDITOR_LANDING_NEW;
+    }
+
+    @Override
     public void requestData(String id)
     {
         this.pendingId = id;

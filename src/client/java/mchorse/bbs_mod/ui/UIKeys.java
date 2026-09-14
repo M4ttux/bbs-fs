@@ -1053,6 +1053,7 @@ public class UIKeys
     public static final IKey MODEL_BLOCKS_TITLE = L10n.lang("bbs.ui.model_blocks.title");
     public static final IKey MODEL_BLOCKS_TRANSFORM_DEFAULT = L10n.lang("bbs.ui.model_blocks.transform.default");
     public static final IKey MODEL_EDITOR_TITLE = L10n.lang("bbs.ui.model_editor.title");
+    public static final IKey MODEL_EDITOR_LANDING_NEW = L10n.lang("bbs.ui.model_editor.landing.new");
     public static final IKey MODEL_EDITOR_LANDING_LIST = L10n.lang("bbs.ui.model_editor.landing.list");
     public static final IKey MODEL_EDITOR_CREATE_TAKEN = L10n.lang("bbs.ui.model_editor.create.taken");
     public static final IKey MODEL_EDITOR_OPEN_CONFIG_EDITOR = L10n.lang("bbs.ui.model_editor.open_config_editor");

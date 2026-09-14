@@ -1401,6 +1401,7 @@
 	"bbs.ui.model_blocks.shadow": "Тень",
 	"bbs.ui.model_blocks.title": "Блок-модели",
 	"bbs.ui.model_editor.title": "Редактор моделей",
+	"bbs.ui.model_editor.landing.new": "Новая модель",
 	"bbs.ui.model_editor.landing.list": "Список моделей",
 	"bbs.ui.model_editor.create.taken": "Папка «%s» уже есть в папке моделей — выберите другое имя",
 	"bbs.ui.model_editor.open_config_editor": "Конфигурация",

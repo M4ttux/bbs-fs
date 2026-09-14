@@ -1407,6 +1407,7 @@
 	"bbs.ui.model_blocks.shadow": "Shadow",
 	"bbs.ui.model_blocks.title": "Model blocks",
 	"bbs.ui.model_editor.title": "Model editor",
+	"bbs.ui.model_editor.landing.new": "New model",
 	"bbs.ui.model_editor.landing.list": "Model list",
 	"bbs.ui.model_editor.create.taken": "The models folder already has a folder named \"%s\" — pick another name",
 	"bbs.ui.model_editor.open_config_editor": "Configuration",
