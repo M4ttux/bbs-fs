@@ -153,14 +153,14 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         /* Two panes: the preview and, to its right, the settings — each keeping at least 160px. */
         /* The unwrap pane's grip measures from the left edge, and may not eat the preview: the two
          * sidebars are kept apart by the room the middle needs. */
-        this.uvSplitter = new UISplitter("model_editor.uv_split", false, 240);
+        this.uvSplitter = new UISplitter("model_editor.uv_split", false, 200);
         this.uvSplitter.measure(this.editor).range(160, () -> (float) (this.editor.area.w - this.splitter.getPixels() - 160)).onChange(() ->
         {
             this.layoutPanes();
             this.resize();
         });
 
-        this.splitter = new UISplitter("model_editor.split", false, 280).fromEnd();
+        this.splitter = new UISplitter("model_editor.split", false, 220).fromEnd();
         this.splitter.measure(this.editor).range(160, () -> (float) (this.editor.area.w - 160)).onChange(() ->
         {
             this.layoutPanes();
