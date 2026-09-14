@@ -54,6 +54,7 @@ import net.minecraft.util.math.RotationAxis;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
+import org.lwjgl.opengl.GL11;
 
 import java.util.List;
 import java.util.Map;
@@ -416,8 +417,8 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
     }
 
     /**
-     * The outlines over the model: what the panel picked, and the cube under the cursor. Drawn with
-     * no depth test, like the gizmo, so a picked cube shows through whatever stands in front of it.
+     * Selection and hover outlines use the model's depth so only visible edges are drawn.
+     * Keep depth writes off so the outlines do not occlude each other or later overlays.
      */
     private void renderOutlines(UIContext context)
     {
@@ -437,7 +438,9 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
 
         MatrixStack stack = context.render.batcher.getContext().getMatrices();
 
-        RenderSystem.disableDepthTest();
+        RenderSystem.enableDepthTest();
+        RenderSystem.depthFunc(GL11.GL_LEQUAL);
+        RenderSystem.depthMask(false);
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
 
@@ -455,7 +458,7 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
             this.renderOutline(stack, model, this.hovered, HOVER_COLOR);
         }
 
-        RenderSystem.enableDepthTest();
+        RenderSystem.depthMask(true);
     }
 
     /** A group read as the shape it carries: every cube of it and of every group under it. */
