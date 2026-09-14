@@ -3,11 +3,15 @@ package mchorse.bbs_mod;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.audio.MinecraftSoundCapture;
 import mchorse.bbs_mod.audio.SoundManager;
+import mchorse.bbs_mod.blocks.ModelBlock;
 import mchorse.bbs_mod.blocks.entities.ModelProperties;
 import mchorse.bbs_mod.camera.clips.ClipFactoryData;
 import mchorse.bbs_mod.camera.clips.misc.AudioClientClip;
 import mchorse.bbs_mod.camera.clips.misc.CurveClientClip;
 import mchorse.bbs_mod.camera.clips.misc.TrackerClientClip;
+import mchorse.bbs_mod.camera.clips.misc.VideoClientClip;
+import mchorse.bbs_mod.fonts.FontManager;
+import mchorse.bbs_mod.video.VideoManager;
 import mchorse.bbs_mod.camera.controller.CameraController;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.renderer.LivePlayerItemUse;
@@ -19,9 +23,32 @@ import mchorse.bbs_mod.client.renderer.entity.GunProjectileEntityRenderer;
 import mchorse.bbs_mod.client.renderer.item.GunItemRenderer;
 import mchorse.bbs_mod.client.renderer.item.ModelBlockItemRenderer;
 import mchorse.bbs_mod.cubic.model.ModelManager;
-import mchorse.bbs_mod.events.BBSAddonMod;
-import mchorse.bbs_mod.events.register.RegisterClientSettingsEvent;
-import mchorse.bbs_mod.events.register.RegisterL10nEvent;
+import mchorse.bbs_mod.api.BBSAddonMod;
+import mchorse.bbs_mod.api.client.events.BBSClientReadyEvent;
+import mchorse.bbs_mod.api.client.events.RegisterClientSettingsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterClipPanelsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterClipRenderersEvent;
+import mchorse.bbs_mod.api.client.events.RegisterFormSectionsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterFrameOverlaysEvent;
+import mchorse.bbs_mod.ui.film.FrameOverlays;
+import mchorse.bbs_mod.api.client.events.RegisterImportersEvent;
+import mchorse.bbs_mod.api.client.events.RegisterKeybindsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterModelLoadersEvent;
+import mchorse.bbs_mod.api.client.events.RegisterPreviewOverlaysEvent;
+import mchorse.bbs_mod.api.client.events.RegisterTrackStylesEvent;
+import mchorse.bbs_mod.film.replays.tracks.TrackStyle;
+import mchorse.bbs_mod.importers.Importers;
+import mchorse.bbs_mod.ui.film.clips.renderer.UIClipRenderers;
+import mchorse.bbs_mod.api.client.events.RegisterFormEditorsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterFormRenderersEvent;
+import mchorse.bbs_mod.api.client.events.RegisterKeyframeEditorsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterValueWidgetsEvent;
+import mchorse.bbs_mod.forms.FormUtilsClient;
+import mchorse.bbs_mod.settings.ui.UIValueMap;
+import mchorse.bbs_mod.ui.film.clips.UIClip;
+import mchorse.bbs_mod.ui.forms.editors.UIFormEditor;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIKeyframeFactory;
+import mchorse.bbs_mod.api.client.events.RegisterL10nEvent;
 import mchorse.bbs_mod.film.Films;
 import mchorse.bbs_mod.film.Recorder;
 import mchorse.bbs_mod.film.WorldVideoExportSession;
@@ -30,6 +57,8 @@ import mchorse.bbs_mod.forms.FormCategories;
 import mchorse.bbs_mod.forms.categories.UserFormCategory;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.structure.BakedStructure;
+import mchorse.bbs_mod.forms.structure.StructureSelection;
+import mchorse.bbs_mod.forms.structure.StructureWand;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.graphics.FramebufferManager;
 import mchorse.bbs_mod.graphics.texture.TextureManager;
@@ -49,7 +78,9 @@ import mchorse.bbs_mod.resources.packs.URLSourcePack;
 import mchorse.bbs_mod.resources.packs.URLTextureErrorCallback;
 import mchorse.bbs_mod.selectors.EntitySelectors;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.dashboard.DashboardWarmup;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
+import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
@@ -63,7 +94,16 @@ import mchorse.bbs_mod.utils.ScreenshotRecorder;
 import mchorse.bbs_mod.utils.VideoRecorder;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
+import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
+import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
+import net.minecraft.util.Identifier;
+import net.minecraft.resource.ResourceManager;
+import net.minecraft.resource.ResourceType;
+import mchorse.bbs_mod.cubic.jem.VanillaRigs;
+import mchorse.bbs_mod.utils.resources.CemSourcePack;
 import mchorse.bbs_mod.utils.resources.MinecraftSourcePack;
+import mchorse.bbs_mod.utils.resources.PlayerSkinSourcePack;
+import mchorse.bbs_mod.utils.resources.PlayerSkins;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -103,6 +143,8 @@ public class BBSModClient implements ClientModInitializer
     private static TextureManager textures;
     private static FramebufferManager framebuffers;
     private static SoundManager sounds;
+    private static VideoManager videos;
+    private static FontManager fonts;
     private static L10n l10n;
 
     private static ModelManager models;
@@ -140,6 +182,38 @@ public class BBSModClient implements ClientModInitializer
     private static float originalFramebufferScale;
     private static boolean customGUIScale;
 
+    /** The OptiFine CEM models of the installed resource packs; null until the client has started. */
+    private static CemSourcePack cemSourcePack;
+
+    /** Minecraft's own textures; null until the client has started. */
+    private static MinecraftSourcePack minecraftSourcePack;
+
+    public static CemSourcePack getCemSourcePack()
+    {
+        return cemSourcePack;
+    }
+
+    /**
+     * Read the resource packs again and drop everything built on what they said before. A pack going
+     * on or off changes which models and textures exist, and nothing else would notice: the watchdog
+     * watches BBS's own folder, and a link a pack serves has no file behind it to watch.
+     */
+    private static void reloadFromResourcePacks()
+    {
+        /* The first reload runs before the client has started; both packs index themselves when made. */
+        if (cemSourcePack == null)
+        {
+            return;
+        }
+
+        minecraftSourcePack.setupPaths();
+        cemSourcePack.reindex();
+        VanillaRigs.clear();
+
+        getModels().forgetFolder(CemSourcePack.NAME + "/");
+        getFormCategories().setup();
+    }
+
     public static TextureManager getTextures()
     {
         return textures;
@@ -153,6 +227,16 @@ public class BBSModClient implements ClientModInitializer
     public static SoundManager getSounds()
     {
         return sounds;
+    }
+
+    public static VideoManager getVideos()
+    {
+        return videos;
+    }
+
+    public static FontManager getFonts()
+    {
+        return fonts;
     }
 
     public static L10n getL10n()
@@ -233,10 +317,30 @@ public class BBSModClient implements ClientModInitializer
     /** Returns the dashboard without creating it. Used to avoid creating UI when handling keys (e.g. F6) before user has opened BBS. */
     public static UIDashboard getDashboardIfCreated()
     {
+        if (dashboard != null)
+        {
+            dashboard.finishBuilding();
+        }
+
         return dashboard;
     }
 
     public static UIDashboard getDashboard()
+    {
+        UIDashboard dashboard = getUnfinishedDashboard();
+
+        dashboard.finishBuilding();
+
+        return dashboard;
+    }
+
+    /**
+     * The dashboard, created if it wasn't there, but not necessarily built in full.
+     *
+     * <p>Only {@link DashboardWarmup}, which is what finishes it a step at a time, has any
+     * business with a half built dashboard — everybody else wants {@link #getDashboard()}.</p>
+     */
+    public static UIDashboard getUnfinishedDashboard()
     {
         if (dashboard == null)
         {
@@ -368,6 +472,23 @@ public class BBSModClient implements ClientModInitializer
     @Override
     public void onInitializeClient()
     {
+        /* Every resource reload: the pack list changed, or the user pressed F3+T. It fires before the
+         * client has started too, which reloadFromResourcePacks sits out. */
+        ResourceManagerHelper.get(ResourceType.CLIENT_RESOURCES).registerReloadListener(new SimpleSynchronousResourceReloadListener()
+        {
+            @Override
+            public Identifier getFabricId()
+            {
+                return new Identifier(BBSMod.MOD_ID, "resource_pack_models");
+            }
+
+            @Override
+            public void reload(ResourceManager manager)
+            {
+                reloadFromResourcePacks();
+            }
+        });
+
         /* The client half of the addons, picked up before anything client side is posted. Their
          * common half is registered by BBSMod, from the "bbs-addon" entrypoint. */
         FabricLoader.getInstance()
@@ -382,6 +503,8 @@ public class BBSModClient implements ClientModInitializer
         textures = new TextureManager(provider);
         framebuffers = new FramebufferManager();
         sounds = new SoundManager(provider);
+        videos = new VideoManager();
+        fonts = new FontManager();
         l10n = new L10n();
         l10n.register((lang) -> Collections.singletonList(Link.assets("strings/" + lang + ".json")));
 
@@ -396,6 +519,11 @@ public class BBSModClient implements ClientModInitializer
 
         particles = new ParticleManager(() -> new File(BBSMod.getAssetsFolder(), "particles"));
 
+        /* Both of these are read by the objects made right below, and both lists are rebuilt
+         * on every asset reload — so the moment to add to them is before the first build. */
+        BBSMod.events.post(new RegisterModelLoadersEvent());
+        BBSMod.events.post(new RegisterFormSectionsEvent());
+
         models = new ModelManager(provider);
         formCategories = new FormCategories();
         screenshotRecorder = new ScreenshotRecorder(new File(parentFile, "screenshots"));
@@ -406,12 +534,32 @@ public class BBSModClient implements ClientModInitializer
 
         BBSResources.init();
 
+        /* While the dashboard is open or a model block is held, model blocks
+         * are targetable as at least a full cube even with a tiny hitbox. */
+        ModelBlock.editingCheck = () ->
+        {
+            if (UIScreen.getCurrentMenu() instanceof UIDashboard)
+            {
+                return true;
+            }
+
+            MinecraftClient mc = MinecraftClient.getInstance();
+
+            return mc.player != null && mc.player.getMainHandStack().isOf(BBSMod.MODEL_BLOCK_ITEM);
+        };
+
         URLRepository repository = new URLRepository(new File(parentFile, "url_cache"));
 
         provider.register(new URLSourcePack("http", repository));
         provider.register(new URLSourcePack("https", repository));
 
+        PlayerSkins.init(new File(parentFile, "skin_cache"));
+
+        provider.register(new PlayerSkinSourcePack());
+
         KeybindSettings.registerClasses();
+
+        BBSMod.events.post(new RegisterKeybindsEvent());
 
         BBSMod.setupConfig(Icons.KEY_CAP, "keybinds", new File(BBSMod.getSettingsFolder(), "keybinds.json"), KeybindSettings::register);
 
@@ -435,10 +583,15 @@ public class BBSModClient implements ClientModInitializer
             }
         });
 
-        BBSSettings.theme.modes(
-            UIKeys.ENGINE_THEME_LIGHT,
-            UIKeys.ENGINE_THEME_DARK
-        );
+        BBSSettings.taskbarSide.postCallback((v, f) ->
+        {
+            if (dashboard != null)
+            {
+                dashboard.getPanels().setSide(UIDashboardPanels.getSettingsSide());
+            }
+        });
+
+        BBSSettings.taskbarSide.modes(UIDashboardPanels.getSideLabels());
 
         BBSSettings.keystrokeMode.modes(
             UIKeys.ENGINE_KEYSTROKES_POSITION_AUTO,
@@ -487,8 +640,41 @@ public class BBSModClient implements ClientModInitializer
         /* Replace audio clip with client version that plays audio */
         BBSMod.getFactoryCameraClips()
             .register(Link.bbs("audio"), AudioClientClip.class, new ClipFactoryData(Icons.SOUND, 0xffc825))
+            .register(Link.bbs("video"), VideoClientClip.class, new ClipFactoryData(Icons.VIDEO_CAMERA, 0xd21f3c))
             .register(Link.bbs("tracker"), TrackerClientClip.class, new ClipFactoryData(Icons.USER, 0x4cedfc))
             .register(Link.bbs("curve"), CurveClientClip.class, new ClipFactoryData(Icons.ARC, 0xff1493));
+
+        /* The client-side registries, each followed by the event that lets addons add to it.
+         * They used to fill themselves in static initialisers, so the moment depended on who
+         * touched the class first — a moment nobody chose and an addon could not aim at. */
+        FormUtilsClient.setup();
+        BBSMod.events.post(new RegisterFormRenderersEvent());
+
+        UIFormEditor.setup();
+        BBSMod.events.post(new RegisterFormEditorsEvent());
+
+        UIClip.setup();
+        BBSMod.events.post(new RegisterClipPanelsEvent());
+
+        UIKeyframeFactory.setup();
+        BBSMod.events.post(new RegisterKeyframeEditorsEvent());
+
+        UIValueMap.setup();
+        BBSMod.events.post(new RegisterValueWidgetsEvent());
+
+        UIClipRenderers.setup();
+        BBSMod.events.post(new RegisterClipRenderersEvent());
+
+        TrackStyle.setup();
+        BBSMod.events.post(new RegisterTrackStylesEvent());
+
+        Importers.setup();
+        BBSMod.events.post(new RegisterImportersEvent());
+
+        FrameOverlays.setup();
+        BBSMod.events.post(new RegisterFrameOverlaysEvent());
+
+        BBSMod.events.post(new RegisterPreviewOverlaysEvent());
 
         /* Keybinds */
         keyDashboard = this.createKey("dashboard", GLFW.GLFW_KEY_0);
@@ -504,12 +690,20 @@ public class BBSModClient implements ClientModInitializer
         keyTeleport = this.createKey("teleport", GLFW.GLFW_KEY_Y);
         keyZoom = this.createKeyMouse("zoom", 2);
 
+        StructureWand.register();
+
+        WorldRenderEvents.BEFORE_ENTITIES.register((context) -> BBSRendering.beginEntityPass());
+
         WorldRenderEvents.AFTER_ENTITIES.register((context) ->
         {
+            StructureWand.renderWorld(context);
+
             if (!BBSRendering.isIrisShadersEnabled())
             {
                 BBSRendering.renderCoolStuff(context);
             }
+
+            BBSRendering.endEntityPass();
 
             if (BBSSettings.chromaSkyEnabled.get())
             {
@@ -572,7 +766,13 @@ public class BBSModClient implements ClientModInitializer
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
         {
             dashboard = null;
+            DashboardWarmup.reset();
             worldExportSession.stop();
+            videos.delete();
+
+            /* Corners are raw coordinates: kept across a world change they would point the wand
+             * at whatever now stands in their place */
+            StructureSelection.clear();
 
             /* A panel export dies with its dashboard without finishing - the sound
              * capture must not keep accumulating into the next session */
@@ -591,7 +791,13 @@ public class BBSModClient implements ClientModInitializer
              * again and nothing of the film's use answers for them */
             LivePlayerItemUse.endFrame();
 
+            videos.update();
+            sounds.update();
+            fonts.update();
+
             BBSRendering.startTick();
+
+            getFormCategories().getUserForms().flush();
         });
 
         ClientTickEvents.END_WORLD_TICK.register((client) ->
@@ -622,10 +828,21 @@ public class BBSModClient implements ClientModInitializer
                 films.update();
                 modelBlockItemRenderer.update();
                 gunItemRenderer.update();
+            }
+
+            /* Animated textures keep going in BBS's own screens even while the game is paused
+             * under them — the texture manager pauses it, the film editor doesn't, and a preview
+             * should play in both. With no BBS screen the clock stops with the world, as vanilla's does. */
+            if (!mc.isPaused() || mc.currentScreen instanceof UIScreen)
+            {
                 textures.update();
             }
 
             worldExportSession.update();
+
+            /* Build the dashboard while nothing is asking for it, so that the key below
+             * opens one that is already there */
+            DashboardWarmup.tick(mc);
 
             while (keyDashboard.wasPressed()) UIScreen.open(getDashboard());
             while (keyItemEditor.wasPressed()) this.keyOpenModelBlockEditor(mc);
@@ -683,7 +900,16 @@ public class BBSModClient implements ClientModInitializer
         ClientLifecycleEvents.CLIENT_STARTED.register((e) ->
         {
             BBSRendering.setupFramebuffer();
-            provider.register(new MinecraftSourcePack());
+
+            minecraftSourcePack = new MinecraftSourcePack();
+
+            provider.register(minecraftSourcePack);
+
+            /* Last under "assets", so the user's own folder and the jar win over a resource pack's
+             * models - which is what lets a pack model be given a config.json or replaced outright. */
+            cemSourcePack = new CemSourcePack();
+
+            provider.register(cemSourcePack);
 
             Window window = MinecraftClient.getInstance().getWindow();
 
@@ -736,6 +962,8 @@ public class BBSModClient implements ClientModInitializer
         {
             BBSMod.getAssetsPath("models/player/" + path + "/").mkdirs();
         }
+
+        BBSMod.events.post(new BBSClientReadyEvent());
     }
 
     private void keyRecordVideo(MinecraftClient mc)

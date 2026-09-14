@@ -1,6 +1,6 @@
 package mchorse.bbs_mod.ui.utils.bones;
 
-import mchorse.bbs_mod.cubic.IModel;
+import mchorse.bbs_mod.cubic.IBoneHierarchy;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
@@ -9,6 +9,7 @@ import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
+import mchorse.bbs_mod.ui.framework.elements.utils.RowStyle;
 import mchorse.bbs_mod.ui.framework.tooltips.ITooltip;
 import mchorse.bbs_mod.ui.framework.tooltips.LabelTooltip;
 import mchorse.bbs_mod.utils.Direction;
@@ -45,7 +46,6 @@ public class UIBoneTreeList extends UIStringList
 {
     public static final int INDENT = 8;
 
-    private static final int GUIDE_COLOR = Colors.A25 | 0xFFFFFF;
 
     private static final int MARKER = 4;
     private static final int MARKER_GAP = 2;
@@ -68,6 +68,20 @@ public class UIBoneTreeList extends UIStringList
      *  while a query is active, so matches render flat like built-in filtering does. */
     private boolean flat;
 
+    /**
+     * Bones the host has folded shut; null in a tree that doesn't fold at all, which is most of
+     * them — a bone list is usually read whole. A folded bone keeps its subtree out of the rows
+     * entirely (see {@link #emit}), so folding is a property of the fill, not of the drawing.
+     */
+    private Set<String> collapsed;
+
+    /** Bones with children, as the last fill found them: who gets a fold arrow. */
+    private final Set<String> parents = new HashSet<>();
+
+    /** What the last {@link #fillBones} was given, so a fold can build the rows again. */
+    private IBoneHierarchy filledModel;
+    private Collection<String> filledHidden;
+
     public UIBoneTreeList(Consumer<List<String>> callback)
     {
         super(callback);
@@ -87,6 +101,18 @@ public class UIBoneTreeList extends UIStringList
     public boolean isDisabled(String id)
     {
         return this.disabled != null && id != null && !id.isEmpty() && this.disabled.test(id);
+    }
+
+    /**
+     * Let branches fold: a bone with children gets an arrow, clicking it (or Left/Right on the
+     * focused row) folds its subtree away, and every row leaves room for the arrow so the names
+     * still line up. Off by default.
+     */
+    public UIBoneTreeList collapsible()
+    {
+        this.collapsed = new HashSet<>();
+
+        return this;
     }
 
     /**
@@ -140,7 +166,7 @@ public class UIBoneTreeList extends UIStringList
      * Set only the hierarchy metadata from a model, leaving the list contents to the
      * host. Passing a null model clears the metadata (every row renders flat).
      */
-    public void setHierarchy(IModel model, Predicate<String> hidden)
+    public void setHierarchy(IBoneHierarchy model, Predicate<String> hidden)
     {
         this.metas.clear();
 
@@ -155,10 +181,14 @@ public class UIBoneTreeList extends UIStringList
      * bone's children stay visible and take over its depth, mirroring how the flat
      * lists used to just remove disabled bones from the hierarchy-ordered key list.
      */
-    public void fillBones(IModel model, Collection<String> hidden)
+    public void fillBones(IBoneHierarchy model, Collection<String> hidden)
     {
+        this.filledModel = model;
+        this.filledHidden = hidden;
+
         this.clear();
         this.metas.clear();
+        this.parents.clear();
 
         if (model != null)
         {
@@ -172,7 +202,7 @@ public class UIBoneTreeList extends UIStringList
 
     /**
      * Fill with a plain list of bone names, no hierarchy — the fallback for forms
-     * whose bones don't come from an {@link IModel} (e.g. mob forms' model parts).
+     * whose bones don't come from a rig at all.
      */
     public void fillFlat(Collection<String> bones)
     {
@@ -223,7 +253,7 @@ public class UIBoneTreeList extends UIStringList
     /* Building the intermediate node tree */
 
     /** A bone (and its visible subtree); a hidden bone dissolves into its children in place. */
-    private static List<Node> boneNodes(IModel model, Collection<String> bones, Predicate<String> hidden)
+    private static List<Node> boneNodes(IBoneHierarchy model, Collection<String> bones, Predicate<String> hidden)
     {
         List<Node> nodes = new ArrayList<>();
 
@@ -268,18 +298,14 @@ public class UIBoneTreeList extends UIStringList
             }
         }
 
-        int i = 0;
-
         for (BodyPart part : form.parts.getAllTyped())
         {
             Form child = part.getForm();
 
             if (child != null)
             {
-                children.addAll(formNodes(child, StringUtils.combinePaths(path, String.valueOf(i)), keys));
+                children.addAll(formNodes(child, StringUtils.combinePaths(path, part.getId()), keys));
             }
-
-            i += 1;
         }
 
         if (!keys.contains(path))
@@ -296,7 +322,7 @@ public class UIBoneTreeList extends UIStringList
         return new ArrayList<>(List.of(node));
     }
 
-    private static List<Node> formBoneNodes(Form owner, IModel model, Collection<String> bones, String formPath, Set<String> keys)
+    private static List<Node> formBoneNodes(Form owner, IBoneHierarchy model, Collection<String> bones, String formPath, Set<String> keys)
     {
         List<Node> nodes = new ArrayList<>();
 
@@ -340,13 +366,85 @@ public class UIBoneTreeList extends UIStringList
                 this.list.add(node.id);
             }
 
+            if (!node.children.isEmpty())
+            {
+                this.parents.add(node.id);
+            }
+
+            /* A folded bone's subtree is emitted for its metadata but not filled into the rows:
+             * the rows are what folding hides. */
+            boolean folded = this.collapsed != null && this.collapsed.contains(node.id);
+
             /* This node's connector column keeps its vertical running through the
              * whole subtree unless the node closed the level as its last sibling.
              * Roots have no column, so nothing to continue. */
-            int childLines = !last && depth > 0 ? lines | (1 << (depth - 1)) : lines;
+            int childLines = childGuideLines(lines, depth, last);
 
-            this.emit(node.children, depth + 1, childLines, fill);
+            this.emit(node.children, depth + 1, childLines, fill && !folded);
         }
+    }
+
+    /* Folding */
+
+    @Override
+    protected Boolean branch(String element)
+    {
+        /* A search draws the matches flat, without the structure the arrows fold — and the rows
+         * it shows aren't the rows a fill would leave, so there is nothing to fold there. */
+        if (this.collapsed == null || this.flat || this.isFiltering() || !this.parents.contains(element))
+        {
+            return null;
+        }
+
+        return !this.collapsed.contains(element);
+    }
+
+    @Override
+    protected void toggle(String element)
+    {
+        if (this.collapsed == null || !this.parents.contains(element))
+        {
+            return;
+        }
+
+        if (!this.collapsed.remove(element))
+        {
+            this.collapsed.add(element);
+        }
+
+        this.refill();
+    }
+
+    /**
+     * A search runs over the whole tree, so it opens what was folded — the rows a fold takes out
+     * of the list are rows the filter would never see. They stay open once the search clears:
+     * having just been shown where a bone lives, closing the branch back over it would hide it again.
+     */
+    @Override
+    public void filter(String filter)
+    {
+        if (this.collapsed != null && !filter.isEmpty() && !this.collapsed.isEmpty())
+        {
+            this.collapsed.clear();
+            this.refill();
+        }
+
+        super.filter(filter);
+    }
+
+    /** Build the rows again from the last fill, keeping the pick — what a fold changes. */
+    private void refill()
+    {
+        List<String> picked = new ArrayList<>(this.getCurrent());
+
+        this.fillBones(this.filledModel, this.filledHidden);
+        this.setCurrent(picked);
+    }
+
+    /** The room a row leaves at its start for the fold arrow; none in a tree that doesn't fold. */
+    private int arrowSlot()
+    {
+        return this.collapsed == null ? 0 : ARROW_SLOT;
     }
 
     @Override
@@ -357,44 +455,52 @@ public class UIBoneTreeList extends UIStringList
         return meta == null ? element : meta.fullLabel;
     }
 
+    /**
+     * The row's metadata as shown: none while search results render flat — branches
+     * without the parent rows above them are just a lie about structure.
+     */
+    private Meta shownMeta(String element)
+    {
+        return this.flat || this.isFiltering() ? null : this.metas.get(element);
+    }
+
+    /** The tree is always fully unfolded, so rows only step right; no branch ever folds. */
+    @Override
+    protected int indent(String element)
+    {
+        Meta meta = this.shownMeta(element);
+
+        return meta == null ? 0 : meta.depth * INDENT;
+    }
+
+    @Override
+    protected int indentStep()
+    {
+        return INDENT;
+    }
+
     @Override
     protected void renderElementPart(UIContext context, String element, int i, int x, int y, boolean hover, boolean selected)
     {
-        /* Search results render flat with their full label — branches without the
-         * parent rows above them are just a lie about structure. */
         boolean filtering = this.flat || this.isFiltering();
-        Meta meta = filtering ? null : this.metas.get(element);
+        Meta meta = this.shownMeta(element);
         int depth = meta == null ? 0 : meta.depth;
         int h = this.scroll.scrollItemSize;
 
-        if (meta != null && depth > 0)
+        if (meta != null)
         {
-            int mid = y + h / 2;
-            int textX = x + 4 + depth * INDENT;
-
-            for (int level = 0; level < depth - 1; level++)
-            {
-                if ((meta.lines & (1 << level)) != 0)
-                {
-                    int lx = columnX(x, level);
-
-                    context.batcher.box(lx, y, lx + 1, y + h, GUIDE_COLOR);
-                }
-            }
-
-            /* The connector: a tee for a middle child, a corner for the last one. */
-            int lx = columnX(x, depth - 1);
-
-            context.batcher.box(lx, y, lx + 1, meta.last ? mid + 1 : y + h, GUIDE_COLOR);
-            context.batcher.box(lx + 1, mid, textX - 2, mid + 1, GUIDE_COLOR);
+            this.renderTreeGuides(context, x, y, depth, meta.lines, meta.last, x + this.rowContentX(element) + this.arrowSlot());
         }
 
         String label = meta == null
             ? (filtering ? this.elementToString(context, i, element) : element)
             : meta.treeLabel;
-        int color = this.isDisabled(element) ? Colors.GRAY : (hover ? Colors.HIGHLIGHT : Colors.WHITE);
-        int textX = x + 4 + depth * INDENT;
+        boolean lit = hover || selected;
+        int color = this.isDisabled(element) ? RowStyle.textColor(lit, Colors.GRAY) : RowStyle.textColor(lit);
+        int textX = x + this.rowContentX(element) + this.arrowSlot();
         int right = this.renderMarkers(context, element, x, y, h);
+
+        this.renderArrow(context, element, x, y, lit);
 
         if (right < x + this.area.w)
         {
@@ -444,11 +550,6 @@ public class UIBoneTreeList extends UIStringList
         }
 
         return this.laneX;
-    }
-
-    private static int columnX(int x, int level)
-    {
-        return x + 4 + level * INDENT + 2;
     }
 
     /** The dot legend, gated on the cursor actually being in the dot column. */
