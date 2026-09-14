@@ -2223,6 +2223,8 @@
 	"bbs.ui.film.replays.category.physics.tooltip": "Physics tracks (chain controls, targets)",
 	"bbs.ui.film.replays.actions_timeline": "Action clips timeline",
 	"bbs.ui.film.replays.all_tracks": "All tracks",
+	"bbs.ui.film.replays.body_parts": "Body parts",
+	"bbs.ui.film.replays.selected_body_part": "Body part: %s",
 	"bbs.ui.film.replays.collapse_all": "Collapse all sections",
 	"bbs.ui.film.replays.expand_all": "Expand all sections",
 	"keybinds.config.title": "UI keybinds",
