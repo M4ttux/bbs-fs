@@ -159,9 +159,9 @@ public class UIModelCubeUV extends UIElement
         this.sheetWidth.getEvents().register(UITrackpadDragEndEvent.class, (e) -> this.editor.closeCubeEdit());
         this.sheetHeight.getEvents().register(UITrackpadDragEndEvent.class, (e) -> this.editor.closeCubeEdit());
 
-        /* The side's own icons stand at an icon button's size rather than squeezed to a row's height:
-         * they are what the pane is worked with. */
-        UIElement actions = UI.strip(UIConstants.ICON_SIZE, drawn, flipX, flipY, rotate, fit, maximize, applyAll);
+        /* Share the pane's width evenly while keeping the icons at their normal height. */
+        UIElement actions = UI.row(0, 0, UIConstants.ICON_SIZE,
+            drawn.w(0), flipX.w(0), flipY.w(0), rotate.w(0), fit.w(0), maximize.w(0), applyAll.w(0));
 
         this.rows = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING,
             this.cornerRows,
