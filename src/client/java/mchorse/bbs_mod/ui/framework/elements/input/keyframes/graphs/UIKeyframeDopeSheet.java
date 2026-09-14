@@ -608,8 +608,8 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
             if (context.mouseY >= y && context.mouseY < y + height)
             {
-                /* A click on a row's name means "key this here" — except on a section, which takes
-                 * no keyframes at all. There the whole row answers like its arrow does. */
+                /* Sections fold. A value row can select its property panel; hosts without that
+                 * panel retain the shortcut that inserts a key at the cursor. */
                 if (this.hasChildren(sheet) && (sheet.header || this.isFoldToggleHit(context, sheet, y, labelWidth)))
                 {
                     this.toggleFold(sheet, Window.isShiftPressed());
@@ -617,7 +617,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
                     return true;
                 }
 
-                if (!sheet.header)
+                if (!sheet.header && !this.keyframes.pickTrack(sheet))
                 {
                     this.addKeyframeManually(sheet, this.keyframes.getTick(), null);
                 }
@@ -1083,10 +1083,9 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         int my = y + height / 2;
         int lx = area.x;
 
-        /* The row's own colour, and the standing light a header wears: it is a heading, and reading
-         * as "always about to be clicked" is exactly how it separates itself from the tracks it
-         * holds. The track has no pick of its own — keyframes are what gets picked here. */
-        RowStyle.row(context.batcher, lx, y, w, height, sheet.getRowColor(), sheet.header, hover, false);
+        /* Headings and the active property keep their row colour without a key selection. */
+        boolean active = !this.keyframes.getActiveTrack().isEmpty() && sheet.id.equals(this.keyframes.getActiveTrack());
+        RowStyle.row(context.batcher, lx, y, w, height, sheet.getRowColor(), sheet.header || active, hover, false);
 
         /* A row that has children keeps its own icon and gets a fold arrow next to it. */
         Icon icon = sheet.getIcon();
@@ -1095,7 +1094,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
         int iconX = lx + w - LABEL_RIGHT_PAD - LABEL_ICON_SIZE;
         FontRenderer font = context.batcher.getFont();
-        int textColor = hover ? Colors.WHITE : Colors.setA(Colors.WHITE, 0.75F);
+        int textColor = hover || active ? Colors.WHITE : Colors.setA(Colors.WHITE, 0.75F);
         int textX = lx + LABEL_TEXT_LEFT + this.getSheetIndent(sheet);
         int textRight = hasIcon ? iconX - LABEL_TEXT_ICON_GAP : lx + w - LABEL_RIGHT_PAD;
 
