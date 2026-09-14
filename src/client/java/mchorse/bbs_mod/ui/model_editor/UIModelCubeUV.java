@@ -109,8 +109,8 @@ public class UIModelCubeUV extends UIElement
          * visibility with, open or shut as the side is. It stays live on a side that isn't drawn — it
          * is how that side comes back. */
         UIIcon drawn = new UIIcon(() -> this.uv() != null ? Icons.VISIBLE : Icons.INVISIBLE, (b) -> this.setDrawn(this.uv() == null));
-        UIIcon flipX = new UIIcon(Icons.HORIZONTAL, (b) -> this.change(UIKeys.MODEL_EDITOR_MODEL_UNDO_UV_FLIP, ModelUV::flipX));
-        UIIcon flipY = new UIIcon(Icons.VERTICAL, (b) -> this.change(UIKeys.MODEL_EDITOR_MODEL_UNDO_UV_FLIP, ModelUV::flipY));
+        UIIcon flipX = new UIIcon(Icons.FLIP_HORIZONTAL, (b) -> this.change(UIKeys.MODEL_EDITOR_MODEL_UNDO_UV_FLIP, ModelUV::flipX));
+        UIIcon flipY = new UIIcon(Icons.FLIP_VERTICAL, (b) -> this.change(UIKeys.MODEL_EDITOR_MODEL_UNDO_UV_FLIP, ModelUV::flipY));
         UIIcon rotate = new UIIcon(Icons.REFRESH, (b) -> this.change(UIKeys.MODEL_EDITOR_MODEL_UNDO_UV_ROTATE, ModelUV::rotate90));
 
         /* Blockbench's shortcuts for one side's unwrap, after the mirrors and the turn: as big as the
