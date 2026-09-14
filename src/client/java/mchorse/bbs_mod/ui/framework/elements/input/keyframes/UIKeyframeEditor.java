@@ -14,6 +14,7 @@ import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.utils.UITimelinePanel;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIAnchorKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIKeyframeFactory;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIKeyframeParams;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIPoseKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIPoseTransformKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UITransformKeyframeFactory;
@@ -33,6 +34,8 @@ public class UIKeyframeEditor extends UITimelinePanel
 
     public UIKeyframes view;
     public UIKeyframeFactory editor;
+    private UINumericTrackEditor trackEditor;
+    private Consumer<String> trackSelection;
 
     public UIKeyframeEditor(Function<Consumer<Keyframe>, UIKeyframes> factory)
     {
@@ -51,7 +54,60 @@ public class UIKeyframeEditor extends UITimelinePanel
     @Override
     protected UIElement getPropertiesPanel()
     {
-        return this.editor;
+        return this.trackEditor == null ? this.editor : this.trackEditor;
+    }
+
+    /** Opt in to editing track values. Other timelines retain their existing key editors. */
+    public void trackValues(String selected, Consumer<String> selection)
+    {
+        this.trackSelection = selection;
+        this.view.trackPicker((sheet) ->
+        {
+            if (!UINumericTrackEditor.supports(sheet))
+            {
+                return false;
+            }
+
+            this.view.getGraph().clearSelection();
+            this.showTrack(sheet);
+            this.resize();
+
+            return true;
+        });
+
+        UIKeyframeSheet sheet = this.view.getDopeSheet().getSheet(selected);
+
+        if (UINumericTrackEditor.supports(sheet))
+        {
+            this.showTrack(sheet);
+        }
+    }
+
+    private void showTrack(UIKeyframeSheet sheet)
+    {
+        String id = sheet == null ? "" : sheet.id;
+
+        this.view.setActiveTrack(id);
+        this.trackSelection.accept(id);
+
+        if (this.trackEditor != null && this.trackEditor.getTrackId().equals(id))
+        {
+            return;
+        }
+
+        if (this.trackEditor != null)
+        {
+            this.trackEditor.removeFromParent();
+            this.trackEditor = null;
+        }
+
+        if (UINumericTrackEditor.supports(sheet))
+        {
+            this.trackEditor = new UINumericTrackEditor(sheet, this.view);
+            this.attachPropertiesPanel(this.trackEditor, 140);
+            this.trackEditor.setVisible(this.propertiesVisible);
+            this.trackEditor.resize();
+        }
     }
 
     @Override
@@ -97,17 +153,40 @@ public class UIKeyframeEditor extends UITimelinePanel
             this.editor = null;
         }
 
+        if (this.trackEditor != null && this.view.getGraph().getSheet(this.trackEditor.getTrackId()) == null)
+        {
+            this.showTrack(null);
+        }
+
+        if (this.trackSelection != null && keyframe != null)
+        {
+            UIKeyframeSheet sheet = this.getSheet(keyframe);
+
+            if (sheet != null)
+            {
+                this.showTrack(sheet);
+            }
+        }
+
         if (keyframe != null)
         {
             /* Null when the keyframe's type has no editor registered: the track still works, it
              * just gets no properties panel. It used to be dereferenced straight away, so a type
              * whose registration went missing crashed on the click that selected a keyframe. */
-            this.editor = UIKeyframeFactory.createPanel(keyframe, this.view);
+            this.editor = this.trackEditor == null ? UIKeyframeFactory.createPanel(keyframe, this.view)
+                : new UIKeyframeParams(keyframe, this.view);
 
             if (this.editor != null)
             {
-                this.attachPropertiesPanel(this.editor, 140);
-                this.editor.setVisible(this.propertiesVisible);
+                if (this.trackEditor == null)
+                {
+                    this.attachPropertiesPanel(this.editor, 140);
+                }
+                else
+                {
+                    this.trackEditor.parameters(this.editor);
+                }
+                this.editor.setVisible(this.trackEditor != null || this.propertiesVisible);
                 this.resize();
 
                 if (this.target != null)
@@ -341,6 +420,22 @@ public class UIKeyframeEditor extends UITimelinePanel
         }
 
         this.view.applyState(state);
+
+        if (this.trackSelection != null && data.has("active_track"))
+        {
+            UIKeyframeSheet sheet = this.view.getDopeSheet().getSheet(data.getString("active_track"));
+
+            if (!this.view.getActiveTrack().equals(data.getString("active_track")))
+            {
+                if (this.editor != null)
+                {
+                    this.editor.removeFromParent();
+                    this.editor = null;
+                }
+
+                this.showTrack(sheet);
+            }
+        }
     }
 
     @Override
@@ -358,5 +453,10 @@ public class UIKeyframeEditor extends UITimelinePanel
 
         data.put("extra", keyframeState.extra);
         data.put("selection", selection);
+
+        if (this.trackSelection != null)
+        {
+            data.putString("active_track", this.view.getActiveTrack());
+        }
     }
 }

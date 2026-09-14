@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import org.lwjgl.glfw.GLFW;
@@ -77,6 +78,8 @@ public class UIKeyframes extends UITimelineCanvas
 
 
     private final Consumer<Keyframe> callback;
+    private Predicate<UIKeyframeSheet> trackPicker;
+    private String activeTrack = "";
     private Consumer<UIContext> backgroundRender;
     private Consumer<UIContext> rulerRender;
     private Supplier<Integer> duration;
@@ -708,6 +711,8 @@ public class UIKeyframes extends UITimelineCanvas
             this.dopeSheet.pickSelected();
 
             this.currentGraph = new UIKeyframeGraph(this, sheet);
+            this.pickKeyframe(null);
+            this.pickTrack(sheet);
 
             this.resetView();
         }
@@ -974,6 +979,27 @@ public class UIKeyframes extends UITimelineCanvas
     }
 
     /* Sheet management */
+
+    /** Hosts may give track names a selection of their own, separate from selecting keys. */
+    public void trackPicker(Predicate<UIKeyframeSheet> picker)
+    {
+        this.trackPicker = picker;
+    }
+
+    public boolean pickTrack(UIKeyframeSheet sheet)
+    {
+        return this.trackPicker != null && this.trackPicker.test(sheet);
+    }
+
+    public void setActiveTrack(String id)
+    {
+        this.activeTrack = id;
+    }
+
+    public String getActiveTrack()
+    {
+        return this.activeTrack;
+    }
 
     public void removeAllSheets()
     {

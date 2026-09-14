@@ -249,6 +249,13 @@ public class TrackCatalog
 
             String name = value.getId();
 
+            /* Shape key tracks only apply to models that actually expose shape keys. */
+            if (form instanceof ModelForm modelForm && value == modelForm.shapeKeys
+                && (model == null || model.model.getShapeKeys().isEmpty()))
+            {
+                continue;
+            }
+
             /* CEM states belong only to JEM models, including forms nested in body parts. */
             if (form instanceof ModelForm && name.startsWith("cem_") && (model == null || model.cemAnimation == null))
             {
