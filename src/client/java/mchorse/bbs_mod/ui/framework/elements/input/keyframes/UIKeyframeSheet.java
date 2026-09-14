@@ -21,7 +21,6 @@ import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.function.Supplier;
 
 public class UIKeyframeSheet
@@ -241,33 +240,6 @@ public class UIKeyframeSheet
     public Icon getIcon()
     {
         return this.icon;
-    }
-
-    /** Read a track without selecting or creating a key. Empty tracks show their initial value. */
-    public Object valueAt(float tick)
-    {
-        KeyframeSegment segment = this.channel.find(tick);
-
-        if (segment != null)
-        {
-            return segment.createInterpolated();
-        }
-
-        return this.property != null ? this.channel.getFactory().copy(this.property.get())
-            : this.seed != null ? this.seed.get() : this.channel.getFactory().createEmpty();
-    }
-
-    /** A property edit belongs to this track at this time, independently of selected keys. */
-    public void setValueAt(float tick, Object value)
-    {
-        if (this.header || Objects.equals(this.valueAt(tick), value))
-        {
-            return;
-        }
-
-        Keyframe keyframe = this.ensureKeyframe(tick);
-
-        keyframe.setValue(this.channel.getFactory().copy(value), true);
     }
 
     /**

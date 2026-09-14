@@ -140,8 +140,6 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
      * state is handed to each new sheet, which folds in it directly rather than keeping a copy.
      */
     private final Map<String, FoldState<String>> expandedTracksByReplay = new HashMap<>();
-    /** Active property per film and replay; rebuilt rows and film tabs do not own this choice. */
-    private final Map<String, Map<String, String>> activeTracks = new HashMap<>();
 
     public enum ReplayCategory
     {
@@ -809,10 +807,6 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
             }
 
             this.keyframeEditor.view.getDopeSheet().setExpanded(this.getExpandedTracks());
-
-            Map<String, String> filmTracks = this.activeTracks.computeIfAbsent(this.film.getId(), (id) -> new HashMap<>());
-            String replayId = this.replay.getId();
-            this.keyframeEditor.trackValues(filmTracks.getOrDefault(replayId, ""), (id) -> filmTracks.put(replayId, id));
 
             this.add(this.keyframeEditor);
             /* Category bar + actions toggle on top so they overlay the track names column. */
