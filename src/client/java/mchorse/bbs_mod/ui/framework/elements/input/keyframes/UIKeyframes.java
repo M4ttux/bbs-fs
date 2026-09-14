@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import org.joml.Vector3f;
 import org.lwjgl.glfw.GLFW;
 
 import mchorse.bbs_mod.BBSSettings;
@@ -24,40 +23,36 @@ import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.utils.UITimelineCanvas;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.IUIKeyframeGraph;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.KeyframeType;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.UIKeyframeDopeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.UIKeyframeGraph;
-import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.UIVector3KeyframeGraph;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.overlays.UIKeyframeStyleOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.overlays.UITrackStyleOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.utils.Area;
-import mchorse.bbs_mod.ui.utils.Scale;
 import mchorse.bbs_mod.ui.utils.Scroll;
-import mchorse.bbs_mod.ui.utils.ScrollDirection;
 import mchorse.bbs_mod.ui.utils.UIUtils;
+import mchorse.bbs_mod.ui.utils.context.MenuVerb;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
-import mchorse.bbs_mod.ui.utils.presets.UIPresetContextMenu;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Pair;
-import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.utils.profiler.BBSProfiler;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
 import mchorse.bbs_mod.utils.keyframes.factories.IKeyframeFactory;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
-import mchorse.bbs_mod.utils.keyframes.factories.Vector3fKeyframeFactory;
 import mchorse.bbs_mod.utils.presets.PresetManager;
 
-public class UIKeyframes extends UIElement
+public class UIKeyframes extends UITimelineCanvas
 {
     /* Editing states */
 
-    private boolean selecting;
-    private boolean navigating;
     private int dragging = -1;
     private Pair<Keyframe, KeyframeType> draggingData;
     private boolean scaling;
@@ -68,10 +63,6 @@ public class UIKeyframes extends UIElement
     private boolean stacking;
     private float stackOffset;
 
-    private int lastX;
-    private int lastY;
-    private int originalX;
-    private int originalY;
     private float originalT;
     private Object originalV;
 
@@ -84,7 +75,6 @@ public class UIKeyframes extends UIElement
     private final UIKeyframeDopeSheet dopeSheet = new UIKeyframeDopeSheet(this);
     private IUIKeyframeGraph currentGraph = this.dopeSheet;
 
-    private final Scale xAxis = new Scale(this.graphArea, ScrollDirection.HORIZONTAL);
 
     private final Consumer<Keyframe> callback;
     private Consumer<UIContext> backgroundRender;
@@ -102,6 +92,10 @@ public class UIKeyframes extends UIElement
 
     public UIKeyframes(Consumer<Keyframe> callback)
     {
+        /* The time strip excludes the dope sheet's label column, so the axis maps pixels
+         * over the graph area rather than the whole element. */
+        this.xAxis.area = this.graphArea;
+
         this.callback = callback;
         this.tooltip = new UIKeyframePreviewTooltip(this);
 
@@ -127,7 +121,8 @@ public class UIKeyframes extends UIElement
 
                 this.pasteKeyframes(parseKeyframes(data), (float) offset, mouseY);
             })
-            .canCopy(() -> this.currentGraph.getSelected() != null);
+            .canCopy(() -> this.currentGraph.getSelected() != null)
+            .labels(UIKeys.KEYFRAMES_CONTEXT_COPY, UIKeys.KEYFRAMES_CONTEXT_PASTE);
 
         /* Context menu items */
         this.context((menu) ->
@@ -137,10 +132,15 @@ public class UIKeyframes extends UIElement
             int mouseY = context.mouseY;
             boolean hasSelected = this.currentGraph.getSelected() != null;
 
-            menu.custom(new UIPresetContextMenu(this.copyPasteController, mouseX, mouseY)
-                .labels(UIKeys.KEYFRAMES_CONTEXT_COPY, UIKeys.KEYFRAMES_CONTEXT_PASTE));
+            this.copyPasteController.install(menu, context, mouseX, mouseY);
 
-            UIKeyframeSheet hovered = this.currentGraph.getSheet(mouseY);
+            menu.icon(MenuVerb.REMOVE, () -> this.currentGraph.removeSelected()).label(UIKeys.KEYFRAMES_CONTEXT_REMOVE).enabled(hasSelected);
+
+            /* Both entries below act on a track. A body part's section is a heading: there is no
+             * curve to edit, and its colour is the interface's own while its name comes from the
+             * part — so restyling it would half do nothing and half write a per-part entry into a
+             * table keyed by kind of track. */
+            UIKeyframeSheet hovered = this.currentGraph.getTrackSheet(mouseY);
 
             if (!this.single)
             {
@@ -161,6 +161,11 @@ public class UIKeyframes extends UIElement
                     new UITrackStyleOverlayPanel(hovered, this::refreshTrackStyles),
                     220, 160
                 ));
+            }
+
+            if (hasSelected)
+            {
+                menu.action(Icons.SHAPES, UIKeys.KEYFRAMES_CONTEXT_KEYFRAME_STYLE, this::editKeyframeStyle);
             }
 
             menu.action(Icons.SEARCH, UIKeys.KEYFRAMES_CONTEXT_ADJUST_VALUES, () -> this.adjustValues());
@@ -195,7 +200,6 @@ public class UIKeyframes extends UIElement
                         sheet.channel.postNotify();
                     }
                 });
-                menu.action(Icons.REMOVE, UIKeys.KEYFRAMES_CONTEXT_REMOVE, () -> this.currentGraph.removeSelected());
             }
         });
 
@@ -267,6 +271,32 @@ public class UIKeyframes extends UIElement
         return this;
     }
 
+    /**
+     * Restyle every selected keyframe at once, starting from the style of the first of them. The
+     * panel edits one style and this writes it to all of them, so a mixed selection ends up uniform
+     * - which is what "restyle these" means and what the old per-field controls did too.
+     */
+    private void editKeyframeStyle()
+    {
+        Keyframe selected = this.currentGraph.getSelected();
+
+        if (selected == null)
+        {
+            return;
+        }
+
+        UIOverlay.addOverlay(this.getContext(), new UIKeyframeStyleOverlayPanel(selected.getStyle(), (style) ->
+        {
+            for (UIKeyframeSheet sheet : this.getGraph().getSheets())
+            {
+                for (Keyframe keyframe : sheet.selection.getSelected())
+                {
+                    keyframe.setStyle(style);
+                }
+            }
+        }), 220, 200);
+    }
+
     private void adjustValues()
     {
         this.getContext().replaceContextMenu((menu2) ->
@@ -297,29 +327,13 @@ public class UIKeyframes extends UIElement
             Keyframe kf = selected.get(index);
             Keyframe prevKf = selected.get(previous);
 
-            if (factory instanceof Vector3fKeyframeFactory)
+            double difference = factory.getY(kf.getValue()) - factory.getY(prevKf.getValue());
+
+            selected.remove(index);
+
+            for (Keyframe keyframe : selected)
             {
-                Vector3f v1 = (Vector3f) kf.getValue();
-                Vector3f v2 = (Vector3f) prevKf.getValue();
-                Vector3f diff = new Vector3f(v1).sub(v2);
-
-                selected.remove(index);
-
-                for (Keyframe keyframe : selected)
-                {
-                    keyframe.setValue(new Vector3f((Vector3f) keyframe.getValue()).add(diff));
-                }
-            }
-            else
-            {
-                double difference = factory.getY(kf.getValue()) - factory.getY(prevKf.getValue());
-
-                selected.remove(index);
-
-                for (Keyframe keyframe : selected)
-                {
-                    keyframe.setValue(factory.yToValue(factory.getY(keyframe.getValue()) + difference));
-                }
+                keyframe.setValue(factory.yToValue(factory.getY(keyframe.getValue()) + difference));
             }
 
             sheet.channel.postNotify();
@@ -488,8 +502,8 @@ public class UIKeyframes extends UIElement
         this.scaling = true;
         this.scaleTicks.clear();
         this.scalingAnchor = Integer.MAX_VALUE;
-        this.originalX = context.mouseX;
-        this.originalY = context.mouseY;
+        this.initialX = context.mouseX;
+        this.initialY = context.mouseY;
 
         for (UIKeyframeSheet sheet : this.currentGraph.getSheets())
         {
@@ -693,14 +707,7 @@ public class UIKeyframes extends UIElement
             this.dopeSheet.clearSelection();
             this.dopeSheet.pickSelected();
 
-            if (sheet.channel.getFactory() instanceof Vector3fKeyframeFactory)
-            {
-                this.currentGraph = new UIVector3KeyframeGraph(this, sheet);
-            }
-            else
-            {
-                this.currentGraph = new UIKeyframeGraph(this, sheet);
-            }
+            this.currentGraph = new UIKeyframeGraph(this, sheet);
 
             this.resetView();
         }
@@ -832,11 +839,16 @@ public class UIKeyframes extends UIElement
 
         if (keyframes.size() == 1)
         {
-            UIKeyframeSheet current = this.currentGraph.getSheet(mouseY);
+            UIKeyframeSheet current = this.currentGraph.getTrackSheet(mouseY);
 
             if (current == null)
             {
-                current =  sheets.get(0);
+                current = this.currentGraph.getFirstTrackSheet();
+            }
+
+            if (current == null)
+            {
+                return;
             }
 
             this.pasteKeyframesTo(current, keyframes.get(keyframes.keySet().iterator().next()), offset);
@@ -907,13 +919,6 @@ public class UIKeyframes extends UIElement
 
     /* Getters & setters */
 
-    public UIKeyframes backgroundRenderer(Consumer<UIContext> backgroundRender)
-    {
-        this.backgroundRender = backgroundRender;
-
-        return this;
-    }
-
     public UIKeyframes rulerRenderer(Consumer<UIContext> rulerRender)
     {
         this.rulerRender = rulerRender;
@@ -933,11 +938,6 @@ public class UIKeyframes extends UIElement
         return this.currentGraph;
     }
 
-    public Scale getXAxis()
-    {
-        return this.xAxis;
-    }
-
     public int getDuration()
     {
         return this.duration == null ? 0 : this.duration.get();
@@ -948,20 +948,29 @@ public class UIKeyframes extends UIElement
         return (float) this.fromGraphX(this.getContext().mouseX);
     }
 
-    public boolean isSelecting()
+    /**
+     * The tick auto-keyframing writes at, or {@code null} when an edit should land on the
+     * keyframes it was made on.
+     *
+     * <p>Auto-keyframing turns every value edit into a key at the playhead instead of a rewrite of
+     * whatever keyframe happens to be selected, so posing at a tick where the track has no keyframe
+     * yet makes one rather than dragging the past along with it. A timeline without a playhead has
+     * no tick to key at, so it never auto-keyframes &mdash; only the film editor's timelines do.
+     */
+    public Integer getAutoKeyframeTick()
     {
-        return this.selecting;
+        return null;
     }
 
-    public boolean isNavigating()
+    public boolean isSelecting()
     {
-        return this.navigating;
+        return this.marquee.isPressed();
     }
 
     /** Whether the user is in the middle of any mouse interaction (dragging, selecting, navigating, scaling or stacking). */
     public boolean isInteracting()
     {
-        return this.dragging >= 0 || this.selecting || this.navigating || this.scaling || this.stacking;
+        return this.dragging >= 0 || this.marquee.isPressed() || this.navigating || this.scaling || this.stacking;
     }
 
     /* Sheet management */
@@ -989,10 +998,6 @@ public class UIKeyframes extends UIElement
         }
     }
 
-    public void addElement(UIKeyframeElement element)
-    {
-        this.dopeSheet.addElement(element);
-    }
 
     public void pickKeyframe(Keyframe keyframe)
     {
@@ -1005,16 +1010,6 @@ public class UIKeyframes extends UIElement
     }
 
     /* Graphing */
-
-    public int toGraphX(double tick)
-    {
-        return (int) this.xAxis.to(tick);
-    }
-
-    public double fromGraphX(int mouseX)
-    {
-        return this.xAxis.from(mouseX);
-    }
 
     public void resetView()
     {
@@ -1059,11 +1054,13 @@ public class UIKeyframes extends UIElement
         }
     }
 
+    /** The band being stretched, with a little slack so a keyframe grazed by its edge counts. */
     public Area getGrabbingArea(UIContext context)
     {
         Area area = new Area();
 
-        area.setPoints(this.originalX, this.originalY, context.mouseX, context.mouseY, 3);
+        area.copy(this.marquee.getArea());
+        area.offset(3);
 
         return area;
     }
@@ -1130,8 +1127,8 @@ public class UIKeyframes extends UIElement
 
         if (this.graphArea.isInside(context))
         {
-            this.lastX = this.originalX = context.mouseX;
-            this.lastY = this.originalY = context.mouseY;
+            this.lastX = this.initialX = context.mouseX;
+            this.lastY = this.initialY = context.mouseY;
 
             if (Window.isCtrlPressed() && context.mouseButton == 0)
             {
@@ -1195,7 +1192,7 @@ public class UIKeyframes extends UIElement
 
         if (shift && found == null)
         {
-            this.selecting = true;
+            this.marquee.press(context.mouseX, context.mouseY);
         }
 
         if (found != null)
@@ -1213,13 +1210,13 @@ public class UIKeyframes extends UIElement
 
             this.pickKeyframe(found);
         }
-        else if (!this.selecting)
+        else if (!this.marquee.isPressed())
         {
             this.currentGraph.clearSelection();
             this.pickKeyframe(null);
         }
 
-        if (!this.selecting)
+        if (!this.marquee.isPressed())
         {
             this.dragging = 0;
             this.draggingData = pair;
@@ -1244,8 +1241,9 @@ public class UIKeyframes extends UIElement
     {
         this.currentGraph.mouseReleased(context);
 
-        if (this.selecting)
+        if (this.marquee.isPressed())
         {
+            this.marquee.update(context.mouseX, context.mouseY);
             this.currentGraph.selectInArea(this.getGrabbingArea(context));
         }
 
@@ -1256,7 +1254,7 @@ public class UIKeyframes extends UIElement
         }
 
         this.navigating = false;
-        this.selecting = false;
+        this.marquee.reset();
         this.dragging = -1;
 
         return super.subMouseReleased(context);
@@ -1320,6 +1318,8 @@ public class UIKeyframes extends UIElement
     {
         super.render(context);
 
+        BBSProfiler.begin(BBSProfiler.Timer.UI_TIMELINE);
+
         this.handleMouse(context);
 
         context.batcher.clip(this.area, context);
@@ -1327,10 +1327,7 @@ public class UIKeyframes extends UIElement
         this.renderBackground(context);
         this.currentGraph.render(context);
 
-        if (this.selecting)
-        {
-            context.batcher.normalizedBox(this.originalX, this.originalY, context.mouseX, context.mouseY, BBSSettings.accentOverlay(Colors.A25));
-        }
+        this.renderMarquee(context);
 
         this.currentGraph.postRender(context);
         this.renderOverlay(context);
@@ -1343,6 +1340,8 @@ public class UIKeyframes extends UIElement
             Area a = this.labelResizer.area;
             Scroll.bar(context.batcher, a.x, a.y, a.ex(), a.ey());
         }
+
+        BBSProfiler.end(BBSProfiler.Timer.UI_TIMELINE);
     }
 
     protected void renderOverlay(UIContext context)
@@ -1367,12 +1366,12 @@ public class UIKeyframes extends UIElement
 
         int mouseX = context.mouseX;
         int mouseY = context.mouseY;
-        boolean mouseHasMoved = Math.abs(mouseX - this.originalX) > 2 || Math.abs(mouseY - this.originalY) > 2;
+        boolean mouseHasMoved = Math.abs(mouseX - this.initialX) > 2 || Math.abs(mouseY - this.initialY) > 2;
 
         if (this.scaling)
         {
             float tick = (float) this.fromGraphX(context.mouseX);
-            float originalTick = (float) this.fromGraphX(this.originalX);
+            float originalTick = (float) this.fromGraphX(this.initialX);
             float ratio = (tick - this.scalingAnchor) / (originalTick - this.scalingAnchor);
 
             for (Map.Entry<Keyframe, Float> entry : this.scaleTicks.entrySet())
@@ -1397,7 +1396,7 @@ public class UIKeyframes extends UIElement
         {
             if (this.currentGraph.getSelected() != null)
             {
-                this.currentGraph.dragKeyframes(context, this.draggingData, this.originalX, this.originalY, this.originalT, this.originalV);
+                this.currentGraph.dragKeyframes(context, this.draggingData, this.initialX, this.initialY, this.originalT, this.originalV);
             }
             else
             {
@@ -1430,7 +1429,7 @@ public class UIKeyframes extends UIElement
             {
                 int leftEx = Math.min(this.graphArea.ex(), leftBorder);
 
-                context.batcher.box(this.graphArea.x, this.graphArea.y, leftEx, this.graphArea.y + this.graphArea.h, BBSSettings.chromeSurface());
+                context.batcher.box(this.graphArea.x, this.graphArea.y, leftEx, this.graphArea.y + this.graphArea.h, BBSSettings.sunkenSurface());
             }
         }
 
