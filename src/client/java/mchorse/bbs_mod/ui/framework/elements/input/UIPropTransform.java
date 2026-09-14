@@ -465,6 +465,18 @@ public class UIPropTransform extends UITransform implements TransformGesture.Hos
         this.keys().register(Keys.TRANSFORMATIONS_TRANSLATE, () -> this.gesture.enableMode(TransformOp.TRANSLATE)).active(translate).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_SCALE, () -> this.gesture.enableMode(TransformOp.SCALE)).active(scale).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_ROTATE, () -> this.gesture.enableMode(TransformOp.ROTATE)).active(rotate).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_RESET, () ->
+        {
+            if (this.gesture.isEditing())
+            {
+                this.gesture.accept();
+            }
+
+            this.endGesture();
+            this.reset();
+            this.refillTransform();
+            this.endGesture();
+        }).active(() -> enabled.get() && this.transform != null).strict().category(category);
         this.keys().register(Keys.TRANSFORMATIONS_X, () -> this.gesture.setAxis(Axis.X)).active(active).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_Y, () -> this.gesture.setAxis(Axis.Y)).active(active).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_Z, () -> this.gesture.setAxis(Axis.Z)).active(active).category(category);
