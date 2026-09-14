@@ -8,6 +8,7 @@ import mchorse.bbs_mod.client.render.picker.BBSPickerRenderer;
 import mchorse.bbs_mod.client.renderer.ItemPredicateDonor;
 import mchorse.bbs_mod.client.renderer.ThirdPersonItemUse;
 import mchorse.bbs_mod.client.renderer.entity.ActorEntityRenderer;
+import mchorse.bbs_mod.cubic.IBoneHierarchy;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.graphics.ModelPreviewRenderer;
 import mchorse.bbs_mod.graphics.texture.AdoptedTexture;
@@ -20,6 +21,8 @@ import mchorse.bbs_mod.cubic.animation.ProceduralAnimator;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.ik.ModelIKDebug;
 import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
+import mchorse.bbs_mod.cubic.jem.CemAnimator;
+import mchorse.bbs_mod.cubic.jem.CemVanillaStage;
 import mchorse.bbs_mod.cubic.constraints.ModelConstraintsRuntime;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsDebug;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsRuntime;
@@ -36,10 +39,13 @@ import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.renderers.utils.FramebufferDebug;
 import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
+import mchorse.bbs_mod.forms.renderers.utils.FormPbr;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.ui.utils.pose.PoseBones;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
+import mchorse.bbs_mod.forms.renderers.utils.RenderFrame;
 import mchorse.bbs_mod.math.Operation;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.settings.values.core.ValuePose;
@@ -52,6 +58,7 @@ import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
+import mchorse.bbs_mod.utils.profiler.BBSProfiler;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.render.LightmapTextureManager;
@@ -87,12 +94,15 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     private ActionsConfig lastConfigs;
     private IAnimator animator;
     private ModelInstance lastModel;
-    private boolean ikAppliedThisRender;
-    private boolean physicsAppliedThisRender;
-    private boolean constraintsAppliedThisRender;
     private boolean renderingArm;
 
     private IEntity entity = new StubEntity();
+
+    /**
+     * Render the bind pose alone — no actions, no default pose, no form pose: what the model editor
+     * edits the model's geometry against.
+     */
+    private boolean rest;
 
     @Override
     protected void applyTransforms(MatrixStack stack, boolean origin, float transition)
@@ -165,8 +175,18 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         return getModel(this.form);
     }
 
+    @Override
+    public IBoneHierarchy getBoneHierarchy()
+    {
+        ModelInstance model = this.getModel();
+
+        return model == null ? null : model.model;
+    }
+
     public Pose getPose()
     {
+        BBSProfiler.count(BBSProfiler.Section.POSE_COPY);
+
         Pose pose = this.form.pose.get().copy();
         Pose overlay = this.form.poseOverlay.get();
 
@@ -184,8 +204,9 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     {
         for (Map.Entry<String, PoseTransform> entry : pose.transforms.entrySet())
         {
-            PoseTransform poseTransform = targetPose.get(entry.getKey());
+            PoseTransform poseTransform = targetPose.getOrCreate(entry.getKey());
             PoseTransform value = entry.getValue();
+            poseTransform.visible &= value.visible;
 
             if (!Operation.equals(value.fix, 0))
             {
@@ -208,18 +229,73 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         this.lastModel = null;
     }
 
+    public void setRest(boolean rest)
+    {
+        this.rest = rest;
+    }
+
     /**
      * The channels phase of the bone pipeline (rest &rarr; actions &rarr; pose): resets every bone
      * to its bind pose, applies the animator's actions, then the form's pose stack. After this the
      * channels are the FK truth; the constraint stages (IK &rarr; physics &rarr; limits) run on top
-     * of it separately (render: the apply*Once trio; matrix capture: its explicit IK solve) and
+     * of it separately (render: the apply* trio; matrix capture: its explicit IK solve) and
      * write only evaluated orientations, never the channels.
      */
     private void evaluateChannels(IEntity entity, ModelInstance model, float transition)
     {
+        /* The asset already holds this exact evaluation (same form, entity, transition, frame
+         * and pose version) — every render pass of a frame used to redo it: the main render,
+         * the shadow displacement's two samples, the stencil pass, the Iris shadow pass.
+         * Skipping rewinds the constraint stack's orient/offset writes to the channels-phase
+         * snapshot, because IK/physics blend FROM the evaluated state and must not stack on
+         * their own previous output. Both skeleton flavours keep such a snapshot. */
+        if (this.rest)
+        {
+            /* Nothing stamped: the cached evaluation is of the posed model, and leaving rest must not restore it. */
+            model.model.resetPose();
+            model.clearChannels();
+
+            return;
+        }
+
+        boolean cacheable = this.form != null && model.model != null && RenderFrame.isEnabled();
+
+        if (cacheable && model.matchesChannels(this.form, entity, transition, RenderFrame.getEpoch(), this.form.getPoseVersion()))
+        {
+            BBSProfiler.count(BBSProfiler.Section.CHANNELS_SKIPPED);
+
+            model.model.restoreChannels();
+
+            return;
+        }
+
+        BBSProfiler.count(BBSProfiler.Section.EVALUATE_CHANNELS);
+
         model.model.resetPose();
+
+        /* The states a CEM pack asks about that only the form can answer — sitting, tamed, angry. Read
+         * here rather than kept in sync, so a keyframe on one of them lands the frame it changes. */
+        if (this.animator instanceof CemAnimator cem)
+        {
+            cem.status.read(this.form);
+        }
+
         this.animator.applyActions(entity, model, transition);
+
+        /* The config's default pose sits under the form's, the same additive layer: the posture the
+         * model has before anything of the form is applied, whichever animator drove it. */
+        model.model.applyPose(model.getDefaultPose());
         model.model.applyPose(this.getPose());
+
+        if (cacheable)
+        {
+            model.model.snapshotChannels();
+            model.stampChannels(this.form, entity, transition, RenderFrame.getEpoch(), this.form.getPoseVersion());
+        }
+        else
+        {
+            model.clearChannels();
+        }
     }
 
     public void ensureAnimator(float transition)
@@ -241,12 +317,35 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             return;
         }
 
-        this.animator = model.isProcedural() ? new ProceduralAnimator() : new Animator();
+        this.animator = createAnimator(model);
         this.animator.setup(model, actionsConfig, false);
 
         this.lastConfigs = new ActionsConfig();
         this.lastConfigs.copy(actionsConfig);
         this.lastModel = model;
+    }
+
+    /**
+     * The animator stage for a model: a .jem's live CEM program drives it, otherwise the config's
+     * choice between vanilla-like procedural and keyframe actions.
+     */
+    private static IAnimator createAnimator(ModelInstance model)
+    {
+        if (model.cemAnimation != null)
+        {
+            if (model.config.cemAnimation.get())
+            {
+                return new CemAnimator(model.cemAnimation, new CemVanillaStage(model.cemAnimation.jem));
+            }
+
+            /* CEM drove the bones' visibility and nothing else resets it: switched off, every bone shows again. */
+            for (ModelGroup group : model.model.getAllGroups())
+            {
+                group.visible = true;
+            }
+        }
+
+        return model.isProcedural() ? new ProceduralAnimator() : new Animator();
     }
 
     @Override
@@ -268,40 +367,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     @Override
     public void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
     {
-        context.batcher.flush();
-
-        /* List/icon form preview: submit a vanilla special GUI element so the form's model renders off-screen
-         * and the deferred GUI composites it into this cell. The list draws each cell in the GUI record phase,
-         * where a direct immediate 3D draw can't composite (two-phase GUI), so we reuse the mechanism vanilla
-         * uses for entity/item thumbnails. BbsFormGuiElementRenderer.render then calls back into renderUIPreview
-         * during the GUI prepare phase (with ModelPreviewRenderer.ACTIVE so the model draws into the FBO). The
-         * cursor-driven yaw is computed here (same as the original getUIMatrix) since render() has no context. */
-        float angle = MathUtils.toRad(context.mouseX - (x1 + x2) / 2) + MathUtils.PI;
-
-        if (BBSSettings.freezeModels.get())
-        {
-            angle = -MathUtils.PI + MathUtils.PI / 8;
-        }
-
-        net.minecraft.client.gui.DrawContext bbs$dc = context.batcher.getContext();
-
-        /* Capture the live 2D GUI matrix (carries the list's scroll translate) so the thumbnail composites at
-         * the scrolled cell position — faithful to the original, which rendered onto getMatrices() directly. */
-        org.joml.Matrix3x2f bbs$pose = new org.joml.Matrix3x2f(bbs$dc.getMatrices());
-
-        /* Read the live GUI scissor (set by the caller's batcher.clip, e.g. UIReplayList clips the form preview
-         * to the row's square) and carry it as the composite quad's scissorArea — without it the model renders
-         * full-size and overflows the cell instead of being cropped. Faithful to the original, where renderUI
-         * was bracketed by batcher.clip/unclip and the immediate 3D draw respected the GL scissor.
-         *
-         * The scissor here is now correct under scroll: Batcher2D.clip neutralises the GUI matrix pose around
-         * DrawContext.enableScissor (which on 1.21.11 transforms the rect by that pose, double-shifting it by the
-         * scroll), so the stored scissor is shifted by the scroll exactly once (to y - S) — in lock-step with the
-         * geometry placed by bbs$pose. */
-        net.minecraft.client.gui.ScreenRect bbs$scissor = bbs$dc.scissorStack.peekLast();
-
-        bbs$dc.state.addSpecialElement(new mchorse.bbs_mod.client.render.special.BbsFormGuiElementRenderState(
-            this, angle, context.getTransition(), bbs$pose, x1, y1, x2, y2, 1.0F, bbs$scissor));
+        this.submitUIPreview(context, x1, y1, x2, y2);
     }
 
     /**
@@ -330,8 +396,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         Color formColor = this.form.color.get();
         float scale = this.form.uiScale.get() * model.getUiScale();
 
-        /* Route cubic geometry through the vanilla entity layer keyed on this model's (adopted) texture,
-         * exactly like render3D — this is what makes ModelInstance.render take the entityCutoutNoCull branch. */
+        /* Route cubic geometry through the BBS model layer keyed on the bound texture, exactly like
+         * render3D — the flag is what makes ModelInstance.render take the preview branch, and the bind
+         * is what that branch resolves its layer from (per material, once the model has several). */
+        BBSModClient.getTextures().bindTexture(this.albedo("", texture));
+
         ModelPreviewRenderer.TEXTURE = AdoptedTexture.identifier(BBSModClient.getTextures().getTexture(texture));
 
         model.model.resetPose();
@@ -362,14 +431,13 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             LightmapTextureManager.pack(15, 15), OverlayTexture.DEFAULT_UV,
             contextColor, formColor, additive, true, null, transition, null);
 
-        /* Attached body parts. They hang off the bone matrices renderModel just captured and
-         * renderBodyParts clears that cache when it is done, so they draw here, inside the same
-         * push, right after the model — not from render(), which this preview path never enters.
+        /* The attached body parts, on the model that was just drawn. They ride the world path through
+         * FormRenderer#render, which the thumbnail never goes through — it calls renderUIPreview
+         * directly — so without this a cell shows the bare form and none of what is pinned to it.
          *
-         * The normal matrix is flipped exactly as renderModel's `ui` branch flips its own: the UI
-         * framing scales Y negative, and a nested form drawn without the flip shades inside-out.
-         * The parts run through the ordinary FormRenderingContext, marked inUI, so every form type
-         * that can hang on a bone reaches its normal render3D. */
+         * The normal matrix takes the same Y flip the model's own draw does (see renderModel's ui
+         * branch): the preview frame is mirrored in Y, and a part drawn without it is lit from the
+         * wrong side. */
         stack.push();
         stack.peek().getNormalMatrix().getScale(Vectors.EMPTY_3F);
         stack.peek().getNormalMatrix().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
@@ -385,13 +453,8 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
     private void renderModel(IEntity target, MatrixStack stack, ModelInstance model, int light, int overlay, Color contextColor, Color formColor, boolean additive, boolean ui, StencilMap stencilMap, float transition, MatrixStack world)
     {
-        this.ikAppliedThisRender = false;
-        this.physicsAppliedThisRender = false;
-        this.constraintsAppliedThisRender = false;
-
         Color finalColor = contextColor.copy();
-        FormColorBlend.BlendMode blendMode = additive ? FormColorBlend.BlendMode.BRIGHTEN : FormColorBlend.BlendMode.MULTIPLY;
-        FormColorBlend.blend(finalColor, formColor, blendMode);
+        FormColorBlend.blend(finalColor, formColor);
 
         /* The GL state this method used to set around the draw is encoded per-pipeline now: blend and
          * the lightmap/overlay samplers by the model RenderLayer, and model.culling by the choice
@@ -416,9 +479,9 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
          * honest answer, so they run model-local, as they do in the UI. */
         Matrix4f baseTransform = ui || world == null ? null : new Matrix4f(world.peek().getPositionMatrix());
 
-        this.applyIKOnce(model, baseTransform);
-        this.applyPhysicsOnce(target, model, transition, baseTransform);
-        this.applyConstraintsOnce(model);
+        this.applyIK(model, baseTransform);
+        this.applyPhysics(target, model, transition, baseTransform);
+        this.applyConstraints(model);
 
         /* Default texture for materials without their own: the form's texture override, else the
          * model's default. Per-material textures (folder defaults now, animation tracks later)
@@ -442,46 +505,33 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         model.render(newStack, finalColor, light, overlay, stencilMap, this.form.shapeKeys.get(), (material) ->
         {
-            if (ignoreMaterials)
-            {
-                return resolvedDefault;
-            }
-
-            /* Resolution order: animated per-material track > editor-picked static per-material
-             * texture > the material's loaded default (folder/Kd) > the model base texture. */
-            Link override = this.form.materialTextureOverrides.get(material);
-
-            if (override != null)
-            {
-                return override;
-            }
-
-            Link picked = this.form.materialTextures.getLink(material);
-
-            if (picked != null)
-            {
-                return picked;
-            }
-
-            return model.getMaterialTexture(material, materialFallback);
+            return this.albedo(material, this.materialLink(model, material, ignoreMaterials, resolvedDefault, materialFallback));
         });
 
-        if (stencilMap == null && !this.renderingArm && this.form != null && this.form.ik.get() instanceof MapType ikMap)
+        if (stencilMap == null && !this.renderingArm && this.form != null)
         {
-            ModelIKDebug.render(newStack, model.model, ikMap, "");
+            ModelIKDebug.render(newStack, model.model, this.form, "");
         }
 
         /* Same debug-layer path the IK overlay above already rides (the 1.21.1 lightmap/overlay/
          * blend/cull teardown is pipeline-encoded now, nothing to tear down). */
-        if (stencilMap == null && !this.renderingArm && this.form != null && this.form.physics.get() instanceof MapType physicsMap)
+        if (stencilMap == null && !this.renderingArm && this.form != null)
         {
-            ModelPhysicsDebug.render(newStack, model.model, physicsMap, target.getAge(), "");
+            ModelPhysicsDebug.render(newStack, model.model, this.form, target.getAge(), "");
         }
 
-        /* Render items */
-        this.captureMatrices(model);
+        /* Render items. The capture allocates ~4 matrices per bone, and its only readers here
+         * are the item/armor block right below (skipped in the picking pass entirely) and
+         * renderBodyParts afterwards - so a model with neither pays for neither. */
+        boolean hasEquipment = !model.getItemsMain().isEmpty() || !model.getItemsOff().isEmpty() || !model.getArmorSlots().isEmpty();
+        boolean hasBodyParts = this.form != null && !this.form.parts.getAllTyped().isEmpty();
 
-        if (stencilMap == null)
+        if (hasBodyParts || (stencilMap == null && hasEquipment))
+        {
+            this.captureMatrices(model);
+        }
+
+        if (stencilMap == null && hasEquipment)
         {
             this.renderItems(target, model, stack, EquipmentSlot.MAINHAND, ItemDisplayContext.THIRD_PERSON_RIGHT_HAND, model.getItemsMain(), finalColor, overlay, light);
             this.renderItems(target, model, stack, EquipmentSlot.OFFHAND, ItemDisplayContext.THIRD_PERSON_LEFT_HAND, model.getItemsOff(), finalColor, overlay, light);
@@ -493,14 +543,56 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
     }
 
-    private void applyIKOnce(ModelInstance model, Matrix4f baseTransform)
+    /**
+     * The channels phase for a reader outside the render: poses the model for the entity the
+     * way the render does (rest &rarr; actions &rarr; pose) and leaves it there — the FK truth
+     * the constraint stack starts from. {@code null} when the form has no model. A reader's
+     * sample is never a repeat of the frame's evaluation, so the frame stamp is dropped first
+     * and the evaluation always runs.
+     */
+    public ModelInstance evaluateChannels(IEntity entity, float transition)
     {
-        if (this.ikAppliedThisRender)
+        this.ensureAnimator(transition);
+
+        ModelInstance model = this.getModel();
+
+        if (this.animator == null || model == null || model.model == null)
         {
-            return;
+            return null;
         }
 
-        this.ikAppliedThisRender = true;
+        model.clearChannels();
+        this.evaluateChannels(entity, model, transition);
+
+        return model;
+    }
+
+    /**
+     * The IK stage on the model as it stands (see {@link #evaluateChannels(IEntity, float)}):
+     * the form's chains solved onto the bones' orientations, exactly as the render does before
+     * drawing. {@code entityWorld} is the frame the film stands the entity in — what
+     * {@code FilmEntityRenderer} renders it under — so the film's world-space targets are brought
+     * into the model the way the render brings them; {@code null} solves against the model alone.
+     */
+    public void solveIK(ModelInstance model, Matrix4f entityWorld, float transition)
+    {
+        Matrix4f base = null;
+
+        if (entityWorld != null)
+        {
+            /* The model's frame as the render establishes it: the entity's, then the form's own
+             * transform and the model's scale, then the half turn every model renders under. */
+            base = new Matrix4f(entityWorld);
+
+            this.applyTransforms(base, transition);
+            base.rotateY(MathUtils.PI);
+        }
+
+        this.applyIK(model, base);
+    }
+
+    private void applyIK(ModelInstance model, Matrix4f baseTransform)
+    {
         model.form = this.form;
 
         boolean hasOverrides = baseTransform != null && this.form != null
@@ -548,26 +640,14 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         return local;
     }
 
-    private void applyPhysicsOnce(IEntity target, ModelInstance model, float transition, Matrix4f baseTransform)
+    private void applyPhysics(IEntity target, ModelInstance model, float transition, Matrix4f baseTransform)
     {
-        if (this.physicsAppliedThisRender)
-        {
-            return;
-        }
-
-        this.physicsAppliedThisRender = true;
         model.form = this.form;
         ModelPhysicsRuntime.apply(target, model, transition, baseTransform);
     }
 
-    private void applyConstraintsOnce(ModelInstance model)
+    private void applyConstraints(ModelInstance model)
     {
-        if (this.constraintsAppliedThisRender)
-        {
-            return;
-        }
-
-        this.constraintsAppliedThisRender = true;
         ModelConstraintsRuntime.apply(model);
     }
 
@@ -676,6 +756,42 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     @Override
     public boolean renderArm(MatrixStack matrices, int light, AbstractClientPlayerEntity player, Hand hand)
     {
+        if (this.renderFirstPersonHand(matrices, light, hand))
+        {
+            return true;
+        }
+
+        return super.renderArm(matrices, light, player, hand);
+    }
+
+    /**
+     * Vanilla's frame for an empty first-person hand — {@code HeldItemRenderer#renderArmHoldingItem}
+     * with no swing and no equip progress, up to where {@code PlayerEntityRenderer#renderArm} (and so
+     * {@link #renderArm} above) is entered. This is what the model editor's first-person preview
+     * multiplies before {@link #renderFirstPersonHand}, so the preview matches the game. The main hand
+     * is the right arm; a left-handed player is not modelled here.
+     */
+    public static void applyFirstPersonArm(MatrixStack stack, boolean mainHand)
+    {
+        float f = mainHand ? 1F : -1F;
+
+        stack.translate(f * 0.64F, -0.6F, -0.72F);
+        stack.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(f * 45F));
+        stack.translate(f * -1F, 3.6F, 3.5F);
+        stack.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(f * 120F));
+        stack.multiply(RotationAxis.POSITIVE_X.rotationDegrees(200F));
+        stack.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(f * -135F));
+        stack.translate(f * 5.6F, 0F, 0F);
+    }
+
+    /**
+     * The model's first-person hand: only the branch under the slot's bone, placed by the slot's
+     * transform in the arm frame the caller has set up (the game's own, or
+     * {@link #applyFirstPersonArm}). Shared by the in-game arm and the model editor's preview.
+     * Returns false when the model has no slot for that hand.
+     */
+    public boolean renderFirstPersonHand(MatrixStack matrices, int light, Hand hand)
+    {
         ModelInstance model = this.getModel();
 
         if (this.animator != null && model != null)
@@ -712,13 +828,17 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 group.visible = visible;
             }
 
+            /* The cached channel evaluation is of the posed model, and this reset leaves the
+             * bind pose behind: a stamp left standing would have the next pass restore only
+             * the constraint writes on top of it - see evaluateChannels' own rest branch. */
             model.model.resetPose();
+            model.clearChannels();
 
             matrices.push();
             matrices.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.PI));
             MatrixStackUtils.applyTransform(matrices, slot.transform);
 
-            BBSModClient.getTextures().bindTexture(texture);
+            BBSModClient.getTextures().bindTexture(this.albedo("", texture));
 
             /* TODO(1.21.11 render): depth-test/blend now pipeline-encoded. */
 
@@ -750,7 +870,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             return true;
         }
 
-        return super.renderArm(matrices, light, player, hand);
+        return false;
     }
 
     @Override
@@ -782,7 +902,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 context.world.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.PI));
             }
 
-            BBSModClient.getTextures().bindTexture(texture);
+            BBSModClient.getTextures().bindTexture(this.albedo("", texture));
 
             if (ModelPreviewRenderer.ACTIVE)
             {
@@ -818,8 +938,68 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
              * branch — the world span now mirrors the vanilla entity pipeline instead — so the dance is
              * dropped. Re-add via FormTranslucentQueue.suspend()/restore() if a deferred pack ever eats a
              * translucent model again. */
-            this.renderModel(context.entity, context.stack, model, context.light, context.overlay, contextColor, formColor, additive, false, context.stencilMap, context.getTransition(), context.world);
+            if (FramebufferDebug.inside())
+            {
+                FramebufferDebug.log("model", "shadingThisDraw=" + BBSRendering.isIrisWorldForms()
+                    + " picking=" + context.isPicking()
+                    + " texture=" + texture + " additive=" + additive
+                    + " alpha=" + contextColor.a + "/" + formColor.a
+                    + " | " + FramebufferDebug.bindings());
+            }
+
+            try
+            {
+                this.renderModel(context.entity, context.stack, model, context.light, context.overlay, contextColor, formColor, additive, false, context.stencilMap, context.getTransition(), context.world);
+            }
+            finally
+            {
+                if (FramebufferDebug.inside())
+                {
+                    FramebufferDebug.log("model", "after draw | " + FramebufferDebug.bindings());
+                    FramebufferDebug.log("model", "after draw | " + FramebufferDebug.glState());
+                    FramebufferDebug.log("model", "after draw | " + FramebufferDebug.samplers());
+                }
+            }
         }
+    }
+
+    /**
+     * Which texture this material draws with. Resolution order: animated per-material track >
+     * editor-picked static per-material texture > the material's loaded default (folder/Kd) > the
+     * model base texture.
+     */
+    private Link materialLink(ModelInstance model, String material, boolean ignoreMaterials, Link resolvedDefault, Link materialFallback)
+    {
+        if (ignoreMaterials)
+        {
+            return resolvedDefault;
+        }
+
+        Link override = this.form.materialTextureOverrides.get(material);
+
+        if (override != null)
+        {
+            return override;
+        }
+
+        Link picked = this.form.materialTextures.getLink(material);
+
+        if (picked != null)
+        {
+            return picked;
+        }
+
+        return model.getMaterialTexture(material, materialFallback);
+    }
+
+    /**
+     * The texture to actually bind for a material: its own, or the PBR copy carrying this
+     * material's sliders when a shaderpack is up (see {@link FormPbr}). Every bind of a model
+     * texture goes through here, so the sliders reach the pack from every draw path.
+     */
+    private Texture albedo(String material, Link link)
+    {
+        return FormPbr.resolveAlbedo(this.form, material, link, BBSModClient.getTextures().getTexture(link));
     }
 
     @Override
@@ -834,14 +1014,14 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         model.fillStencilMap(context.stencilMap, this.form);
 
-        if (this.form != null && this.form.ik.get() instanceof MapType ikMap)
+        if (this.form != null)
         {
-            ModelIKDebug.renderStencil(context.stack, model.model, ikMap, context.stencilMap, this.form);
+            ModelIKDebug.renderStencil(context.stack, model.model, this.form, context.stencilMap, this.form);
         }
 
-        if (this.form != null && this.form.physics.get() instanceof MapType physicsMap)
+        if (this.form != null)
         {
-            ModelPhysicsDebug.renderStencil(context.stack, model.model, physicsMap, context.stencilMap, this.form);
+            ModelPhysicsDebug.renderStencil(context.stack, model.model, this.form, context.stencilMap, this.form);
         }
     }
 
@@ -862,7 +1042,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         for (BodyPart part : this.form.parts.getAllTyped())
         {
-            Matrix4f matrix = this.bones.get(part.bone.get()).matrix();
+            Matrix4f matrix = part.filterBoneMatrix(this.bones.get(part.bone.get()).matrix());
 
             context.stack.push();
             if (context.world != null)
@@ -958,8 +1138,6 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             matrices.put(StringUtils.combinePaths(prefix, entry.getKey()), matrix, o, entry.getValue().evaluatedRotation());
         }
 
-        int i = 0;
-
         /* Recursively do the same thing with body parts */
         for (BodyPart part : this.form.parts.getAllTyped())
         {
@@ -967,7 +1145,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
             if (form != null)
             {
-                Matrix4f matrix = this.bones.get(part.bone.get()).matrix();
+                Matrix4f matrix = part.filterBoneMatrix(this.bones.get(part.bone.get()).matrix());
 
                 stack.push();
 
@@ -982,12 +1160,10 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
                 MatrixStackUtils.applyTransform(stack, part.transform.get());
 
-                FormUtilsClient.getRenderer(form).collectMatrices(part.getRenderEntity(entity), stack, matrices, StringUtils.combinePaths(prefix, String.valueOf(i)), transition);
+                FormUtilsClient.getRenderer(form).collectMatrices(part.getRenderEntity(entity), stack, matrices, StringUtils.combinePaths(prefix, part.getId()), transition);
 
                 stack.pop();
             }
-
-            i += 1;
         }
 
         stack.pop();
@@ -1066,7 +1242,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         if (rest || this.animator == null)
         {
+            /* Same as above: the rest sample wipes the live channels the posed evaluation left,
+             * so the stamp must go with them - otherwise the render that follows this sampling
+             * hits the cache and draws the bind pose (the form's pose silently gone). */
             model.model.resetPose();
+            model.clearChannels();
         }
         else
         {

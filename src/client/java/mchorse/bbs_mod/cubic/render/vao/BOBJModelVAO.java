@@ -5,12 +5,16 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.bobj.BOBJArmature;
 import mchorse.bbs_mod.bobj.BOBJLoader;
+import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.client.render.picker.BBSPickerRenderer;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
+import mchorse.bbs_mod.forms.renderers.utils.FormOverlay;
 import mchorse.bbs_mod.graphics.ModelPreviewRenderer;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
+import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.joml.Matrices;
+import mchorse.bbs_mod.utils.profiler.BBSProfiler;
 import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.client.render.BuiltBuffer;
 import net.minecraft.client.render.Tessellator;
@@ -21,12 +25,16 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class BOBJModelVAO
 {
     public BOBJLoader.CompiledData data;
     public BOBJArmature armature;
 
     private int count;
+    private List<int[]> visibleRanges;
 
     /* CPU-skinned mesh, recomputed every frame in updateMesh and emitted in render */
     private float[] tmpVertices;
@@ -77,6 +85,56 @@ public class BOBJModelVAO
         return snapshot;
     }
 
+    /** Null is the common case where every bone is visible. */
+    public boolean[] snapshotVisibility()
+    {
+        boolean[] visible = null;
+
+        for (int i = 0; i < this.armature.orderedBones.size(); i++)
+        {
+            if (!this.armature.orderedBones.get(i).visible)
+            {
+                if (visible == null)
+                {
+                    visible = new boolean[this.armature.orderedBones.size()];
+                    java.util.Arrays.fill(visible, true);
+                }
+
+                visible[i] = false;
+            }
+        }
+
+        return visible;
+    }
+
+    /* What the VBO currently holds: the armature pose it was skinned from plus the mode bits
+     * that shape the upload (picking bakes bone ids into the light attribute, Iris adds
+     * tangents). The VBO is shared by every actor on this model, so two actors alternating
+     * still re-skin — but one actor across the passes of a frame, and across frames in which
+     * it did not move, skins once. */
+    private static final long NO_KEY = Long.MIN_VALUE;
+
+    private long uploadedKey = NO_KEY;
+    private int uploadedMode = -1;
+
+    /** A content key of the armature's skinning matrices — computed once per render, shared by every mesh. */
+    public static long armatureKey(BOBJArmature armature)
+    {
+        long key = 1469598103934665603L;
+
+        for (Matrix4f matrix : armature.matrices)
+        {
+            key = key * 31 + (matrix == null ? 0 : matrix.hashCode());
+        }
+
+        for (var bone : armature.orderedBones)
+        {
+            key = key * 31 + (bone.visible ? 1 : 0);
+        }
+
+        return key;
+    }
+
     /**
      * Update this mesh. This method is responsible for applying matrix transformations to vertices
      * and normals according to its bone owners and these bone influences. The skinned result is kept
@@ -84,11 +142,40 @@ public class BOBJModelVAO
      */
     public void updateMesh(StencilMap stencilMap)
     {
-        this.updateMesh(stencilMap, this.armature.matrices);
+        this.updateMesh(stencilMap, armatureKey(this.armature));
     }
 
+    /** Skin and upload unless the VBO already holds exactly this pose in this mode. */
+    public void updateMesh(StencilMap stencilMap, long key)
+    {
+        int mode = (stencilMap == null ? 0 : (stencilMap.increment ? 2 : 1)) | (BBSRendering.isIrisShadersEnabled() ? 4 : 0);
+
+        if (key != NO_KEY && key == this.uploadedKey && mode == this.uploadedMode)
+        {
+            BBSProfiler.count(BBSProfiler.Section.BOBJ_SKINS_SKIPPED);
+
+            return;
+        }
+
+        this.updateMesh(stencilMap, this.armature.matrices);
+
+        this.uploadedKey = key;
+        this.uploadedMode = mode;
+    }
+
+    /** Skin from an explicit matrix set (a deferred command's snapshot); the VBO's pose is then unknown. */
     public void updateMesh(StencilMap stencilMap, Matrix4f[] matrices)
     {
+        this.updateMesh(stencilMap, matrices, this.snapshotVisibility());
+    }
+
+    public void updateMesh(StencilMap stencilMap, Matrix4f[] matrices, boolean[] visible)
+    {
+        this.uploadedKey = NO_KEY;
+        this.updateVisibleRanges(visible);
+
+        BBSProfiler.count(BBSProfiler.Section.BOBJ_SKINS);
+
         Vector4f sum = new Vector4f();
         Vector4f result = new Vector4f(0F, 0F, 0F, 0F);
         Vector3f sumNormal = new Vector3f();
@@ -162,6 +249,48 @@ public class BOBJModelVAO
         this.processData(newVertices, newNormals, matrices);
     }
 
+    private void updateVisibleRanges(boolean[] visible)
+    {
+        this.visibleRanges = null;
+
+        if (visible == null)
+        {
+            return;
+        }
+
+        this.visibleRanges = new ArrayList<>();
+        int start = 0;
+
+        for (int i = 0; i < this.count; i += 3)
+        {
+            boolean shown = true;
+
+            /* Omit the whole triangle if a hidden bone influences any of its vertices. */
+            for (int w = i * 4; w < (i + 3) * 4 && shown; w++)
+            {
+                if (this.data.weightData[w] > 0 && !visible[this.data.boneIndexData[w]])
+                {
+                    shown = false;
+                }
+            }
+
+            if (!shown)
+            {
+                if (start < i)
+                {
+                    this.visibleRanges.add(new int[] {start, i - start});
+                }
+
+                start = i + 3;
+            }
+        }
+
+        if (start < this.count)
+        {
+            this.visibleRanges.add(new int[] {start, this.count - start});
+        }
+    }
+
     protected void processData(float[] newVertices, float[] newNormals, Matrix4f[] matrices)
     {}
 
@@ -175,6 +304,12 @@ public class BOBJModelVAO
      * 1.21.1 it toggled the global GL cull around the draw, now it picks the layer variant.
      */
     public void render(MatrixStack stack, float r, float g, float b, float a, StencilMap stencilMap, int light, int overlay, boolean cull)
+    {
+        this.render(stack, r, g, b, a, stencilMap, light, overlay, cull, null);
+    }
+
+    /** The same draw with a colour overlay on it (null = none); see {@code FormOverlay}. */
+    public void render(MatrixStack stack, float r, float g, float b, float a, StencilMap stencilMap, int light, int overlay, boolean cull, Color tint)
     {
         BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL);
 
@@ -191,29 +326,36 @@ public class BOBJModelVAO
         int lu = light & 0xffff;
         int lv = light >> 16 & 0xffff;
 
-        for (int i = 0; i < this.count; i++)
+        /* A hidden bone drops the triangles it moves: the spans updateVisibleRanges left are the ones
+         * to emit, which is the same skip the raw-GL path made by drawing arrays span by span. */
+        List<int[]> spans = this.visibleRanges == null ? List.of(new int[] {0, this.count}) : this.visibleRanges;
+
+        for (int[] span : spans)
         {
-            vertex.set(vertices[i * 3], vertices[i * 3 + 1], vertices[i * 3 + 2], 1F);
-            position.transform(vertex);
-
-            normal.set(normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]);
-            normalMatrix.transform(normal);
-
-            int u = lu;
-            int v = lv;
-
-            if (stencilMap != null)
+            for (int i = span[0], end = span[0] + span[1]; i < end; i++)
             {
-                u = this.tmpLight[i * 2];
-                v = this.tmpLight[i * 2 + 1];
-            }
+                vertex.set(vertices[i * 3], vertices[i * 3 + 1], vertices[i * 3 + 2], 1F);
+                position.transform(vertex);
 
-            builder.vertex(vertex.x, vertex.y, vertex.z)
-                .color(r, g, b, a)
-                .texture(texData[i * 2], texData[i * 2 + 1])
-                .overlay(overlay)
-                .light(u, v)
-                .normal(normal.x, normal.y, normal.z);
+                normal.set(normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]);
+                normalMatrix.transform(normal);
+
+                int u = lu;
+                int v = lv;
+
+                if (stencilMap != null)
+                {
+                    u = this.tmpLight[i * 2];
+                    v = this.tmpLight[i * 2 + 1];
+                }
+
+                builder.vertex(vertex.x, vertex.y, vertex.z)
+                    .color(r, g, b, a)
+                    .texture(texData[i * 2], texData[i * 2 + 1])
+                    .overlay(overlay)
+                    .light(u, v)
+                    .normal(normal.x, normal.y, normal.z);
+            }
         }
 
         BuiltBuffer built = builder.endNullable();
@@ -235,7 +377,7 @@ public class BOBJModelVAO
                  * textureResolver bind). Draws through the BBS model layer, not vanilla entityCutoutNoCull: CUTOUT
                  * has no blending, so the form's colour alpha read as "lighter" instead of transparent and cliffed
                  * into invisibility at the 0.1 discard — see the matching branch in ModelInstance.render. */
-                BBSShaders.getModelLayer(BBSShaders.ModelVariant.SINGLE.withCull(cull), ModelPreviewRenderer.TEXTURE).draw(built);
+                FormOverlay.withOverlay(BBSShaders.getBoundModelLayer(BBSShaders.ModelVariant.SINGLE.withCull(cull)), tint != null).draw(built);
             }
             else
             {
@@ -244,7 +386,7 @@ public class BOBJModelVAO
                 FormTranslucentQueue.submit(built,
                     new BBSShaders.ModelVariant(FormTranslucentQueue.PASS_SINGLE, true, cull),
                     BBSModClient.getTextures().getLastBound(), a, stencilMap,
-                    ModelVAORenderer.captureModelView(stack).getTranslation(new Vector3f()));
+                    ModelVAORenderer.captureModelView(stack).getTranslation(new Vector3f()), tint != null);
             }
         }
     }

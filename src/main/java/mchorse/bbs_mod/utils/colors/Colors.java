@@ -83,6 +83,20 @@ public class Colors
         return ((color >> 24) & 0xff) / 255F;
     }
 
+    /**
+     * The colour's alpha for a draw that carries it on the VERTEX, where a zero alpha is not a
+     * colour anyone means. The palette mixes RGB-only constants ({@link #RED}, {@link #GREEN},
+     * {@link #BLUE}, {@link #YELLOW} — no alpha byte, written for 2D code that supplies its own)
+     * with ones that carry alpha ({@link #PLANE_XZ}, {@link #LIGHTEST_GRAY}); the former stand for
+     * opaque, and reading them with {@link #getA} draws them away entirely.
+     */
+    public static float getOpaqueA(int color)
+    {
+        float alpha = getA(color);
+
+        return alpha <= 0F ? 1F : alpha;
+    }
+
     public static float getR(int color)
     {
         return ((color >> 16) & 0xff) / 255F;
@@ -169,6 +183,16 @@ public class Colors
         }
 
         throw new Exception("Given color \"" + color + "\" can't be parsed!");
+    }
+
+    /**
+     * A colour to tell one thing from another by — a marker on the ruler, a folder in a list. The
+     * hue is random while saturation and value are pinned high, so whatever it lands on reads on
+     * the dark surfaces everything here is drawn on.
+     */
+    public static int randomBright()
+    {
+        return HSVtoRGB((float) Math.random(), 0.75F, 1F).getRGBColor();
     }
 
     public static Color HSVtoRGB(float h, float s, float v)

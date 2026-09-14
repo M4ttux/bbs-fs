@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.forms;
 
+import mchorse.bbs_mod.utils.colors.Color;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
@@ -100,7 +101,9 @@ public class CustomVertexConsumerProvider extends VertexConsumerProvider.Immedia
         /* TODO(1.21.11 render): the deferred branch that used to live here retained the built
          * geometry in a VertexBuffer and handed it to FormTranslucentQueue. Both the buffer type
          * and the replay draw were removed by the GPU-pipeline rewrite, so the queue is disabled
-         * on this branch (see FormTranslucentQueue) and every layer draws immediately. */
+         * on this branch (see FormTranslucentQueue) and every layer draws immediately. The colour
+         * overlay needs nothing here either way: the layer a tinted form draws through IS the tinted
+         * one (see FormOverlay#withOverlay), so the tint travels with the layer, not with a flag. */
         super.draw(layer);
     }
 

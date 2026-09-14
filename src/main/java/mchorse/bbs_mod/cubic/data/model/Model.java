@@ -4,6 +4,7 @@ import mchorse.bbs_mod.bobj.BOBJBone;
 import mchorse.bbs_mod.cubic.CubicModelAnimator;
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.MolangHelper;
+import mchorse.bbs_mod.cubic.RigBone;
 import mchorse.bbs_mod.cubic.data.animation.Animation;
 import mchorse.bbs_mod.data.IMapSerializable;
 import mchorse.bbs_mod.data.types.ListType;
@@ -15,7 +16,6 @@ import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 import mchorse.bbs_mod.utils.pose.Transform;
-import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
@@ -47,6 +47,18 @@ public class Model implements IMapSerializable, IModel
     public Model(MolangParser parser)
     {
         this.parser = parser;
+    }
+
+    /**
+     * Replace the groups with the ones in {@code data} — a snapshot from {@link #toData()}, the way
+     * the model editor's undo keeps them — and settle the hierarchy again. Every group object is a
+     * new one: whatever held one now holds a dead one.
+     */
+    public void reload(MapType data)
+    {
+        this.topGroups.clear();
+        this.fromData(data);
+        this.initialize();
     }
 
     public void initialize()
@@ -88,6 +100,18 @@ public class Model implements IMapSerializable, IModel
         return this.orderedGroups;
     }
 
+    @Override
+    public Collection<? extends RigBone> getRigBones()
+    {
+        return this.orderedGroups;
+    }
+
+    @Override
+    public RigBone getBone(String name)
+    {
+        return this.getGroup(name);
+    }
+
     public ModelGroup getGroup(String id)
     {
         return this.namedGroups.get(id);
@@ -102,7 +126,7 @@ public class Model implements IMapSerializable, IModel
 
         for (String key : this.getAllGroupKeys())
         {
-            PoseTransform poseTransform = pose.get(key);
+            PoseTransform poseTransform = pose.getOrCreate(key);
             ModelGroup group = this.getGroup(key);
 
             poseTransform.copy(group.current);
@@ -123,6 +147,26 @@ public class Model implements IMapSerializable, IModel
         for (ModelGroup orderedGroup : this.orderedGroups)
         {
             orderedGroup.reset();
+        }
+    }
+
+    /** Record every group's channels-phase orient/offset — see {@link ModelGroup#snapshotChannels()}. */
+    @Override
+    public void snapshotChannels()
+    {
+        for (ModelGroup orderedGroup : this.orderedGroups)
+        {
+            orderedGroup.snapshotChannels();
+        }
+    }
+
+    /** Rewind every group's orient/offset to the channels-phase snapshot. */
+    @Override
+    public void restoreChannels()
+    {
+        for (ModelGroup orderedGroup : this.orderedGroups)
+        {
+            orderedGroup.restoreChannels();
         }
     }
 
@@ -154,7 +198,9 @@ public class Model implements IMapSerializable, IModel
             }
 
             group.lighting = transform.lighting;
+            group.poseVisible &= transform.visible;
             group.color.copy(transform.color);
+            group.overlay.copy(transform.overlay);
             group.current.translate.add(transform.translate);
             group.current.scale.add(transform.scale).sub(1, 1, 1);
 
@@ -385,33 +431,30 @@ public class Model implements IMapSerializable, IModel
         texture.addInt(this.textureWidth);
         texture.addInt(this.textureHeight);
 
-        Map<String, String> parents = new HashMap<>();
-        Collection<ModelGroup> allGroups = this.getAllGroups();
+        /* The groups go out in tree order — parents before children, siblings as they stand — into an
+         * ordered map: the file's order is the order they come back in, so a save must not shuffle
+         * the tree. */
+        MapType groups = new MapType(false);
 
-        for (ModelGroup parent : allGroups)
-        {
-            for (ModelGroup child : parent.children)
-            {
-                parents.put(child.id, parent.id);
-            }
-        }
-
-        MapType groups = new MapType();
-
-        for (ModelGroup group : allGroups)
-        {
-            MapType groupData = group.toData();
-            String parentId = parents.get(group.id);
-
-            if (parentId != null)
-            {
-                groupData.putString("parent", parentId);
-            }
-
-            groups.put(group.id, groupData);
-        }
+        this.writeGroups(this.topGroups, null, groups);
 
         data.put("texture", texture);
         data.put("groups", groups);
+    }
+
+    private void writeGroups(List<ModelGroup> list, ModelGroup parent, MapType groups)
+    {
+        for (ModelGroup group : list)
+        {
+            MapType groupData = group.toData();
+
+            if (parent != null)
+            {
+                groupData.putString("parent", parent.id);
+            }
+
+            groups.put(group.id, groupData);
+            this.writeGroups(group.children, group, groups);
+        }
     }
 }

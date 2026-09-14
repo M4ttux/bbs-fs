@@ -113,6 +113,19 @@ public class BBSPickerRenderer
     }
 
     /**
+     * The projection the picker passes currently bind, or null when the engine default is in force.
+     *
+     * <p>For a caller that installs an override of its own around a nested pass and has to put back
+     * exactly what it displaced rather than guessing null — {@link mchorse.bbs_mod.ui.utils.Gizmo}'s
+     * lens does this, since the film editor's picking preview has already set the world projection
+     * here before the gizmo's stencil pass runs inside it.</p>
+     */
+    public static Matrix4f getProjectionOverride()
+    {
+        return projectionOverride == null ? null : new Matrix4f(projectionOverride);
+    }
+
+    /**
      * Write the override into its UBO, or null when unset. MUST be called BEFORE the render pass is
      * opened: {@link #writeProjection} rotates a {@link MappableRingBuffer}, which issues a GPU fence, and
      * the encoder rejects any command while a pass is open ("Close the existing render pass before
@@ -189,6 +202,22 @@ public class BBSPickerRenderer
     }
 
     /**
+     * The colour target picker draws currently go to, or null for the main framebuffer. For a renderer that
+     * points them at a target of its own for the length of one nested render (the framebuffer form) and has
+     * to put back what it found, not what the default happens to be.
+     */
+    public static GpuTextureView getRenderTargetColor()
+    {
+        return targetColor;
+    }
+
+    /** @see #getRenderTargetColor() */
+    public static GpuTextureView getRenderTargetDepth()
+    {
+        return targetDepth;
+    }
+
+    /**
      * Record the Sampler0 albedo texture to bind on the next picker draw. The picker shaders sample it for the
      * alpha cutout ({@code color.a < 0.1 -> discard}); the form/model renderer resolves it from the (adopted)
      * vanilla texture right before issuing the draw.
@@ -207,8 +236,15 @@ public class BBSPickerRenderer
      */
     public static void setSampler0(Texture texture)
     {
-        Identifier adopted = AdoptedTexture.identifier(texture);
+        setSampler0(AdoptedTexture.identifier(texture));
+    }
 
+    /**
+     * {@link #setSampler0(Texture)} for a texture that is already adopted under an id of its own — the
+     * framebuffer form's picture, which is a device texture rather than a BBS raw-GL one.
+     */
+    public static void setSampler0(Identifier adopted)
+    {
         if (adopted == null)
         {
             return;

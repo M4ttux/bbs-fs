@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs;
 
-import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.graphics.line.LineBuilder;
@@ -44,6 +43,12 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
         this.yAxis = new Scale(this.keyframes.area, ScrollDirection.VERTICAL).inverse();
     }
 
+    @Override
+    public UIKeyframes getKeyframes()
+    {
+        return this.keyframes;
+    }
+
     /* Graphing */
 
     public int toGraphY(double value)
@@ -81,8 +86,8 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
             {
                 Keyframe frame = keyframes.get(i);
 
-                minY = Math.min(minY, frame.getY(i));
-                maxY = Math.max(maxY, frame.getY(i));
+                minY = Math.min(minY, frame.getY());
+                maxY = Math.max(maxY, frame.getY());
             }
         }
         else
@@ -92,7 +97,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
 
             if (c == 1)
             {
-                minY = maxY = channel.get(0).getY(0);
+                minY = maxY = channel.get(0).getY();
             }
         }
 
@@ -230,12 +235,6 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
     }
 
     @Override
-    public void pickKeyframe(Keyframe keyframe)
-    {
-        this.keyframes.pickKeyframe(keyframe);
-    }
-
-    @Override
     public void selectKeyframe(Keyframe keyframe)
     {
         this.clearSelection();
@@ -274,9 +273,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
     {
         if (context.mouseWheelHorizontal != 0)
         {
-            double offsetX = (25F * BBSSettings.scrollingSensitivityHorizontal.get() * context.mouseWheelHorizontal) / this.keyframes.getXAxis().getZoom();
-
-            this.keyframes.getXAxis().setShift(this.keyframes.getXAxis().getShift() - offsetX);
+            this.keyframes.panTime(context.mouseWheelHorizontal);
         }
         else if (Window.isAltPressed() && context.mouseWheel != 0D && this.getSelected() != null)
         {
@@ -294,7 +291,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
             {
                 if (context.mouseWheel != 0D)
                 {
-                    this.keyframes.getXAxis().zoomAnchor(Scale.getAnchorX(context, this.keyframes.area), Math.copySign(this.keyframes.getXAxis().getZoomFactor(), context.mouseWheel));
+                    this.keyframes.zoomTimeAt(context, context.mouseWheel);
                 }
             }
 
@@ -314,13 +311,8 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
     {
         if (this.keyframes.isNavigating())
         {
-            int mouseX = context.mouseX;
-            int mouseY = context.mouseY;
-            double offsetX = (mouseX - lastX) / this.keyframes.getXAxis().getZoom();
-            double offsetY = -(mouseY - lastY) / this.yAxis.getZoom();
-
-            this.keyframes.getXAxis().setShift(this.keyframes.getXAxis().getShift() - offsetX);
-            this.yAxis.setShift(this.yAxis.getShift() - offsetY);
+            this.keyframes.dragTimeBy(context.mouseX - lastX);
+            this.yAxis.setShift(this.yAxis.getShift() + (context.mouseY - lastY) / this.yAxis.getZoom());
         }
     }
 
@@ -556,17 +548,28 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
                 }
                 else if (interp != Interpolations.LINEAR)
                 {
-                    float steps = 50F;
+                    /* Sampling a curve nobody can see is the whole cost of a dense channel, and a
+                     * pixel-wide segment needs no more points than it has pixels. The straight
+                     * stand-in an offscreen segment gets is behind the scissor either way. */
+                    boolean visible = Math.max(px, x) >= this.keyframes.area.x - 20 && Math.min(px, x) <= this.keyframes.area.ex() + 20;
 
-                    for (int j = 1; j <= steps; j++)
+                    if (visible)
                     {
-                        float a = j / steps;
+                        float steps = Math.min(50, Math.max(2, Math.abs(x - px)));
 
-                        segment.setup(prev, frame, prev.getTick() + a * (frame.getTick() - prev.getTick()));
+                        /* prev sits at i - 1 by construction — no need to re-find it per sample. */
+                        segment.fill(prev, frame, i - 1);
 
-                        float interpolate = this.toGraphY((float) frame.getFactory().getY(segment.createInterpolated()));
+                        for (int j = 1; j <= steps; j++)
+                        {
+                            float a = j / steps;
 
-                        lineBuilder.add(Lerps.lerp(px, x, a), interpolate);
+                            segment.setup(prev.getTick() + a * (frame.getTick() - prev.getTick()));
+
+                            float interpolate = this.toGraphY((float) frame.getFactory().getY(segment.createInterpolated()));
+
+                            lineBuilder.add(Lerps.lerp(px, x, a), interpolate);
+                        }
                     }
                 }
             }
@@ -655,7 +658,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
                 isPointHover = isPointHover || this.keyframes.getGrabbingArea(context).isInside(x1, y);
             }
 
-            int kc = frame.getColor() != null ? frame.getColor().getRGBColor() | Colors.A100 : sheet.color;
+            int kc = UIKeyframeDopeSheet.keyframeColor(frame, sheet);
             int c = (sheet.selection.has(i) || isPointHover ? Colors.WHITE : kc) | Colors.A100;
 
             if (toRemove)
@@ -693,7 +696,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
 
             int c = sheet.selection.has(j) ? Colors.ACTIVE : 0;
             int mx = this.keyframes.toGraphX(frame.getTick());
-            int mc = c | Colors.A100;
+            int mc = UIKeyframeDopeSheet.keyframeCoreColor(frame, sheet, sheet.selection.has(j));
             IKeyframeShapeRenderer shapeResult = UIKeyframeDopeSheet.renderShape(frame, context, builder, matrix, mx, y, 2, mc);
 
             shapeResult.renderKeyframeBackground(context, builder, matrix, mx, y, 2, mc);

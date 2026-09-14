@@ -5,6 +5,7 @@
     "mixins": [
         "PlayerEntityMixin",
         "PlayerEntityMorphMixin",
+        "PlayerLikeEntityMixin",
         "ServerPlayNetworkHandlerMixin",
         "BlockItemMixin",
         "ServerWorldMixin",
@@ -13,7 +14,9 @@
         "LivingEntityMixin",
         "ServerPlayerEntityMixin",
         "LimbAnimatorAccessor",
-        "LevelPropertiesAccessor"
+        "LevelPropertiesAccessor",
+        "EntityInvoker",
+        "LivingEntityRollAccessor"
     ],
     "injectors": {
         "defaultRequire": 1

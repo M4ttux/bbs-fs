@@ -17,6 +17,23 @@ public class MatrixStackUtils
 
     private static Matrix3f oldInverse = new Matrix3f();
 
+    /**
+     * Unwind a render scope to the entry saved before its push, including pushes left
+     * behind by a failing nested renderer. The caller's own stack levels stay intact.
+     */
+    public static void restore(MatrixStack stack, MatrixStack.Entry entry)
+    {
+        while (stack.peek() != entry)
+        {
+            if (stack.isEmpty())
+            {
+                throw new IllegalStateException("Renderer popped the saved matrix stack entry");
+            }
+
+            stack.pop();
+        }
+    }
+
     public static void scaleStack(MatrixStack stack, float x, float y, float z)
     {
         stack.peek().getPositionMatrix().scale(x, y, z);
@@ -54,6 +71,19 @@ public class MatrixStackUtils
         stack.peek().getNormalMatrix().identity();
     }
 
+    /**
+     * Put the render system on an identity model-view for a 3D pass drawn inside the UI, remembering
+     * the UI's matrices for {@link #restoreMatrices()}.
+     *
+     * <p>The identity is left ON the model-view stack until the restore, so the stack's top and the
+     * applied matrix agree throughout the pass. They used to diverge (the identity was popped right
+     * after being applied), and any vanilla render layer with a layering phase — armor's
+     * {@code VIEW_OFFSET_Z_LAYERING} — does {@code push / scale / applyModelViewMatrix / pop /
+     * applyModelViewMatrix}: it drew itself with the UI's matrix instead of the identity, and left
+     * that matrix applied, so everything vanilla drew after it in the pass (gizmo handles, the pick
+     * stencil, more armor) landed off screen. Every caller pairs the two calls, so the extra level
+     * is balanced.</p>
+     */
     public static void cacheMatrices()
     {
         /* Cache the global stuff */

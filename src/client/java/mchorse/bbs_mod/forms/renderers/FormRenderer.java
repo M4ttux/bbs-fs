@@ -3,6 +3,7 @@ package mchorse.bbs_mod.forms.renderers;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.render.picker.BBSPickerRenderer;
 import mchorse.bbs_mod.client.render.special.BbsFormGuiElementRenderState;
+import mchorse.bbs_mod.cubic.IBoneHierarchy;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.BodyPart;
@@ -18,6 +19,7 @@ import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.interps.Lerps;
+import mchorse.bbs_mod.utils.profiler.BBSProfiler;
 import mchorse.bbs_mod.utils.pose.Transform;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.ScreenRect;
@@ -51,15 +53,20 @@ public abstract class FormRenderer <T extends Form>
         return Collections.emptyList();
     }
 
+    /**
+     * The shape of this form's skeleton, or null when it has none. The one question the bone
+     * widgets ask a form - the tree list, the pose editor's bone column, the bone picker menus -
+     * so they no longer have to know whether they are looking at a cubic model, a BOBJ armature or
+     * a vanilla entity model.
+     */
+    public IBoneHierarchy getBoneHierarchy()
+    {
+        return null;
+    }
+
     public final void renderUI(UIContext context, int x1, int y1, int x2, int y2)
     {
-        /* The diffuse-light directions the old setupLevelDiffuseLighting bound here (lightA=(0,1,-0.2),
-         * lightB=(-0.85,0.85,1)) are now bound per model-form thumbnail in BbsFormGuiElementRenderer.lights():
-         * the UI form preview renders off-screen during the GUI prepare phase (two-phase GUI), so the lights
-         * must be set there at draw time, not here in the record phase. Other form types render flat 2D and
-         * need no diffuse lighting. */
-
-        this.renderInUI(context, x1, y1, x2, y2);
+        this.renderLive(context, x1, y1, x2, y2);
 
         FontRenderer font = context.batcher.getFont();
         String name = this.form.name.get();
@@ -84,6 +91,27 @@ public abstract class FormRenderer <T extends Form>
 
             context.batcher.textCard(name, (x2 + x1 - w) / 2, y2 - 6 - font.getHeight(), Colors.WHITE, Colors.A50);
         }
+    }
+
+    /**
+     * The form alone, without the name and hotkey cards {@link #renderUI} lays over it — for a
+     * host that draws its own captions around the picture.
+     */
+    public final void renderPreview(UIContext context, int x1, int y1, int x2, int y2)
+    {
+        this.renderLive(context, x1, y1, x2, y2);
+    }
+
+    /** The picture of the form itself, without the cards {@link #renderUI} lays over it. */
+    public final void renderLive(UIContext context, int x1, int y1, int x2, int y2)
+    {
+        /* The diffuse-light directions the old setupLevelDiffuseLighting bound here (lightA=(0,1,-0.2),
+         * lightB=(-0.85,0.85,1)) are now bound per model-form thumbnail in BbsFormGuiElementRenderer.lights():
+         * the UI form preview renders off-screen during the GUI prepare phase (two-phase GUI), so the lights
+         * must be set there at draw time, not here in the record phase. Other form types render flat 2D and
+         * need no diffuse lighting. */
+
+        this.renderInUI(context, x1, y1, x2, y2);
     }
 
     protected abstract void renderInUI(UIContext context, int x1, int y1, int x2, int y2);
@@ -111,6 +139,13 @@ public abstract class FormRenderer <T extends Form>
 
         DrawContext dc = context.batcher.getContext();
         Matrix3x2f pose = new Matrix3x2f(dc.getMatrices());
+
+        /* The live GUI scissor (set by the caller's batcher.clip — UIReplayList clips the preview to the
+         * row's square) rides along as the composite quad's scissorArea; without it the model renders
+         * full-size and overflows the cell instead of being cropped. It is correct under scroll because
+         * Batcher2D.clip neutralises the GUI matrix pose around DrawContext.enableScissor (which on
+         * 1.21.11 transforms the rect by that pose, double-shifting it by the scroll), so the stored
+         * scissor is shifted by the scroll exactly once — in lock-step with the geometry placed by pose. */
         ScreenRect scissor = dc.scissorStack.peekLast();
 
         dc.state.addSpecialElement(new BbsFormGuiElementRenderState(
@@ -161,54 +196,79 @@ public abstract class FormRenderer <T extends Form>
             return;
         }
 
-        this.form.applyStates(context.transition);
+        BBSProfiler.count(BBSProfiler.Section.FORM_RENDER);
 
         int light = context.light;
-        boolean visible = this.form.visible.get();
+        IEntity entity = context.entity;
+        MatrixStack stack = context.stack;
+        MatrixStack world = context.world;
+        MatrixStack.Entry stackEntry = stack.peek();
+        MatrixStack.Entry worldEntry = world == null ? null : world.peek();
+        boolean isPicking = context.isPicking();
 
-        if (!visible)
+        try
         {
-            return;
+            this.form.applyStates(context.transition);
+
+            /* A form the author marked unpickable stays out of the picking pass only -
+             * it still renders normally. States are unapplied by the finally below. */
+            if (!this.form.visible.get() || (isPicking && !this.form.pickable.get()))
+            {
+                return;
+            }
+
+            stack.push();
+            if (world != null)
+            {
+                world.push();
+            }
+            this.applyTransforms(stack, false, context.getTransition());
+            if (world != null)
+            {
+                this.applyTransforms(world, false, context.getTransition());
+            }
+
+            float lf = 1F - MathUtils.clamp(this.form.lighting.get(), 0F, 1F);
+            int u = context.light & '\uffff';
+            int v = context.light >> 16 & '\uffff';
+
+            u = (int) Lerps.lerp(u, LightmapTextureManager.MAX_BLOCK_LIGHT_COORDINATE, lf);
+            context.light = u | v << 16;
+
+            this.render3D(context);
+
+            if (isPicking)
+            {
+                this.updateStencilMap(context);
+            }
+
+            this.renderBodyParts(context);
         }
-
-        boolean isPicking = context.stencilMap != null;
-
-        context.stack.push();
-        if (context.world != null)
+        finally
         {
-            context.world.push();
+            /* FormUtilsClient catches render failures and continues the world frame. A
+             * single pop is insufficient when render3D/body parts left nested pushes. */
+            try
+            {
+                MatrixStackUtils.restore(stack, stackEntry);
+            }
+            finally
+            {
+                try
+                {
+                    if (world != null && world != stack)
+                    {
+                        MatrixStackUtils.restore(world, worldEntry);
+                    }
+                }
+                finally
+                {
+                    context.light = light;
+                    context.entity = entity;
+                    this.form.unapplyStates();
+                }
+            }
         }
-        this.applyTransforms(context.stack, false, context.getTransition());
-        if (context.world != null)
-        {
-            this.applyTransforms(context.world, false, context.getTransition());
-        }
-
-        float lf = 1F - MathUtils.clamp(this.form.lighting.get(), 0F, 1F);
-        int u = context.light & '\uffff';
-        int v = context.light >> 16 & '\uffff';
-
-        u = (int) Lerps.lerp(u, LightmapTextureManager.MAX_BLOCK_LIGHT_COORDINATE, lf);
-        context.light = u | v << 16;
-
-        this.render3D(context);
-
-        if (isPicking)
-        {
-            this.updateStencilMap(context);
-        }
-
-        this.renderBodyParts(context);
-
-        context.stack.pop();
-        if (context.world != null)
-        {
-            context.world.pop();
-        }
-
-        context.light = light;
-
-        this.form.unapplyStates();
     }
 
     protected void applyTransforms(MatrixStack stack, boolean origin, float transition)
@@ -230,7 +290,13 @@ public abstract class FormRenderer <T extends Form>
         matrix.mul(this.createTransform().createMatrix());
     }
 
-    protected Transform createTransform()
+    /**
+     * The form's own transform as it is actually rendered: its transform, its overlay and
+     * whatever else was hung on it. Public because the film's orbit camera attaches to this
+     * frame - what the camera follows has to be what the eye sees, not just where the replay
+     * stands.
+     */
+    public Transform createTransform()
     {
         Transform transform = new Transform();
 
@@ -335,6 +401,8 @@ public abstract class FormRenderer <T extends Form>
 
     public MatrixCache collectMatrices(IEntity entity, float transition)
     {
+        BBSProfiler.count(BBSProfiler.Section.COLLECT_MATRICES);
+
         MatrixCache map = new MatrixCache();
         MatrixStack stack = new MatrixStack();
 
@@ -359,8 +427,6 @@ public abstract class FormRenderer <T extends Form>
 
         matrices.put(prefix, mm, oo);
 
-        int i = 0;
-
         for (BodyPart part : this.form.parts.getAllTyped())
         {
             Form form = part.getForm();
@@ -370,12 +436,10 @@ public abstract class FormRenderer <T extends Form>
                 stack.push();
                 MatrixStackUtils.applyTransform(stack, part.transform.get());
 
-                FormUtilsClient.getRenderer(form).collectMatrices(entity, stack, matrices, StringUtils.combinePaths(prefix, String.valueOf(i)), transition);
+                FormUtilsClient.getRenderer(form).collectMatrices(entity, stack, matrices, StringUtils.combinePaths(prefix, part.getId()), transition);
 
                 stack.pop();
             }
-
-            i += 1;
         }
 
         stack.pop();

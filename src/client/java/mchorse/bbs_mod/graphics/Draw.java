@@ -139,6 +139,16 @@ public class Draw
         flush(builder, getPositionColorLayer());
     }
 
+    /**
+     * Same, through the pipeline that does not depth-test — the replacement for wrapping a draw in
+     * {@code RenderSystem.disableDepthTest()}, which the GPU rewrite removed. For world overlays that
+     * have to read through terrain, like the structure wand's selection.
+     */
+    public static void flushTrianglesNoDepth(BufferBuilder builder)
+    {
+        flush(builder, getPositionColorNoDepthLayer());
+    }
+
     /** Finish a buffer and submit it through the given layer (no-op on an empty buffer). */
     private static void flush(BufferBuilder builder, RenderLayer layer)
     {
@@ -164,14 +174,26 @@ public class Draw
 
     public static void renderBox(MatrixStack stack, double x, double y, double z, double w, double h, double d, float r, float g, float b, float a)
     {
+        BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
+
+        renderBox(builder, stack, x, y, z, w, h, d, r, g, b, a);
+
+        flush(builder, getPositionColorLayer());
+    }
+
+    /**
+     * The wireframe box written into a batch of the caller's own, for a caller that has more to draw
+     * into it or wants it submitted through a different layer — the structure wand builds its whole
+     * selection this way and flushes it without depth testing, so it reads through terrain.
+     */
+    public static void renderBox(BufferBuilder builder, MatrixStack stack, double x, double y, double z, double w, double h, double d, float r, float g, float b, float a)
+    {
         stack.push();
         stack.translate(x, y, z);
         float fw = (float) w;
         float fh = (float) h;
         float fd = (float) d;
         float t = 1 / 96F + (float) (Math.sqrt(w * w + h + h + d + d) / 2000);
-
-        BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
 
         /* Pillars: fillBox(builder, -t, -t, -t, t, t, t, r, g, b, a); */
         fillBox(builder, stack, -t, -t, -t, t, t + fh, t, r, g, b, a);
@@ -190,8 +212,6 @@ public class Draw
         fillBox(builder, stack, -t, -t, -t + fd, t + fw, t, t + fd, r, g, b, a);
         fillBox(builder, stack, -t, -t, -t, t, t, t + fd, r, g, b, a);
         fillBox(builder, stack, -t + fw, -t, -t, t + fw, t, t + fd, r, g, b, a);
-
-        flush(builder, getPositionColorLayer());
 
         stack.pop();
     }
@@ -257,14 +277,7 @@ public class Draw
 
     public static void fillBox(BufferBuilder builder, MatrixStack stack, float x1, float y1, float z1, float x2, float y2, float z2, int color)
     {
-        float alpha = Colors.getA(color);
-
-        if (alpha <= 0F)
-        {
-            alpha = 1F;
-        }
-
-        fillBox(builder, stack, x1, y1, z1, x2, y2, z2, Colors.getR(color), Colors.getG(color), Colors.getB(color), alpha);
+        fillBox(builder, stack, x1, y1, z1, x2, y2, z2, Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getOpaqueA(color));
     }
 
     public static void fillBox(BufferBuilder builder, MatrixStack stack, float x1, float y1, float z1, float x2, float y2, float z2, float r, float g, float b)
@@ -322,17 +335,28 @@ public class Draw
      */
     public static void arc3D(BufferBuilder builder, MatrixStack stack, Axis axis, float radius, float thickness, float r, float g, float b, float startDeg, float sweepDeg)
     {
-        arc3D(builder, stack, axis, radius, thickness, r, g, b, startDeg, sweepDeg, 1F);
+        arc3D(builder, stack, axis, radius, thickness, r, g, b, startDeg, sweepDeg, 64, 12);
+    }
+
+    /** Arc with an explicit vertex alpha. */
+    public static void arc3D(BufferBuilder builder, MatrixStack stack, Axis axis, float radius, float thickness, float r, float g, float b, float startDeg, float sweepDeg, float a)
+    {
+        arc3D(builder, stack, axis, radius, thickness, r, g, b, startDeg, sweepDeg, 64, 12, a);
     }
 
     /**
-     * Arc with an explicit alpha, so a caller can fade the tube (the gizmo's rings ride
-     * the opacity setting this way).
+     * Tessellate an arc of a torus. The tube's cross-section circle is precomputed once and the
+     * ring-angle trig lives outside the inner loop — the old shape recomputed both per quad,
+     * which put ~18k trig calls into a single ring.
      */
-    public static void arc3D(BufferBuilder builder, MatrixStack stack, Axis axis, float radius, float thickness, float r, float g, float b, float startDeg, float sweepDeg, float a)
+    public static void arc3D(BufferBuilder builder, MatrixStack stack, Axis axis, float radius, float thickness, float r, float g, float b, float startDeg, float sweepDeg, int segU, int segV)
     {
-        int segU = 96;
-        int segV = 24;
+        arc3D(builder, stack, axis, radius, thickness, r, g, b, startDeg, sweepDeg, segU, segV, 1F);
+    }
+
+    /** Tessellated arc with an explicit vertex alpha. */
+    public static void arc3D(BufferBuilder builder, MatrixStack stack, Axis axis, float radius, float thickness, float r, float g, float b, float startDeg, float sweepDeg, int segU, int segV, float a)
+    {
         double u0 = Math.toRadians(startDeg);
         double uStep = Math.toRadians(sweepDeg / (double) segU);
         double vStep = Math.PI * 2D / (double) segV;
@@ -345,41 +369,56 @@ public class Draw
         float tubeR = thickness * 0.5F;
         Matrix4f mat = stack.peek().getPositionMatrix();
 
+        /* The tube cross-section: ring-of-the-tube radii and heights, shared by every u step. */
+        double[] ringR = new double[segV + 1];
+        float[] ringY = new float[segV + 1];
+
+        for (int iv = 0; iv <= segV; iv++)
+        {
+            double v = vStep * iv;
+
+            ringR[iv] = radius + tubeR * Math.cos(v);
+            ringY[iv] = (float) (tubeR * Math.sin(v));
+        }
+
+        double cosU2 = Math.cos(u0);
+        double sinU2 = Math.sin(u0);
+
         for (int iu = 0; iu < segU; iu++)
         {
-            double u1 = u0 + uStep * iu;
+            double cosU1 = cosU2;
+            double sinU1 = sinU2;
             double u2 = u0 + uStep * (iu + 1);
+
+            cosU2 = Math.cos(u2);
+            sinU2 = Math.sin(u2);
 
             for (int iv = 0; iv < segV; iv++)
             {
-                double v1 = vStep * iv;
-                double v2 = vStep * (iv + 1);
-                double cos1 = radius + tubeR * Math.cos(v1);
-                double cos2 = radius + tubeR * Math.cos(v2);
+                double r1 = ringR[iv];
+                double r2 = ringR[iv + 1];
+                float y1 = ringY[iv];
+                float y2 = ringY[iv + 1];
 
-                float x11 = (float) (cos1 * Math.cos(u1));
-                float z11 = (float) (cos1 * Math.sin(u1));
-                float y11 = (float) (tubeR * Math.sin(v1));
+                float x11 = (float) (r1 * cosU1);
+                float z11 = (float) (r1 * sinU1);
 
-                float x12 = (float) (cos2 * Math.cos(u1));
-                float z12 = (float) (cos2 * Math.sin(u1));
-                float y12 = (float) (tubeR * Math.sin(v2));
+                float x12 = (float) (r2 * cosU1);
+                float z12 = (float) (r2 * sinU1);
 
-                float x21 = (float) (cos1 * Math.cos(u2));
-                float z21 = (float) (cos1 * Math.sin(u2));
-                float y21 = (float) (tubeR * Math.sin(v1));
+                float x21 = (float) (r1 * cosU2);
+                float z21 = (float) (r1 * sinU2);
 
-                float x22 = (float) (cos2 * Math.cos(u2));
-                float z22 = (float) (cos2 * Math.sin(u2));
-                float y22 = (float) (tubeR * Math.sin(v2));
+                float x22 = (float) (r2 * cosU2);
+                float z22 = (float) (r2 * sinU2);
 
-                builder.vertex(mat, x11, y11, z11).color(r, g, b, a);
-                builder.vertex(mat, x12, y12, z12).color(r, g, b, a);
-                builder.vertex(mat, x22, y22, z22).color(r, g, b, a);
+                builder.vertex(mat, x11, y1, z11).color(r, g, b, a);
+                builder.vertex(mat, x12, y2, z12).color(r, g, b, a);
+                builder.vertex(mat, x22, y2, z22).color(r, g, b, a);
 
-                builder.vertex(mat, x11, y11, z11).color(r, g, b, a);
-                builder.vertex(mat, x22, y22, z22).color(r, g, b, a);
-                builder.vertex(mat, x21, y21, z21).color(r, g, b, a);
+                builder.vertex(mat, x11, y1, z11).color(r, g, b, a);
+                builder.vertex(mat, x22, y2, z22).color(r, g, b, a);
+                builder.vertex(mat, x21, y1, z21).color(r, g, b, a);
             }
         }
 

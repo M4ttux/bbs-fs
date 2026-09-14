@@ -7,6 +7,7 @@ import mchorse.bbs_mod.client.render.picker.BBSPickerRenderer;
 import mchorse.bbs_mod.cubic.data.animation.Animations;
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
+import mchorse.bbs_mod.cubic.jem.CemAnimation;
 import mchorse.bbs_mod.cubic.model.ArmorSlot;
 import mchorse.bbs_mod.cubic.model.ArmorType;
 import mchorse.bbs_mod.cubic.model.View;
@@ -21,11 +22,15 @@ import mchorse.bbs_mod.cubic.render.vao.ModelVAORenderer;
 import mchorse.bbs_mod.cubic.weld.ModelWeld;
 import mchorse.bbs_mod.cubic.weld.WeldBinding;
 import mchorse.bbs_mod.graphics.ModelPreviewRenderer;
+import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.renderers.utils.FormMaterialLevels;
+import mchorse.bbs_mod.forms.renderers.utils.FormOverlay;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
+import mchorse.bbs_mod.forms.renderers.utils.RenderFrame;
 import mchorse.bbs_mod.obj.shapes.ShapeKeys;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
@@ -38,6 +43,7 @@ import net.minecraft.client.MinecraftClient;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.client.render.BuiltBuffer;
+import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.Tessellator;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
@@ -60,8 +66,65 @@ public class ModelInstance implements IModelInstance
     public IModel model;
     public Animations animations;
 
+    /** Live procedural OptiFine CEM animation, when this model was loaded from a .jem; null otherwise. */
+    public CemAnimation cemAnimation;
+
+    /* The channels token: which (form, entity, transition, frame, pose version) the asset's
+     * pose currently holds. The instance is one globally cached asset per model id, so the
+     * token must live HERE — two forms sharing a model overwrite each other's pose, and each
+     * write re-stamps it. See ModelFormRenderer#evaluateChannels. */
+    private Object channelsForm;
+    private Object channelsEntity;
+    private float channelsTransition;
+    private long channelsEpoch;
+    private int channelsPoseVersion;
+    private boolean channelsValid;
+
+    public boolean matchesChannels(Object form, Object entity, float transition, long epoch, int poseVersion)
+    {
+        return this.channelsValid
+            && this.channelsForm == form
+            && this.channelsEntity == entity
+            && Float.compare(this.channelsTransition, transition) == 0
+            && this.channelsEpoch == epoch
+            && this.channelsPoseVersion == poseVersion;
+    }
+
+    public void stampChannels(Object form, Object entity, float transition, long epoch, int poseVersion)
+    {
+        this.channelsForm = form;
+        this.channelsEntity = entity;
+        this.channelsTransition = transition;
+        this.channelsEpoch = epoch;
+        this.channelsPoseVersion = poseVersion;
+        this.channelsValid = true;
+    }
+
+    public void clearChannels()
+    {
+        this.channelsValid = false;
+        this.channelsForm = null;
+        this.channelsEntity = null;
+    }
+
     /** The model's intrinsic texture from its loader; {@link ModelConfig#texture} overrides it when set. */
     public Link baseTexture;
+
+    /**
+     * What the loader had to work around to build this model - a part model it could not find, an
+     * attribute it does not support, a second model file in the folder it had to leave out - worded
+     * by the loader, one line each. A model that came out wrong looks exactly like one drawn that way,
+     * and the console, where the same lines go, is where nobody looks; the model editor shows these.
+     */
+    public final List<String> warnings = new ArrayList<>();
+
+    /**
+     * The {@code .bbs.json} this model was read from, when the model editor may write it back: a
+     * cubic model that is a real file in the user's own assets, with nothing compiled in from other
+     * files. Null for every other model — one from the jar or a pack, an OBJ, a VOX — and those the
+     * editor only configures.
+     */
+    private Link modelFile;
 
     /**
      * Per-material default textures, loaded from the model's {@code textures/<material>/}
@@ -73,6 +136,9 @@ public class ModelInstance implements IModelInstance
 
     /** Ordered, distinct list of material names present on the model (for the editor and resolution). */
     public List<String> materials = new ArrayList<>();
+
+    /** The pass list of a model with nothing to tell apart: draw it all, with whatever is bound. */
+    private static final List<String> SINGLE_PASS = java.util.Collections.singletonList(null);
 
     /** The model's {@code config.json} as an editable value tree; the instance reads every setting from here. */
     public final ModelConfig config;
@@ -97,10 +163,32 @@ public class ModelInstance implements IModelInstance
         return this.model;
     }
 
+    /** The file the model editor writes this model to, or null for a model it may only configure. */
+    public Link getModelFile()
+    {
+        return this.modelFile;
+    }
+
+    public void setModelFile(Link modelFile)
+    {
+        this.modelFile = modelFile;
+    }
+
+    /** Whether the model editor may edit the model itself — see {@link #getModelFile()}. */
+    public boolean isEditable()
+    {
+        return this.modelFile != null;
+    }
+
     @Override
     public Pose getSneakingPose()
     {
         return this.config.getSneakingPose();
+    }
+
+    public Pose getDefaultPose()
+    {
+        return this.config.getDefaultPose();
     }
 
     @Override
@@ -423,8 +511,39 @@ public class ModelInstance implements IModelInstance
         }
     }
 
-    public void render(MatrixStack stack, Color color, int light, int overlay, StencilMap stencilMap, ShapeKeys keys, Function<String, Link> textureResolver)
+    /**
+     * The materials to draw in turn, or a single null pass — "draw everything, with whatever is
+     * bound" — for a model that has no materials to tell apart. The empty name comes first: it is
+     * the model's own geometry, drawn with the texture the caller bound.
+     */
+    private List<String> renderPasses(Function<String, Texture> textureResolver)
     {
+        if (textureResolver == null || this.materials.size() <= 1)
+        {
+            return SINGLE_PASS;
+        }
+
+        List<String> passes = new ArrayList<>(this.materials.size() + 1);
+
+        passes.add("");
+
+        for (String material : this.materials)
+        {
+            if (!material.isEmpty())
+            {
+                passes.add(material);
+            }
+        }
+
+        return passes;
+    }
+
+    public void render(MatrixStack stack, Color color, int light, int overlay, StencilMap stencilMap, ShapeKeys keys, Function<String, Texture> textureResolver)
+    {
+        /* The colour overlay is off while the pick buffer is being filled (it draws ids, not colours)
+         * and while the entity is flashing red — the hurt flash owns the channel then, and it wins. */
+        boolean tintable = stencilMap == null && overlay == OverlayTexture.DEFAULT_UV && this.form instanceof ModelForm;
+
         if (this.model instanceof Model model)
         {
             List<WeldBinding> bindings = this.getWeldBindings();
@@ -442,8 +561,46 @@ public class ModelInstance implements IModelInstance
 
             renderProcessor.setColor(color.r, color.g, color.b, color.a);
             renderProcessor.setWelds(bindings);
+            /* A material switched off in the material tab drops every cube and mesh that names it. */
+            renderProcessor.setMaterialVisibility((material) -> FormMaterialLevels.materialVisible(this.form instanceof ModelForm form ? form : null, material));
 
+            /* One pass per material, each with that material's texture bound: the draw takes its
+             * texture from whatever the manager bound last, and an OBJ normalises every material's
+             * UVs into ITS OWN texture (the model sheet stays 1x1, see CubicModelLoader), so a
+             * single pass would sample every material against one sheet. A model with at most one
+             * material keeps its single unfiltered pass. */
+            for (String material : this.renderPasses(textureResolver))
             {
+                if (material != null && !material.isEmpty())
+                {
+                    Texture materialTexture = textureResolver.apply(material);
+
+                    if (materialTexture != null)
+                    {
+                        BBSModClient.getTextures().bindTexture(materialTexture);
+
+                        /* The pick pass cuts out against Sampler0, so it follows the same texture —
+                         * otherwise a material's UVs would be judged against the form's sheet. */
+                        if (stencilMap != null)
+                        {
+                            BBSPickerRenderer.setSampler0(materialTexture);
+                        }
+                    }
+                }
+
+                renderProcessor.setMaterialFilter(material);
+
+                /* The overlay is authored on three levels — the form, the material, the bone — and
+                 * they collapse into one colour per bone. A palette in the swatch carries them all
+                 * through a single draw: each bone's colour claims a texel and its vertices address
+                 * it. */
+                ModelForm modelForm = tintable ? (ModelForm) this.form : null;
+                String tintMaterial = material == null ? "" : material;
+
+                FormOverlay.beginPalette();
+                renderProcessor.setOverlayPalette(modelForm == null ? null
+                    : (group) -> FormOverlay.slot(FormOverlay.combine(modelForm, tintMaterial, group)));
+
                 /* TODO(1.21.11 render): RenderSystem.setShader(...) + BufferRenderer.drawWithGlobalProgram(...)
                  * were removed in 1.21.5+. The immediate (non-VAO) cube geometry is built into a BufferBuilder
                  * in QUADS mode (CubicCubeRenderer now emits 4 verts/face) so it can be drawn through a vanilla
@@ -453,7 +610,20 @@ public class ModelInstance implements IModelInstance
                 BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL);
                 CubicRenderer.processRenderModel(renderProcessor, builder, stack, model);
 
+                /* The subdivided welded quads are held back in the renderer's patch buffer during
+                 * the walk (so a seam gets both of its sides before it is drawn) and only leave it
+                 * here — without this the bent bands are simply not emitted. */
+                renderProcessor.finish(builder);
+
                 BuiltBuffer built = builder.endNullable();
+
+                /* Claimed while the geometry was written, so the upload comes after it. */
+                boolean tinted = FormOverlay.hasPalette();
+
+                if (tinted)
+                {
+                    FormOverlay.commitPalette();
+                }
 
                 if (built != null)
                 {
@@ -476,7 +646,7 @@ public class ModelInstance implements IModelInstance
                          * the bottom of the alpha slider). The BBS model layer blends, so the form's colour
                          * alpha fades the preview exactly like the world; same entity vertex format, and the
                          * layer keyed on the SAME adopted texture the cutout branch used. */
-                        BBSShaders.getModelLayer(BBSShaders.ModelVariant.SINGLE.withCull(this.isCulling()), ModelPreviewRenderer.TEXTURE).draw(built);
+                        FormOverlay.withOverlay(BBSShaders.getBoundModelLayer(BBSShaders.ModelVariant.SINGLE.withCull(this.isCulling())), tinted).draw(built);
                     }
                     else
                     {
@@ -488,7 +658,7 @@ public class ModelInstance implements IModelInstance
                         FormTranslucentQueue.submit(built,
                             new BBSShaders.ModelVariant(FormTranslucentQueue.PASS_SINGLE, true, this.isCulling()),
                             BBSModClient.getTextures().getLastBound(), color.a, stencilMap,
-                            ModelVAORenderer.captureModelView(stack).getTranslation(new Vector3f()));
+                            ModelVAORenderer.captureModelView(stack).getTranslation(new Vector3f()), tinted);
                     }
                 }
             }
@@ -509,18 +679,34 @@ public class ModelInstance implements IModelInstance
                  * material textures back in exactly the way 1.21.1 did. */
                 for (BOBJModelVAO vao : vaos)
                 {
+                    /* A mesh IS its material here, so a material switched off in the material tab
+                     * takes the whole mesh out of the draw. */
+                    if (!FormMaterialLevels.materialVisible(this.form instanceof ModelForm form ? form : null, vao.data.mesh.name))
+                    {
+                        continue;
+                    }
+
                     if (textureResolver != null)
                     {
-                        Link link = textureResolver.apply(vao.data.mesh.name);
+                        Texture meshTexture = textureResolver.apply(vao.data.mesh.name);
 
-                        if (link != null)
+                        if (meshTexture != null)
                         {
-                            BBSModClient.getTextures().bindTexture(link);
+                            BBSModClient.getTextures().bindTexture(meshTexture);
                         }
                     }
 
+                    /* Per mesh, because a BOBJ mesh IS its material — same level the cubic path
+                     * tints at, and the form's own overlay is folded in by combine(). */
+                    Color tint = tintable ? FormOverlay.combine((ModelForm) this.form, vao.data.mesh.name, null) : null;
+
+                    if (tint != null)
+                    {
+                        FormOverlay.swatch(tint);
+                    }
+
                     vao.updateMesh(stencilMap);
-                    vao.render(stack, color.r, color.g, color.b, color.a, stencilMap, light, overlay, this.isCulling());
+                    vao.render(stack, color.r, color.g, color.b, color.a, stencilMap, light, overlay, this.isCulling(), tint);
                 }
 
                 stack.pop();

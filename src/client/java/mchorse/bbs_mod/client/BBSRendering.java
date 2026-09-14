@@ -8,26 +8,34 @@ import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.camera.clips.misc.CurveClip;
-import mchorse.bbs_mod.camera.clips.misc.SubtitleClip;
 import mchorse.bbs_mod.camera.controller.CameraWorkCameraController;
 import mchorse.bbs_mod.camera.controller.PlayCameraController;
+import mchorse.bbs_mod.api.events.ModelBlockEntityUpdateCallback;
 import mchorse.bbs_mod.client.renderer.MorphRenderer;
-import mchorse.bbs_mod.events.ModelBlockEntityUpdateCallback;
+import mchorse.bbs_mod.forms.FormRenderLast;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
+import mchorse.bbs_mod.forms.structure.StructureWand;
 import mchorse.bbs_mod.utils.sodium.SodiumUtils;
+import mchorse.bbs_mod.graphics.ScreenPixelProbe;
+import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.texture.TextureFormat;
 import mchorse.bbs_mod.mixin.client.FogRendererAccessor;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
+import mchorse.bbs_mod.ui.film.FrameOverlays;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
-import mchorse.bbs_mod.ui.film.UISubtitleRenderer;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.cubic.model.ModelSetupQueue;
+import mchorse.bbs_mod.forms.renderers.utils.RenderFrame;
+import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.utils.iris.IrisUtils;
+import mchorse.bbs_mod.utils.iris.ShaderCurves;
 import mchorse.bbs_mod.utils.colors.Color;
+import mchorse.bbs_mod.utils.profiler.BBSProfiler;
 import mchorse.bbs_mod.utils.colors.Colors;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.fabricmc.loader.api.FabricLoader;
@@ -279,12 +287,19 @@ public class BBSRendering
     public static void setup()
     {
         /* Iris is coupled again — see the field, which resolves itself, plus the pipeline assignment in
-         * BBSShaders. Enough for a shaderpack to draw BBS forms and for the shadow pass to be told
-         * apart; the rest of the 1.21.1 integration (PBR textures, shader-curve uniforms, the pack's
-         * option menus inside BBS's UI) stays decoupled.
+         * BBSShaders. A shaderpack draws BBS forms, the shadow pass is told apart, and PBR maps reach
+         * it; the pack's option menus inside BBS's UI are what stays decoupled.
          *
          * Sodium still is: nothing in BBS asks it anything except the ortho frame's point-camera
          * culling relaxation, which is a nicety. */
+
+        if (iris)
+        {
+            /* The PBR bridge: BBS textures are raw GL names Iris knows nothing about, so it is told
+             * about them (trackTexture) and given loaders that answer with their _n/_s files or with
+             * the material tab's generated maps. */
+            IrisUtils.setup();
+        }
 
         LOGGER.info("[BBS shaders] Iris integration {}", iris ? "on" : "off (mod not present)");
         optifine = FabricLoader.getInstance().isModLoaded("optifabric");
@@ -491,6 +506,19 @@ public class BBSRendering
          * renderWorld: a HEAD reset would wipe the freshly armed flag before anything reads it (that
          * exact inversion made the whole ortho toggle a no-op). The reset lives in onWorldRenderEnd. */
         MinecraftClient mc = MinecraftClient.getInstance();
+
+        /* The frame boundary the profiler's counters roll over on; the flag is mirrored here
+         * so the hot-path checks read a plain static boolean. */
+        BBSProfiler.enabled = BBSSettings.profilerOverlay != null && BBSSettings.profilerOverlay.get();
+        BBSProfiler.frame();
+        RenderFrame.nextFrame();
+        Gizmo.INSTANCE.forgetPlacement();
+
+        /* The budgeted tail of model loading: VAO bakes for whatever the background loader
+         * finished, a few milliseconds' worth per frame instead of all of them at once. */
+        ModelSetupQueue.drain();
+
+        BBSModClient.getVideos().startFrame();
         BBSModClient.getFilms().startRenderFrame(mc.getRenderTickCounter().getTickProgress(false));
 
         UIBaseMenu menu = UIScreen.getCurrentMenu();
@@ -546,9 +574,9 @@ public class BBSRendering
              * export is the export framebuffer: subtitles belong in the film. */
             Batcher2D batcher = new Batcher2D(ImmediateGui.begin());
 
-            /* 1.21.11: UISubtitleRenderer.renderSubtitles takes a 3D MatrixStack (context.getMatrices() is now a
-             * 2D Matrix3x2fStack). The subtitle renderer manages its own transform stack, so feed a fresh one. */
-            UISubtitleRenderer.renderSubtitles(new MatrixStack(), batcher, SubtitleClip.getSubtitles(controller.getContext()));
+            /* 1.21.11: FrameOverlays takes a 3D MatrixStack (batcher.getContext().getMatrices() is now
+             * a 2D Matrix3x2fStack). The overlays manage their own transform stack, so feed a fresh one. */
+            FrameOverlays.render(new MatrixStack(), batcher, controller.getContext());
             ImmediateGui.end();
         }
 
@@ -567,12 +595,12 @@ public class BBSRendering
             {
                 /* Same ImmediateGui flush as the playback branch above: the menu's context here
                  * still points at the PREVIOUS frame's already-composited DrawContext, so recording
-                 * into it dropped the subtitles on the floor. Flushing immediately also lands them
+                 * into it dropped the overlays on the floor. Flushing immediately also lands them
                  * in mc.framebuffer — the film preview/export framebuffer during this phase — so
                  * they show in the panel preview and in the exported file, like on 1.21.1. */
                 Batcher2D batcher = new Batcher2D(ImmediateGui.begin());
 
-                UISubtitleRenderer.renderSubtitles(new MatrixStack(), batcher, SubtitleClip.getSubtitles(panel.getRunner().getContext()));
+                FrameOverlays.render(new MatrixStack(), batcher, panel.getRunner().getContext());
                 ImmediateGui.end();
             }
         }
@@ -612,6 +640,10 @@ public class BBSRendering
      */
     public static void onRenderAfterInterface()
     {
+        /* The one moment in the frame where the interface is actually on the framebuffer, so this is
+         * where a read-back of it belongs (the colour picker's eyedropper). */
+        ScreenPixelProbe.fulfill();
+
         if (!deferredCapture)
         {
             return;
@@ -779,6 +811,7 @@ public class BBSRendering
         Batcher2D batcher2D = new Batcher2D(drawContext);
 
         BBSModClient.getFilms().renderHud(batcher2D, tickDelta);
+        StructureWand.renderHud(batcher2D);
     }
 
     /**
@@ -834,6 +867,28 @@ public class BBSRendering
         batcher2D.textCard(label, iconX + 3, y + 4, Colors.WHITE, Colors.A50);
     }
 
+    /** Whether the entity pass opened the render-last scope — false when one was already open. */
+    private static boolean entityPassRenderLast;
+
+    /**
+     * The world's entity pass: between these two calls vanilla draws the actors, model blocks
+     * and morphed players, and without a shader pack {@link #renderCoolStuff} draws the films
+     * at its end — one render-last scope spans it all, so a form set to render last draws after
+     * every other form of the frame. Under Iris the films run earlier, at the solid layer, in a
+     * scope of their own; this one still covers what the entity loop drew.
+     */
+    public static void beginEntityPass()
+    {
+        entityPassRenderLast = FormRenderLast.open();
+    }
+
+    public static void endEntityPass()
+    {
+        FormRenderLast.close(entityPassRenderLast);
+
+        entityPassRenderLast = false;
+    }
+
     public static void renderCoolStuff(WorldRenderContext worldRenderContext)
     {
         /* 1.21.11: the relocated Fabric WorldRenderContext (api.client.rendering.v1.world) again threads a real
@@ -849,12 +904,24 @@ public class BBSRendering
          * camera model-view still active). See MorphRenderer / LivingEntityRendererMorphMixin. */
         MorphRenderer.renderQueued(worldRenderContext);
 
-        if (MinecraftClient.getInstance().currentScreen instanceof UIScreen screen)
-        {
-            screen.renderInWorld(worldRenderContext);
-        }
+        /* A scope over everything drawn here, for when this runs on its own — under Iris, at the
+         * solid layer: forms set to render last draw when it closes, after the last replay, still
+         * in this pass. Inside the entity pass's scope this opens nothing and they wait for it. */
+        boolean renderLast = FormRenderLast.open();
 
-        BBSModClient.getFilms().render(worldRenderContext);
+        try
+        {
+            if (MinecraftClient.getInstance().currentScreen instanceof UIScreen screen)
+            {
+                screen.renderInWorld(worldRenderContext);
+            }
+
+            BBSModClient.getFilms().render(worldRenderContext);
+        }
+        finally
+        {
+            FormRenderLast.close(renderLast);
+        }
     }
 
     public static boolean isOptifinePresent()
@@ -965,6 +1032,36 @@ public class BBSRendering
     public static boolean isSodiumLoaded()
     {
         return sodium;
+    }
+
+    /**
+     * Render into a framebuffer of ours instead of the world's frame: the world-forms span closes for
+     * the duration ({@link #suspendWorldForms()} says why a pack program must not claim these draws)
+     * and Iris is told the main target is gone, which also turns its shadow pass off for the span —
+     * see {@link IrisUtils#renderOffscreen(Runnable)}, where the nesting is counted, so an inner
+     * framebuffer form does not hand the main target back while the outer one is still drawing.
+     */
+    public static void renderOffscreen(Runnable render)
+    {
+        boolean prev = worldForms;
+
+        worldForms = false;
+
+        try
+        {
+            if (iris)
+            {
+                IrisUtils.renderOffscreen(render);
+            }
+            else
+            {
+                render.run();
+            }
+        }
+        finally
+        {
+            worldForms = prev;
+        }
     }
 
     /**
@@ -1230,8 +1327,49 @@ public class BBSRendering
         }
     }
 
+    /**
+     * Tell Iris that this albedo copy carries a material's PBR sliders, so a pack asking it for
+     * normal/specular maps gets the ones baked from those sliders (see {@code IrisPbrConstLoader}).
+     */
+    public static void trackPbrVariant(Texture variant, Link albedo, float smoothness, float metallic, float sss, float emission, float relief)
+    {
+        if (!iris)
+        {
+            return;
+        }
+
+        try
+        {
+            IrisUtils.trackPbrVariant(variant, albedo, smoothness, metallic, sss, emission, relief);
+        }
+        catch (Throwable e)
+        {
+            LOGGER.error("[BBS shaders] failed to track a PBR variant with Iris", e);
+        }
+    }
+
+    /**
+     * Tell Iris which of its own texture a BBS GL name is, so a shaderpack asking that albedo for
+     * its PBR maps reaches {@link IrisUtils} instead of the pack's flat defaults. Called for every
+     * texture the manager binds; Iris keys its holders by GL name, and an untracked name gets the
+     * default holder cached against it.
+     */
     public static void trackTexture(Texture texture)
-    {}
+    {
+        if (!iris)
+        {
+            return;
+        }
+
+        try
+        {
+            IrisUtils.trackTexture(texture);
+        }
+        catch (Throwable e)
+        {
+            LOGGER.error("[BBS shaders] failed to track a texture with Iris", e);
+        }
+    }
 
     /**
      * Options the loaded shaderpack declares as sliders. {@link mchorse.bbs_mod.utils.iris.ShaderCurves}
@@ -1322,6 +1460,27 @@ public class BBSRendering
         }
 
         return null;
+    }
+
+    public static float getSunHorizontalRotation()
+    {
+        if (!MinecraftClient.getInstance().isOnThread())
+        {
+            return 0F;
+        }
+
+        if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
+        {
+            Map<String, Double> values = CurveClip.getValues(controller.getContext());
+            Double v = values != null ? values.get(ShaderCurves.SUN_HORIZONTAL_ROTATION) : null;
+
+            if (v != null)
+            {
+                return v.floatValue();
+            }
+        }
+
+        return 0F;
     }
 
     public static Integer getChromaSkyColorArgb()

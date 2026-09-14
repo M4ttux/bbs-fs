@@ -2,6 +2,7 @@ package mchorse.bbs_mod.ui.forms.editors.utils;
 
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.render.picker.BBSPickerRenderer;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.entities.IEntity;
@@ -244,7 +245,7 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
                 /* Reorient the pick stencil into the active space to match the visual (renderAxes),
                  * so hovering a ring lands where it's drawn. */
                 Gizmo.INSTANCE.reorientForSpace(gizmoStack, this.formEditor.getGizmoSpace(), this.camera.view, this.getSceneAxes());
-                Gizmo.INSTANCE.renderStencil(gizmoStack, this.stencilMap);
+                Gizmo.INSTANCE.renderStencil(gizmoStack);
                 gizmoStack.pop();
             }
 

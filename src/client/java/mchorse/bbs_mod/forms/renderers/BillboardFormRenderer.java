@@ -9,7 +9,10 @@ import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.client.render.picker.BBSPickerRenderer;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.forms.BillboardForm;
+import mchorse.bbs_mod.forms.renderers.utils.FramebufferDebug;
 import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
+import mchorse.bbs_mod.forms.renderers.utils.FormOverlay;
+import mchorse.bbs_mod.utils.colors.OverlayBlend;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -33,14 +36,14 @@ import org.joml.Vector4f;
 
 import java.util.function.Supplier;
 
-public class BillboardFormRenderer extends FormRenderer<BillboardForm>
+public class BillboardFormRenderer <T extends BillboardForm> extends FormRenderer<T>
 {
     private static final Quad quad = new Quad();
     private static final Quad uvQuad = new Quad();
 
     private static final Matrix4f matrix = new Matrix4f();
 
-    public BillboardFormRenderer(BillboardForm form)
+    public BillboardFormRenderer(T form)
     {
         super(form);
     }
@@ -134,16 +137,25 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
         this.renderModel(format, layer, null, shading, context.stack, context.overlay, context.light, context.color, context.getTransition());
     }
 
-    private void renderModel(VertexFormat format, Supplier<RenderLayer> shader, RenderPipeline picker, boolean deferrable, MatrixStack matrices, int overlay, int light, int overlayColor, float transition)
+    /**
+     * The texture the quad wears. The video form's renderer swaps this for a
+     * decoded video frame; everything else about the quad stays shared.
+     */
+    protected Texture getTexture()
     {
         Link t = this.form.texture.get();
 
-        if (t == null)
+        return t == null ? null : BBSModClient.getTextures().getTexture(t);
+    }
+
+    private void renderModel(VertexFormat format, Supplier<RenderLayer> shader, RenderPipeline picker, boolean deferrable, MatrixStack matrices, int overlay, int light, int overlayColor, float transition)
+    {
+        Texture texture = this.getTexture();
+
+        if (texture == null)
         {
             return;
         }
-
-        Texture texture = BBSModClient.getTextures().getTexture(t);
 
         float w = texture.width;
         float h = texture.height;
@@ -216,7 +228,7 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
         Matrix4f matrix = matrices.peek().getPositionMatrix();
         MatrixStack.Entry entry = matrices.peek();
 
-        FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
+        FormColorBlend.blend(color, this.form.color.get());
 
         if (this.form.billboard.get())
         {
@@ -228,7 +240,13 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
          * useLightmap()/useOverlay()); the shader is the layer's RenderPipeline. */
         BBSModClient.getTextures().bindTexture(texture);
 
-        texture.bind();
+        /* Filter parameters go to whichever texture is bound on the ACTIVE unit, and nothing
+         * promises that unit is 0 here: under a shader pack it is whatever unit Iris touched
+         * last (unit 2 in practice). A bind there put this texture over the lightmap's slot
+         * behind GlStateManager's back - its cache still said the lightmap was bound, so the
+         * draw never rebound it, and the quad was lit by a texel of its own skin. Naming the
+         * unit keeps the real binding and the cache in step, on unit 0, on purpose. */
+        texture.bind(0);
         texture.setFilterMipmap(this.form.linear.get(), this.form.mipmap.get());
 
         /* After the bind, never before: the layer is resolved from the last bound texture, so that
@@ -237,12 +255,37 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
          * global GL binding still pointed at it — deferred through the item command queue, that
          * binding is long gone by execution time and the billboard samples whatever is left.
          * Picking has no layer: the picker pipeline is driven by BBSPickerRenderer, which binds
-         * Sampler0 itself from the same texture. */
-        RenderLayer layer = picker == null ? shader.get() : null;
+         * Sampler0 itself from the same texture.
+         *
+         * The colour overlay rides the overlay channel, so it needs the shaded format (the
+         * no-shading one has no overlay UV) and steps aside for a hurt flash; the layer a tinted
+         * billboard draws through is the twin that samples BBS's swatch. Picking never tints: it
+         * draws ids, not colours. */
+        Color formOverlay = this.form.overlayColor.get();
+        boolean tinted = picker == null
+            && format == VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL
+            && overlay == OverlayTexture.DEFAULT_UV
+            && OverlayBlend.isActive(formOverlay);
+
+        if (tinted)
+        {
+            FormOverlay.swatch(formOverlay);
+        }
+
+        RenderLayer layer = picker == null ? FormOverlay.withOverlay(shader.get(), tinted) : null;
 
         if (picker != null)
         {
             BBSPickerRenderer.setSampler0(texture);
+        }
+
+        if (FramebufferDebug.inside())
+        {
+            FramebufferDebug.log("billboard", "layer=" + layer
+                + " shaded=" + (format == VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL)
+                + " texture=" + texture.id + "/translucent=" + texture.hasTranslucency() + " alpha=" + color.a
+                + " light=" + light + " overlayActive=" + tinted + " defer=" + deferrable
+                + " | " + FramebufferDebug.bindings());
         }
 
         BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, format);
@@ -299,7 +342,7 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
                 FormTranslucentQueue.submit(built,
                     new BBSShaders.ModelVariant(FormTranslucentQueue.PASS_SINGLE, depthWrite, true),
                     texture, color.a, null,
-                    new Matrix4f(RenderSystem.getModelViewMatrix()).transformPosition(matrix.getTranslation(new Vector3f())));
+                    new Matrix4f(RenderSystem.getModelViewMatrix()).transformPosition(matrix.getTranslation(new Vector3f())), tinted);
             }
             else
             {
@@ -307,6 +350,15 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
             }
         }
 
+        if (FramebufferDebug.inside())
+        {
+            FramebufferDebug.log("billboard", "after draw | " + FramebufferDebug.bindings());
+            FramebufferDebug.log("billboard", "after draw | " + FramebufferDebug.glState());
+            FramebufferDebug.log("billboard", "after draw | " + FramebufferDebug.samplers());
+        }
+
+        /* On unit 0 again, for the same reason as the bind above. */
+        texture.bind(0);
         texture.setFilterMipmap(false, false);
     }
 

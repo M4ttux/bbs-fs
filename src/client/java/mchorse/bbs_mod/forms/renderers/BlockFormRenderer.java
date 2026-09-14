@@ -11,10 +11,12 @@ import mchorse.bbs_mod.forms.QueueDispatch;
 import mchorse.bbs_mod.forms.forms.BlockForm;
 import mchorse.bbs_mod.forms.renderers.utils.FluidVertexConsumer;
 import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
+import mchorse.bbs_mod.forms.renderers.utils.FormOverlay;
 import mchorse.bbs_mod.forms.renderers.utils.SingleBlockRenderView;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.colors.Color;
+import mchorse.bbs_mod.utils.colors.OverlayBlend;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.BlockRenderType;
@@ -25,6 +27,7 @@ import net.minecraft.client.render.BlockRenderLayers;
 import net.minecraft.client.render.LightmapTextureManager;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.block.entity.BlockEntityRenderManager;
 import net.minecraft.client.render.block.entity.BlockEntityRenderer;
 import net.minecraft.client.render.block.entity.state.BlockEntityRenderState;
@@ -81,11 +84,21 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
         stack.peek().getNormalMatrix().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
 
         Color set = Color.white();
-        FormColorBlend.blend(set, this.form.color.get(), this.form.additiveColor.get());
+        FormColorBlend.blend(set, this.form.color.get());
+
+        Color overlay = this.form.overlayColor.get();
+        boolean overlayActive = OverlayBlend.isActive(overlay);
+
+        if (overlayActive)
+        {
+            FormOverlay.swatch(overlay);
+        }
 
         consumers.setSubstitute(BBSRendering.getColorConsumer(set));
         consumers.setUI(true);
+        consumers.setLayerMapper(overlayActive ? FormOverlay::withOverlay : null);
         this.renderBlock(stack, consumers, LightmapTextureManager.MAX_BLOCK_LIGHT_COORDINATE, OverlayTexture.DEFAULT_UV, false);
+        consumers.setLayerMapper(null);
         consumers.draw();
         consumers.setUI(false);
         consumers.setSubstitute(null);
@@ -108,6 +121,14 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
         if (context.world != null)
         {
             context.world.translate(-0.5F, 0F, -0.5F);
+        }
+
+        Color overlay = this.form.overlayColor.get();
+        boolean overlayActive = !context.isPicking() && OverlayBlend.isActive(overlay);
+
+        if (overlayActive)
+        {
+            FormOverlay.swatch(overlay);
         }
 
         if (context.isPicking())
@@ -143,12 +164,8 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
             return;
         }
 
-        /* TODO(1.21.11 render): RenderSystem.enableBlend() is gone; blend state now lives in each
-         * RenderLayer's RenderPipeline. No imperative blend toggle needed here. */
-        CustomVertexConsumerProvider.hijackVertexFormat((l) -> {});
-
         color.set(context.color);
-        FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
+        FormColorBlend.blend(color, this.form.color.get());
 
         /* Publishing the form's camera-space origin opts its translucent layers into the
          * deferred sorted pass (see CustomVertexConsumerProvider#draw(RenderLayer)); the
@@ -161,12 +178,12 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
         }
 
         consumers.setSubstitute(BBSRendering.getColorConsumer(color));
+        consumers.setLayerMapper(overlayActive ? FormOverlay::withOverlay : null);
         this.renderBlock(context.stack, consumers, light, context.overlay, context.isPicking());
+        consumers.setLayerMapper(null);
         consumers.draw();
         consumers.setSubstitute(null);
         FormTranslucentQueue.setSortOrigin(null);
-
-        CustomVertexConsumerProvider.clearRunnables();
 
         context.stack.pop();
         if (context.world != null)
