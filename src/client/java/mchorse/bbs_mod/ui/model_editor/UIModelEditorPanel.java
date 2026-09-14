@@ -48,7 +48,7 @@ import java.util.function.Supplier;
 /**
  * Model Editor — a proper data panel (tabs, right icon bar, save) over models. Each tab is an open model;
  * the picker in the icon bar chooses one. The editor area is the preview, with a resizable pane of
- * settings beside it. Models are assets, so create/rename/delete are intentionally off.
+ * settings beside it. Models are assets, so rename/delete are intentionally off; a new one can be made.
  *
  * <p>The pane holds one of the panel's two editors ({@link Editor}), picked by the first buttons of
  * the action bar the way the film panel picks between its camera and replay editors: the config
@@ -564,7 +564,7 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         }
     }
 
-    /** Models are assets, so the data manager is a pure picker — no create/duplicate/rename/remove. */
+    /** Models are assets, so the data manager only picks and makes new ones — no duplicate/rename/remove. */
     @Override
     protected UICRUDOverlayPanel createOverlayPanel()
     {
