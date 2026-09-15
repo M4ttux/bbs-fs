@@ -14,4 +14,4 @@ An addon for the **BBS** mod. Makes shader settings properly animatable.
 
 ---
 
-Minecraft 1.20.1 / 1.20.4 / 1.21.1 · Fabric · requires **BBS 2.4** and Fabric API · **Iris** is what provides the picker and the shaders themselves · BBS itself is never modified.
+Minecraft 1.20.1 / 1.20.4 / 1.21.1 / 1.21.11 · Fabric · requires **BBS 2.6+** and Fabric API · **Iris** is what provides the picker and the shaders themselves · BBS itself is never modified.

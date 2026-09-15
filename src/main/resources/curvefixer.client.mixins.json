@@ -1,5 +1,5 @@
 {
-    "required": true,
+    "required": false,
     "minVersion": "0.8",
     "package": "org.qualet.curvefixer.mixin.client",
     "compatibilityLevel": "JAVA_17",
@@ -11,6 +11,6 @@
         "WorldFilmControllerAccessor"
     ],
     "injectors": {
-        "defaultRequire": 1
+        "defaultRequire": 0
     }
 }

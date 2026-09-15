@@ -1,8 +1,8 @@
 package org.qualet.curvefixer.client;
 
 import mchorse.bbs_mod.BBSSettings;
-import mchorse.bbs_mod.events.L10nReloadEvent;
-import mchorse.bbs_mod.events.Subscribe;
+import mchorse.bbs_mod.api.client.events.L10nReloadEvent;
+import mchorse.bbs_mod.api.Subscribe;
 import mchorse.bbs_mod.l10n.L10n;
 
 /**

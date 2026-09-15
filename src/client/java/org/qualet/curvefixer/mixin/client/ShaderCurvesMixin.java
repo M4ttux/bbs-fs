@@ -21,8 +21,8 @@ import java.util.Set;
  * numeric options as cycling value boxes (e.g. Photon: 2 sliders vs ~297 numeric defines) become
  * almost fully animatable. Integer options are kept only when the author exposed them as sliders.</p>
  *
- * <p>This is a single-method {@link Overwrite} of a small, self-contained private method — pinned to
- * BBS 2.4 (the method is byte-identical in its 1.20.1 / 1.20.4 / 1.21.1 builds). If BBS rewrites
+ * <p>This is a single-method {@link Overwrite} of a small, self-contained private method — written
+ * against BBS 2.3.1, unchanged through 2.6 (1.20.1 / 1.20.4 / 1.21.1 / 1.21.11 builds). If BBS rewrites
  * {@code removeIrrelevantVariables}, this must be re-synced.</p>
  */
 @Mixin(value = ShaderCurves.class, remap = false)

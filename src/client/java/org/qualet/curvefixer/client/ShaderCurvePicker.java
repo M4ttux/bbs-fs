@@ -56,14 +56,26 @@ public final class ShaderCurvePicker
             return false;
         }
 
-        ShaderMenu menu = CurveFixerIris.buildShaderMenu();
+        ShaderMenu menu;
+        Map<String, String> languageMap;
 
-        if (menu == null)
+        try
         {
+            menu = CurveFixerIris.buildShaderMenu();
+
+            if (menu == null)
+            {
+                return false;
+            }
+
+            languageMap = CurveFixerIris.getShadersRawLanguageMap(BBSModClient.getLanguageKey());
+        }
+        catch (LinkageError e)
+        {
+            /* Iris build whose option-menu API differs from the one we compiled against: stock list. */
             return false;
         }
 
-        Map<String, String> languageMap = CurveFixerIris.getShadersRawLanguageMap(BBSModClient.getLanguageKey());
         Consumer<String> onAddOptionId = (id) -> callback.accept(CurveClip.SHADER_CURVES_PREFIX + id);
         Runnable openLegacy = () ->
         {
