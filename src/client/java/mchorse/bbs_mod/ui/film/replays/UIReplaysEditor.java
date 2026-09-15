@@ -131,8 +131,6 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
     private boolean actionsMode;
     /* «All tracks» view: shows every category's tracks at once, bypassing the category filter. */
     private UIIcon allToggle;
-    private UIIcon collapseAll;
-    private UIIcon expandAll;
     private boolean allMode;
 
     /* Clips */
@@ -384,17 +382,11 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
             this.tabButtons.put(category, button);
         }
 
-        /* Folding and the actions timeline, pinned to the bottom of the bar. */
-        this.collapseAll = new UIIcon(Icons.COLLAPSE_ALL, b -> this.setAllFolded(false));
-        this.collapseAll.tooltip(UIKeys.FILM_REPLAY_COLLAPSE_ALL, Direction.RIGHT);
-
-        this.expandAll = new UIIcon(Icons.EXPAND_ALL, b -> this.setAllFolded(true));
-        this.expandAll.tooltip(UIKeys.FILM_REPLAY_EXPAND_ALL, Direction.RIGHT);
-
+        /* Actions timeline, pinned to the bottom of the bar. */
         this.actionsToggle = new UIIcon(Icons.ACTION, b -> this.toggleActionsMode());
         this.actionsToggle.tooltip(UIKeys.FILM_REPLAY_ACTIONS_TIMELINE, Direction.RIGHT);
         this.actionsToggle.highlight(() -> this.actionsMode, Direction.LEFT);
-        this.layoutBottomToggles();
+        this.layoutActionsToggle();
 
         /* Everything at once is the view to open on: a category is a way to narrow down, and
          * narrowing before the animator has seen what there is hides tracks they came for. */
@@ -411,7 +403,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
         this.keys().register(Keys.REPLAYS_TAB_5, () -> this.setCategoryByPosition(4))
             .category(UIKeys.FILM_REPLAY_TITLE);
 
-        this.add(this.iconBar, this.collapseAll, this.expandAll, this.actionsToggle, this.replayTransform);
+        this.add(this.iconBar, this.actionsToggle, this.replayTransform);
         this.partHeader.relative(this).x(CATEGORY_BAR_WIDTH).y(0).w(120).h(TimelineRulerRenderer.RULER_BLOCK_HEIGHT);
         this.partHeader.add(new UIRenderable(context ->
         {
@@ -442,15 +434,6 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
         }));
 
         return separator;
-    }
-
-    /** Fold or unfold every section and bone of the timeline at once. */
-    private void setAllFolded(boolean unfold)
-    {
-        if (this.keyframeEditor != null)
-        {
-            this.keyframeEditor.view.getDopeSheet().setAllFolded(unfold);
-        }
     }
 
     private void setCategory(ReplayCategory c)
@@ -746,7 +729,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
             this.keyframeEditor.setUndoId("replay_keyframe_editor");
             this.keyframeEditor.view.getDopeSheet().setEmptyState(UIKeys.KEYFRAMES_EMPTY_FILTERED, UIKeys.KEYFRAMES_EMPTY_FILTERED_HINT);
 
-            this.layoutBottomToggles();
+            this.layoutActionsToggle();
 
             /* Reset */
             if (lastEditor != null)
@@ -1042,26 +1025,21 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
             this.iconBar.removeFromParent();
         }
 
-        for (UIIcon pinned : new UIIcon[] {this.collapseAll, this.expandAll, this.actionsToggle})
+        if (this.actionsToggle.getParent() != null)
         {
-            if (pinned.getParent() != null)
-            {
-                pinned.removeFromParent();
-            }
+            this.actionsToggle.removeFromParent();
         }
 
         this.partHeader.removeFromParent();
-        this.add(this.iconBar, this.collapseAll, this.expandAll, this.actionsToggle, this.partHeader);
+        this.add(this.iconBar, this.actionsToggle, this.partHeader);
     }
 
     /**
-     * Pin the actions toggle to the right edge of the track-names column. The iconBar
-     * shrink-wraps to its category icons, so anchor to the editor by label width instead.
+     * Pin the actions toggle to the bottom of the category bar. The iconBar
+     * shrink-wraps to its category icons, so anchor to the editor instead.
      */
-    private void layoutBottomToggles()
+    private void layoutActionsToggle()
     {
-        this.collapseAll.relative(this).x(0).y(1F, -60).wh(CATEGORY_BAR_WIDTH, 20);
-        this.expandAll.relative(this).x(0).y(1F, -40).wh(CATEGORY_BAR_WIDTH, 20);
         this.actionsToggle.relative(this).x(0).y(1F, -20).wh(CATEGORY_BAR_WIDTH, 20);
     }
 
@@ -1285,7 +1263,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
     {
         super.resize();
 
-        this.layoutBottomToggles();
+        this.layoutActionsToggle();
     }
 
     @Override

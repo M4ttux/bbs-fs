@@ -632,24 +632,6 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     }
 
     /**
-     * Fold or unfold every body part section. Only the sections: a bone folds by hand, one branch at
-     * a time, which is how a skeleton is worked through — "unfold everything" there would bury the
-     * timeline in rows nobody asked for.
-     */
-    public void setAllFolded(boolean unfold)
-    {
-        for (UIKeyframeSheet sheet : this.sheets)
-        {
-            if (sheet.header && this.hasChildren(sheet))
-            {
-                this.setFolded(sheet, unfold, false);
-            }
-        }
-
-        this.updateScrollSize();
-    }
-
-    /**
      * Fold or unfold a row. With shift the whole branch below it goes too — a skeleton is nested as
      * deep as the model is, and opening a hand one joint at a time is not what anyone means by
      * "show me the fingers".
