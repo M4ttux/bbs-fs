@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.selectors;
 
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.selectors.EntitySelector;
@@ -17,7 +18,16 @@ public class UISelectorList extends UIList<EntitySelector>
     {
         super(callback);
 
+        this.sorting();
         this.emptyState(UIKeys.GENERAL_RIGHT_CLICK);
+    }
+
+    @Override
+    protected void handleSwap(int from, int to)
+    {
+        super.handleSwap(from, to);
+
+        BBSModClient.getSelectors().update();
     }
 
     @Override
@@ -27,7 +37,7 @@ public class UISelectorList extends UIList<EntitySelector>
 
         if (element.entity != null)
         {
-            id = element.name.isEmpty() ? element.entity.toString() : element.entity.toString() + " - " + element.name;
+            id = element.name.isEmpty() ? element.entity.toString() : element.name + " - " + element.entity.toString();
         }
 
         return id;

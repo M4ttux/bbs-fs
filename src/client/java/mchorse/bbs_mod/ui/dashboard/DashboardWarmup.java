@@ -16,9 +16,9 @@ import net.minecraft.client.gui.screen.world.LevelLoadingScreen;
  * already waiting, one {@link UIDashboard#buildNextStep() step} at a time.</p>
  *
  * <p>The moment worth having is the world still loading: nobody is looking at anything but a
- * progress bar, so building takes as much of the tick as it is given. Whatever is left over
- * once the world is up — a quick join leaves little of that window — is picked up in the
- * world instead, a single step at a time, where dropped frames would be noticed.</p>
+ * progress bar, so building takes as much of the tick as it is given.
+ * The terrain screen stays up until building finishes, including on a quick join. If a
+ * custom loading screen bypasses it, leftovers are picked up one step at a time.</p>
  *
  * <p>Panels touch the UI and OpenGL, so every step runs on the render thread, the same as it
  * always did — this only moves it earlier, never off the thread.</p>
@@ -42,6 +42,13 @@ public class DashboardWarmup
     {
         ticks = 0;
         done = false;
+    }
+
+    /** Keep the terrain screen visible while the end-of-tick warmup finishes the panels.
+     * Without a usable world, allow vanilla's timeout to close the screen as usual. */
+    public static boolean shouldKeepLoading(MinecraftClient mc)
+    {
+        return !done && mc.world != null && mc.player != null && mc.getCameraEntity() != null;
     }
 
     public static void tick(MinecraftClient mc)
