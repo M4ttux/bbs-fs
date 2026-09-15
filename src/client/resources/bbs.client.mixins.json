@@ -8,6 +8,7 @@
         "GameRendererMixin",
         "MouseMixin",
         "MinecraftClientMixin",
+        "DownloadingTerrainScreenMixin",
         "EntityRendererDispatcherInvoker",
         "PlayerEntityRendererMixin",
         "RenderTickCounterMixin",
