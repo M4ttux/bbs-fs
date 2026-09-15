@@ -1,7 +1,5 @@
 package mchorse.bbs_mod.film.replays.tracks;
 
-import mchorse.bbs_mod.BBSSettings;
-import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
@@ -87,6 +85,16 @@ public class TrackCatalog
         return tracks;
     }
 
+    /** Only the selected form's own tracks; nested body parts are selected separately. */
+    public static List<TrackDescriptor> forPart(Form root, FormProperties properties, String path)
+    {
+        List<TrackDescriptor> tracks = of(root, properties);
+
+        tracks.removeIf(track -> !track.id().formPath().equals(path));
+
+        return ordered(tracks);
+    }
+
     /**
      * The catalog laid out the way a timeline draws it: every track that folds under another one
      * follows it directly, so unfolding a parent reveals rows that are already in the right place.
@@ -164,71 +172,10 @@ public class TrackCatalog
          * paths resolve to nothing. */
         for (BodyPart part : form.parts.getAllTyped())
         {
-            collectBodyPart(root, part, StringUtils.combinePaths(path, part.getId()), properties, out);
+            collect(root, part.getForm(), StringUtils.combinePaths(path, part.getId()), properties, out);
         }
     }
 
-
-    /**
-     * A body part's tracks, gathered under a row of their own.
-     *
-     * <p>The part gets one row carrying its name and the icon of what kind of form it is, and
-     * everything the form offers folds under it. That is what says whose a track is — the tracks
-     * themselves are named plainly ("pose", "color"), because the alternative is repeating the
-     * part's name at the head of every row it owns, and nesting parts made those names grow without
-     * bound.</p>
-     *
-     * <p>The row is a header: it holds no value, and its channel exists only because a row is drawn
-     * from one. Nothing is ever written into it (see {@code UIKeyframeSheet.header}).</p>
-     */
-    private static void collectBodyPart(Form root, BodyPart part, String path, FormProperties properties, List<TrackDescriptor> out)
-    {
-        Form form = part.getForm();
-
-        if (form == null)
-        {
-            return;
-        }
-
-        List<TrackDescriptor> tracks = new ArrayList<>();
-
-        collect(root, form, path, properties, tracks);
-
-        if (tracks.isEmpty())
-        {
-            /* A part whose form animates nothing gets no row: an empty header is a lie about there
-             * being something inside. */
-            return;
-        }
-
-        TrackId node = TrackId.bodyPart(path);
-
-        out.add(new TrackDescriptor(node, headerChannel(node), form, IKey.constant(bodyPartName(form)),
-            form.getIcon(), BBSSettings.primaryColor.get(), null));
-
-        for (TrackDescriptor track : tracks)
-        {
-            /* Only what stood on its own joins the part's row; a bone already hangs off its bone. */
-            out.add(track.parent() == null ? track.under(node) : track);
-        }
-    }
-
-    /** What a body part's row is called: the animator's own track name, else the form's name. */
-    private static String bodyPartName(Form form)
-    {
-        String custom = form.getTrackName("");
-
-        return custom.isEmpty() ? form.getDisplayName() : custom;
-    }
-
-    /**
-     * The channel a header row is drawn from. Deliberately NOT taken from the replay's properties:
-     * a header names no value, so it must not create a track in the film that would then be saved.
-     */
-    private static KeyframeChannel headerChannel(TrackId id)
-    {
-        return new KeyframeChannel(id.toKey(), KeyframeFactories.FLOAT);
-    }
 
     /** The replay's channel for this track, made if absent; null when asked without a replay. */
     private static KeyframeChannel channel(FormProperties properties, TrackId id)

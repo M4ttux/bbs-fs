@@ -652,8 +652,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
         }
 
         this.selectedPartsByReplay.put(this.replay.getId(), this.selectedPart);
-        List<TrackDescriptor> catalog = TrackCatalog.ordered(TrackCatalog.of(this.replay.form.get(), this.replay.properties));
-        catalog.removeIf(track -> track.kind() == TrackKind.BODY_PART || !track.id().formPath().equals(this.selectedPart));
+        List<TrackDescriptor> catalog = TrackCatalog.forPart(this.replay.form.get(), this.replay.properties, this.selectedPart);
 
         this.updateTab(ReplayCategory.IK, catalog);
         this.updateTab(ReplayCategory.PHYSICS, catalog);
@@ -668,28 +667,19 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
 
         for (UIKeyframeSheet sheet : sheets)
         {
-            /* Headers name body parts, not tracks — the filter menu has nothing to offer for them. */
-            if (!sheet.header)
-            {
-                this.keys.add(getSheetFilterKey(sheet));
-            }
+            this.keys.add(getSheetFilterKey(sheet));
         }
 
         Set<String> disabled = BBSSettings.disabledSheets.get();
 
         /* The body-part tree already chose the owner; tabs narrow down its properties. */
-        sheets.removeIf((v) -> !v.header && !this.allMode && categoryOf(v) != this.category);
+        sheets.removeIf((v) -> !this.allMode && categoryOf(v) != this.category);
 
         /* The tab isn't empty by itself - so if the filter empties it, the timeline has to stay (see below). */
         boolean hadTracks = !sheets.isEmpty();
 
         sheets.removeIf((v) ->
         {
-            if (v.header)
-            {
-                return false;
-            }
-
             String filterKey = getSheetFilterKey(v);
 
             for (String s : disabled)
