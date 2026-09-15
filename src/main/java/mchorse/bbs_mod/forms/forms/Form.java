@@ -134,6 +134,7 @@ public abstract class Form extends ValueGroup
         this.additiveColor.invisible();
 
         /* Not animated: one-off authoring switches, like the hitbox or the hotkey. */
+        this.pickable.invisible();
         this.renderLayer.invisible();
         this.renderLast.invisible();
 
