@@ -71,7 +71,8 @@ public class UISaveTextureOverlayPanel extends UIOverlayPanel implements IFolder
         });
         this.files.current(this::target);
         this.files.background();
-        this.name = new UITextbox(1000, (text) -> {}).filename();
+        this.name = new UITextbox(1000, (text) -> {})
+            .validator((text) -> UITextbox.FILENAME_PREDICATE.test(text.replace(" ", "")));
         this.name.placeholder(UIKeys.TEXTURES_SAVE_DIALOG_NAME);
         this.save = new UIButton(UIKeys.GENERAL_SAVE, (b) -> this.trySave());
 
@@ -97,6 +98,16 @@ public class UISaveTextureOverlayPanel extends UIOverlayPanel implements IFolder
 
         this.navigate(TextureEntry.folderLink(current.parent()));
         this.name.setText(StringUtils.fileName(current.path));
+    }
+
+    @Override
+    protected void onAdd(UIElement parent)
+    {
+        super.onAdd(parent);
+
+        parent.getContext().focus(this.name);
+        this.name.selectAll(parent.getContext());
+        this.name.textbox.selectFilename();
     }
 
     /* IFolderTreeHost */
