@@ -60,6 +60,8 @@ public class UIAnimationStateEditor extends UIElement
     public UIElement editArea;
     public final UIForms bodyParts;
 
+    private final UIElement sidebar = new UIElement();
+    private final UIElement timelineArea = new UIElement();
     private final UISection bodyPartsSection = new UISection(L10n.lang("bbs.ui.film.replays.body_parts"));
     private Form root;
     private String selectedPart = "";
@@ -81,50 +83,53 @@ public class UIAnimationStateEditor extends UIElement
                 this.selectPart(list.get(0).getPath());
             }
         });
-        this.bodyPartsSection.relative(this).xy(3, 3).w(140);
+        this.sidebar.relative(this).x(BBSSettings.editorLayoutSettings.getStateEditorSizeH()).wTo(this.area, 1F).h(1F);
+        this.timelineArea.relative(this).y(1F).anchorY(1F).wTo(this.sidebar.area)
+            .h(BBSSettings.editorLayoutSettings.getStateEditorSizeV());
+
+        this.bodyPartsSection.relative(this.sidebar).x(3).y(1F, -3).w(1F, -6).anchorY(1F);
         this.bodyPartsSection.fields.add(this.bodyParts);
         this.bodyPartsSection.setVisible(false);
 
         this.editArea = new UIElement();
-        this.editArea.relative(this)
-            .x(BBSSettings.editorLayoutSettings.getStateEditorSizeH())
-            .wTo(this.area, 1F)
-            .h(1F);
+        this.editArea.relative(this.sidebar).w(1F).hTo(this.bodyPartsSection.area);
+        /* The section's natural height determines how much space remains for properties. */
+        this.sidebar.add(this.bodyPartsSection, this.editArea);
 
         UIDraggable draggable = new UIDraggable((context) ->
         {
             float fx = (context.mouseX - this.area.x) / (float) this.area.w;
-            float fy = -(context.mouseY - this.getParent().area.ey()) / (float) this.getParent().area.h;
+            float fy = (this.area.ey() - context.mouseY) / (float) this.area.h;
 
             BBSSettings.editorLayoutSettings.setStateEditorSizeV(fy);
             BBSSettings.editorLayoutSettings.setStateEditorSizeH(fx);
 
-            this.h(BBSSettings.editorLayoutSettings.getStateEditorSizeV());
-            this.editArea.x(BBSSettings.editorLayoutSettings.getStateEditorSizeH());
+            this.timelineArea.h(BBSSettings.editorLayoutSettings.getStateEditorSizeV());
+            this.sidebar.x(BBSSettings.editorLayoutSettings.getStateEditorSizeH());
             this.getParent().resize();
         });
         draggable.cursors(GLFW.GLFW_CROSSHAIR_CURSOR, GLFW.GLFW_CROSSHAIR_CURSOR);
 
-        draggable.reference(() -> new Vector2i(this.editArea.area.x, this.area.y));
+        draggable.reference(() -> new Vector2i(this.sidebar.area.x, this.timelineArea.area.y));
         draggable.rendering((context) ->
         {
             int size = 5;
-            int x = this.editArea.area.x + 3;
-            int y = this.editArea.area.y + 3;
+            int x = this.sidebar.area.x + 3;
+            int y = this.timelineArea.area.y + 3;
 
             context.batcher.box(x, y, x + 1, y + size, Colors.WHITE);
             context.batcher.box(x, y - 1, x + size, y, Colors.WHITE);
 
-            x = this.editArea.area.x - 3;
-            y = this.editArea.area.y + 3;
+            x = this.sidebar.area.x - 3;
+            y = this.timelineArea.area.y + 3;
 
             context.batcher.box(x - 1, y, x, y + size, Colors.WHITE);
             context.batcher.box(x - size, y - 1, x, y, Colors.WHITE);
         });
 
-        draggable.hoverOnly().relative(this.editArea).w(40).h(6).anchorX(0.5F);
+        draggable.hoverOnly().relative(this.timelineArea).x(1F).w(40).h(6).anchorX(0.5F);
 
-        this.add(this.bodyPartsSection, this.editArea, draggable);
+        this.add(this.sidebar, this.timelineArea, draggable);
     }
 
     public AnimationState getState()
@@ -162,6 +167,8 @@ public class UIAnimationStateEditor extends UIElement
 
         if (this.state == null)
         {
+            this.resize();
+
             return;
         }
 
@@ -227,7 +234,7 @@ public class UIAnimationStateEditor extends UIElement
         if (!sheets.isEmpty() || hadTracks)
         {
             this.keyframeEditor = new UIKeyframeEditor((consumer) -> new UIAnimationStateKeyframes(this.editor, consumer)).target(this.editArea);
-            this.keyframeEditor.relative(this).h(1F).wTo(this.editArea.area);
+            this.keyframeEditor.full(this.timelineArea);
             this.keyframeEditor.setUndoId("form_animation_state_keyframe_editor");
             this.keyframeEditor.view.getDopeSheet().setEmptyState(UIKeys.KEYFRAMES_EMPTY_FILTERED, UIKeys.KEYFRAMES_EMPTY_FILTERED_HINT);
 
@@ -290,7 +297,7 @@ public class UIAnimationStateEditor extends UIElement
              * bone and material rows, and unfolded they bury the form's own properties. */
             this.keyframeEditor.view.getDopeSheet().setExpanded(this.expandedTabs);
 
-            this.addAfter(this.editArea, this.keyframeEditor);
+            this.timelineArea.add(this.keyframeEditor);
         }
 
         this.resize();
@@ -331,17 +338,12 @@ public class UIAnimationStateEditor extends UIElement
     @Override
     public void resize()
     {
-        int timelineWidth = (int) (this.getFlex().getW() * BBSSettings.editorLayoutSettings.getStateEditorSizeH());
-        int treeWidth = Math.min(160, Math.max(1, timelineWidth / 3));
+        int maxHeight = Math.min(160, this.getFlex().getH() / 2);
 
-        this.bodyPartsSection.w(treeWidth);
         this.bodyParts.h(Math.max(1, Math.min(this.bodyParts.getList().size() * this.bodyParts.scroll.scrollItemSize,
-            this.getFlex().getH() - 26)));
-
-        if (this.keyframeEditor != null)
-        {
-            this.keyframeEditor.x(treeWidth + 6);
-        }
+            maxHeight)));
+        this.editArea.hTo(this.bodyPartsSection.isVisible() ? this.bodyPartsSection.area : this.sidebar.area,
+            this.bodyPartsSection.isVisible() ? 0F : 1F);
 
         super.resize();
     }
