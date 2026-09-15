@@ -103,7 +103,7 @@ public class FormRenderLast
      */
     public static boolean postpone(Form form, FormRenderingContext context)
     {
-        if (!form.renderLast.get() || !isActive() || context.isPicking())
+        if (form == null || !form.renderLast.get() || !isActive() || context.isPicking())
         {
             return false;
         }
