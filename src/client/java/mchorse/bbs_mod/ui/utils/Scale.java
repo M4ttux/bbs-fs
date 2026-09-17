@@ -385,6 +385,11 @@ public class Scale
     /** Queue a wheel step from the last displayed scale, keeping its point under the cursor. */
     public void animateZoom(float anchor, double wheel)
     {
+        this.animateZoom(anchor, wheel, 1D);
+    }
+
+    public void animateZoom(float anchor, double wheel, double speed)
+    {
         if (wheel == 0 || this.area == null || this.direction.getSide(this.area) <= 0)
         {
             return;
@@ -396,7 +401,7 @@ public class Scale
         double base = this.zoomAnimating && this.zoomDirection == direction && this.hasZoomArea()
             ? this.zoomTarget : this.getZoom();
         this.zoomStart = this.getZoom();
-        this.zoomTarget = MathUtils.clamp(base + Math.copySign(this.getZoomFactor(base), wheel), 0.01D, 1000D);
+        this.zoomTarget = MathUtils.clamp(base + Math.copySign(this.getZoomFactor(base) * speed, wheel), 0.01D, 1000D);
         this.zoomAnchor = anchor;
         this.zoomDirection = direction;
         this.zoomStarted = this.zoomTime();

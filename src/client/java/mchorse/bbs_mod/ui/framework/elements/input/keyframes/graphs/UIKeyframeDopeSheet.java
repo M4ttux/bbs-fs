@@ -670,7 +670,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         {
             this.keyframes.panTime(context.mouseWheelHorizontal);
         }
-        else if (Window.isShiftPressed())
+        else if (Window.isShiftPressed() && Window.isCtrlPressed())
         {
             this.dopeSheet.mouseScroll(context);
         }

@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.framework.elements.utils;
 
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.utils.Area;
@@ -102,7 +103,12 @@ public abstract class UITimelineCanvas extends UIElement
     /** Zoom the time axis one step in the wheel's direction, anchored under the cursor. */
     public void zoomTimeAt(UIContext context, double wheel)
     {
-        this.xAxis.animateZoom(Scale.getAnchorX(context, this.xAxis.area), wheel);
+        this.xAxis.animateZoom(Scale.getAnchorX(context, this.xAxis.area), wheel, this.getZoomSpeed());
+    }
+
+    public double getZoomSpeed()
+    {
+        return Window.isShiftPressed() ? 3D : 1D;
     }
 
     /** Pan the time axis by a cursor movement of {@code dx} pixels (middle-drag navigation). */

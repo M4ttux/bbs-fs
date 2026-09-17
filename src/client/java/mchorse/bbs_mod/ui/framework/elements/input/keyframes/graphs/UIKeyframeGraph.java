@@ -298,29 +298,15 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
             float delta = (float) (context.mouseWheel * 1F);
             this.moveSelectedBy(delta, true);
         }
-        else
+        else if (context.mouseWheel != 0D)
         {
-            boolean x = Window.isShiftPressed();
-            boolean y = Window.isCtrlPressed();
-            boolean none = !x && !y;
-
-            /* Scaling X */
-            if (x && !y || none)
+            /* Ctrl isolates values; Shift accelerates whichever axes are being zoomed. */
+            if (!Window.isCtrlPressed())
             {
-                if (context.mouseWheel != 0D)
-                {
-                    this.keyframes.zoomTimeAt(context, context.mouseWheel);
-                }
+                this.keyframes.zoomTimeAt(context, context.mouseWheel);
             }
 
-            /* Scaling Y */
-            if (y && !x || none)
-            {
-                if (context.mouseWheel != 0D)
-                {
-                    this.yAxis.animateZoom(Scale.getAnchorY(context, this.keyframes.area), context.mouseWheel);
-                }
-            }
+            this.yAxis.animateZoom(Scale.getAnchorY(context, this.keyframes.area), context.mouseWheel, this.keyframes.getZoomSpeed());
         }
     }
 
