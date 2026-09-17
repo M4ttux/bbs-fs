@@ -858,7 +858,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
                 }
             }
         }
-        else if (Window.isCtrlPressed())
+        else if (Window.isCtrlPressed() && !this.keyframes.isDuplicatingAtPlayhead())
         {
             UIKeyframeSheet sheet = this.getSheet(context.mouseY);
 
@@ -877,8 +877,10 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         else if (Window.isAltPressed() && !Window.isShiftPressed())
         {
             List<UIKeyframeSheet> sheets = new ArrayList<>();
+            boolean atPlayhead = this.keyframes.isDuplicatingAtPlayhead();
+            float tick = this.keyframes.getDuplicationTick(context);
 
-            for (UIKeyframeSheet sheet : this.getInteractiveSheets())
+            for (UIKeyframeSheet sheet : atPlayhead ? this.getSheets() : this.getInteractiveSheets())
             {
                 if (sheet.selection.hasAny())
                 {
@@ -886,7 +888,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
                 }
             }
 
-            if (sheets.size() == 1)
+            if (sheets.size() == 1 && !atPlayhead)
             {
                 UIKeyframeSheet current = sheets.get(0);
                 UIKeyframeSheet hovered = this.getSheet(context.mouseY);
@@ -903,7 +905,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
                     Keyframe first = selected.get(0);
                     Keyframe keyframe = selected.get(i);
 
-                    this.renderPreviewKeyframe(context, hovered, Math.round(this.keyframes.fromGraphX(context.mouseX)) + (keyframe.getTick() - first.getTick()), Colors.YELLOW);
+                    this.renderPreviewKeyframe(context, hovered, tick + (keyframe.getTick() - first.getTick()), Colors.YELLOW);
                 }
             }
             else
@@ -922,13 +924,14 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
                 for (UIKeyframeSheet sheet : sheets)
                 {
+                    if (!this.isVisible(sheet)) continue;
                     List<Keyframe> selected = sheet.selection.getSelected();
 
                     for (int i = 0; i < selected.size(); i++)
                     {
                         Keyframe keyframe = selected.get(i);
 
-                        this.renderPreviewKeyframe(context, sheet, Math.round(this.keyframes.fromGraphX(context.mouseX)) + (keyframe.getTick() - min), Colors.YELLOW);
+                        this.renderPreviewKeyframe(context, sheet, tick + (keyframe.getTick() - min), Colors.YELLOW);
                     }
                 }
             }

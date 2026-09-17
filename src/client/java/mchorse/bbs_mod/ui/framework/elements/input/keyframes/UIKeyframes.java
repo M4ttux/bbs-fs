@@ -831,11 +831,16 @@ public class UIKeyframes extends UITimelineCanvas
      */
     protected void pasteKeyframes(Map<String, PastedKeyframes> keyframes, float offset, int mouseY)
     {
+        this.pasteKeyframes(keyframes, offset, mouseY, false);
+    }
+
+    private void pasteKeyframes(Map<String, PastedKeyframes> keyframes, float offset, int mouseY, boolean keepTracks)
+    {
         List<UIKeyframeSheet> sheets = this.currentGraph.getSheets();
 
         this.currentGraph.clearSelection();
 
-        if (keyframes.size() == 1)
+        if (keyframes.size() == 1 && !keepTracks)
         {
             UIKeyframeSheet current = this.currentGraph.getSheet(mouseY);
 
@@ -1110,6 +1115,12 @@ public class UIKeyframes extends UITimelineCanvas
     @Override
     protected boolean subMouseClicked(UIContext context)
     {
+        if (!this.scaling && !this.stacking && context.mouseButton == 0
+            && this.graphArea.isInside(context) && this.isDuplicatingAtPlayhead())
+        {
+            this.duplicateOrSelectColumn(context);
+            return true;
+        }
         if (!this.scaling && !this.stacking && this.loops.mouseClicked(context)) return true;
         if (this.currentGraph.mouseClicked(context))
         {
@@ -1177,15 +1188,25 @@ public class UIKeyframes extends UITimelineCanvas
         if (this.currentGraph.getSelected() != null && !Window.isShiftPressed())
         {
             /* Duplicate */
-            int tick = (int) Math.round(this.fromGraphX(context.mouseX));
-
-            this.pasteKeyframes(this.parseKeyframes(this.serializeKeyframes()), tick, context.mouseY);
+            this.pasteKeyframes(this.parseKeyframes(this.serializeKeyframes()), this.getDuplicationTick(context),
+                context.mouseY, this.isDuplicatingAtPlayhead());
 
             return;
         }
 
         /* Select a column */
         this.currentGraph.selectByX(context.mouseX);
+    }
+
+    public boolean isDuplicatingAtPlayhead()
+    {
+        return Window.isAltPressed() && Window.isCtrlPressed() && !Window.isShiftPressed()
+            && this.currentGraph.getSelected() != null;
+    }
+
+    public float getDuplicationTick(UIContext context)
+    {
+        return this.isDuplicatingAtPlayhead() ? this.getTick() : Math.round(this.fromGraphX(context.mouseX));
     }
 
     private void pickOrStartSelectingKeyframes(UIContext context)

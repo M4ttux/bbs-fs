@@ -473,7 +473,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
                 x += length;
             }
         }
-        else if (Window.isCtrlPressed())
+        else if (Window.isCtrlPressed() && !this.keyframes.isDuplicatingAtPlayhead())
         {
             UIKeyframeSheet sheet = this.getSheet(context.mouseY);
 
@@ -491,17 +491,23 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
         }
         else if (Window.isAltPressed())
         {
+            currentTick = this.keyframes.getDuplicationTick(context);
             UIKeyframeSheet current = this.sheet;
             List<Keyframe> selected = current.selection.getSelected();
             IKeyframeFactory factory = current.channel.getFactory();
 
+            float firstTick = selected.isEmpty() ? 0 : selected.get(0).getTick();
+            if (this.keyframes.isDuplicatingAtPlayhead())
+            {
+                for (Keyframe keyframe : selected) firstTick = Math.min(firstTick, keyframe.getTick());
+            }
+
             for (int i = 0; i < selected.size(); i++)
             {
-                Keyframe first = selected.get(0);
                 Keyframe keyframe = selected.get(i);
                 int y = (int) this.yAxis.to(factory.getY(keyframe.getValue()));
 
-                this.renderPreviewKeyframe(context, current, currentTick + (keyframe.getTick() - first.getTick()), y, Colors.YELLOW);
+                this.renderPreviewKeyframe(context, current, currentTick + (keyframe.getTick() - firstTick), y, Colors.YELLOW);
             }
         }
     }
