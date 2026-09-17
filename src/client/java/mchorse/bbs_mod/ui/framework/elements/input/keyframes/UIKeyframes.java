@@ -958,7 +958,7 @@ public class UIKeyframes extends UITimelineCanvas
      * <p>Auto-keyframing turns every value edit into a key at the playhead instead of a rewrite of
      * whatever keyframe happens to be selected, so posing at a tick where the track has no keyframe
      * yet makes one rather than dragging the past along with it. A timeline without a playhead has
-     * no tick to key at, so it never auto-keyframes &mdash; only the film editor's timelines do.
+     * no tick to key at, so it never auto-keyframes. Film and animation-state timelines supply it.
      */
     public Integer getAutoKeyframeTick()
     {

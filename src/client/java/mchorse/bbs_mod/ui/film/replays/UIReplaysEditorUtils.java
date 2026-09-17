@@ -1031,20 +1031,22 @@ public class UIReplaysEditorUtils
     }
 
     @SuppressWarnings("unchecked")
-    public static void posesToLimbTracks(Replay replay, UIKeyframeSheet poseSheet, IPosedForm posedForm)
+    public static boolean posesToLimbTracks(FormProperties properties, UIKeyframeSheet poseSheet)
     {
-        if (replay == null || poseSheet == null || posedForm == null)
+        if (properties == null || poseSheet == null || poseSheet.getPosedForm() == null)
         {
-            return;
+            return false;
         }
 
-        String formPath = poseSheet.id.equals("pose") ? "" : poseSheet.id.substring(0, poseSheet.id.length() - (FormUtils.PATH_SEPARATOR + "pose").length());
-        Form form = formPath.isEmpty() ? replay.form.get() : FormUtils.getForm(replay.form.get(), formPath);
+        TrackId track = TrackId.parse(poseSheet.id);
+        if (track == null) return false;
+        String formPath = track.formPath();
+        Form form = UIReplaysEditor.getSheetForm(poseSheet);
         IBoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(form);
 
         if (!(form instanceof IPosedForm) || hierarchy == null)
         {
-            return;
+            return false;
         }
 
         ModelInstance model = form instanceof ModelForm targetModelForm ? ModelFormRenderer.getModel(targetModelForm) : null;
@@ -1054,42 +1056,42 @@ public class UIReplaysEditorUtils
 
         List<Keyframe<Pose>> selectedKeyframes = (List<Keyframe<Pose>>) (List<?>) poseSheet.selection.getSelected();
 
-        if (selectedKeyframes.isEmpty())
+        if (selectedKeyframes.isEmpty() || bones.isEmpty() || selectedKeyframes.stream().anyMatch(keyframe -> keyframe.getValue() == null))
         {
-            return;
+            return false;
         }
 
-        for (Keyframe<Pose> keyframe : selectedKeyframes)
+        /* Capture the whole track collection before creating channels, so undo also removes them. */
+        BaseValue.edit(properties, target ->
         {
-            Pose pose = keyframe.getValue();
-
-            if (pose == null)
+            for (Keyframe<Pose> keyframe : selectedKeyframes)
             {
-                continue;
-            }
+                Pose pose = keyframe.getValue();
+                float tick = keyframe.getTick();
 
-            float tick = keyframe.getTick();
-
-            for (String bone : bones)
-            {
-                KeyframeChannel<PoseTransform> limbChannel = (KeyframeChannel<PoseTransform>) replay.properties.getOrCreate(TrackId.bone(formPath, bone));
-
-                if (limbChannel == null)
+                for (String bone : bones)
                 {
-                    continue;
+                    KeyframeChannel<PoseTransform> limbChannel = (KeyframeChannel<PoseTransform>) target.getOrCreate(TrackId.bone(formPath, bone));
+
+                    if (limbChannel == null)
+                    {
+                        continue;
+                    }
+
+                    /* Every bone, including those left at rest in the source pose. */
+                    PoseTransform transform = pose.get(bone);
+                    PoseTransform copy = transform == null ? new PoseTransform() : (PoseTransform) transform.copy();
+                    int index = limbChannel.insert(tick, copy);
+                    Keyframe<PoseTransform> limbKf = limbChannel.get(index);
+
+                    limbKf.copyOverExtra(keyframe);
                 }
-
-                /* Every bone of the model, not just the posed ones: a bone the pose is silent
-                 * about still gets a rest keyframe on its track, but reading must not grow the
-                 * pose being laid out. */
-                PoseTransform transform = pose.get(bone);
-                PoseTransform copy = transform == null ? new PoseTransform() : (PoseTransform) transform.copy();
-                int index = limbChannel.insert(tick, copy);
-                Keyframe<PoseTransform> limbKf = limbChannel.get(index);
-
-                limbKf.copyOverExtra(keyframe);
             }
-        }
+
+            poseSheet.selection.removeSelected();
+        });
+
+        return true;
     }
 
     public static void clearIKTracks(Replay replay, ModelForm modelForm)

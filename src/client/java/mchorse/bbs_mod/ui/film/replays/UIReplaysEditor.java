@@ -778,10 +778,11 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
                 {
                     menu.action(Icons.LIMB, UIKeys.FILM_REPLAY_CONTEXT_POSES_TO_LIMBS, () ->
                     {
-                        UIReplaysEditorUtils.posesToLimbTracks(this.replay, sheet, posedForm);
-
-                        sheet.selection.removeSelected();
-                        this.updateChannelsList();
+                        if (UIReplaysEditorUtils.posesToLimbTracks(this.replay.properties, sheet))
+                        {
+                            this.getExpandedTracks().set(sheet.id, true);
+                            this.updateChannelsList();
+                        }
                     });
                 }
 
