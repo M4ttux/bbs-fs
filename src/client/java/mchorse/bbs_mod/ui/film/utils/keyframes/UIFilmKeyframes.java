@@ -79,6 +79,12 @@ public class UIFilmKeyframes extends UIKeyframes
         return this.getOffset();
     }
 
+    @Override
+    public float getPlayheadTick(UIContext context)
+    {
+        return this.editor == null ? 0F : this.editor.getCursor(context.getTransition()) - this.getClipOffset();
+    }
+
     /**
      * The playhead in this timeline's own tick space &mdash; {@link #getOffset()} rather than the
      * raw cursor, so a keyframe clip keys where its cursor is drawn instead of at the film's tick.
@@ -130,7 +136,7 @@ public class UIFilmKeyframes extends UIKeyframes
     {
         if (this.editor != null)
         {
-            float cursor = this.editor.getCursor(context.getTransition()) - this.getClipOffset();
+            float cursor = this.getPlayheadTick(context);
             int cx = this.toGraphX(cursor);
             String label = TimeUtils.formatCursorTime(cursor) + "/" + TimeUtils.formatTime(this.getDuration());
 

@@ -953,6 +953,12 @@ public class UIKeyframes extends UITimelineCanvas
         return (float) this.fromGraphX(this.getContext().mouseX);
     }
 
+    /** Exact visible playhead time, including fractions entered with Shift while snapping. */
+    public float getPlayheadTick(UIContext context)
+    {
+        return this.getTick();
+    }
+
     /**
      * The tick auto-keyframing writes at, or {@code null} when an edit should land on the
      * keyframes it was made on.
@@ -1223,7 +1229,7 @@ public class UIKeyframes extends UITimelineCanvas
 
     public float getDuplicationTick(UIContext context)
     {
-        return this.isDuplicatingAtPlayhead() ? this.getTick() : this.fromGraphCursor(context.mouseX);
+        return this.isDuplicatingAtPlayhead() ? this.getPlayheadTick(context) : this.fromGraphCursor(context.mouseX);
     }
 
     private void pickOrStartSelectingKeyframes(UIContext context)

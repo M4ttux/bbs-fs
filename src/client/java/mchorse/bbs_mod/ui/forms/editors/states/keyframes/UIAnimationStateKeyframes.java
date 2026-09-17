@@ -40,6 +40,12 @@ public class UIAnimationStateKeyframes extends UIKeyframes
     }
 
     @Override
+    public float getPlayheadTick(UIContext context)
+    {
+        return this.editor == null ? 0F : this.editor.getCursor(context.getTransition());
+    }
+
+    @Override
     public Float getAutoKeyframeTick()
     {
         return this.editor != null && BBSSettings.autoKeyframe.get() ? this.getOffset() : null;
@@ -81,7 +87,7 @@ public class UIAnimationStateKeyframes extends UIKeyframes
          * mirroring UIFilmKeyframes; rendering it in renderBackground left it under the keyframes. */
         if (this.editor != null)
         {
-            float cursor = this.editor.getCursor(context.getTransition());
+            float cursor = this.getPlayheadTick(context);
             int cx = this.toGraphX(cursor);
             String label = TimeUtils.formatCursorTime(cursor) + "/" + TimeUtils.formatTime(this.getDuration());
 
