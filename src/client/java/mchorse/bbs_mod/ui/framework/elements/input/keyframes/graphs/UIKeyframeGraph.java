@@ -523,6 +523,12 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
         BufferBuilder builder = Tessellator.getInstance().getBuffer();
         Matrix4f matrix = context.batcher.getContext().getMatrices().peek().getPositionMatrix();
 
+        if (!this.sheet.channel.getLoops().isEmpty())
+        {
+            this.renderLoopGraph(context, builder, matrix);
+            return;
+        }
+
         UIKeyframeSheet sheet = this.sheet;
         List keyframes = sheet.channel.getKeyframes();
         KeyframeSegment segment = new KeyframeSegment();
@@ -627,6 +633,49 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
         builder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
         this.renderGraphPointShapes(context, builder, matrix, keyframes);
 
+        RenderSystem.enableBlend();
+        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+        BufferRenderer.drawWithGlobalProgram(builder.end());
+    }
+
+    /** Sample the actual finite-loop playback instead of drawing a fictitious line from the
+     * source's last key straight to the next ordinary key. Work is bounded by visible pixels. */
+    private void renderLoopGraph(UIContext context, BufferBuilder builder, Matrix4f matrix)
+    {
+        LineBuilder line = new LineBuilder(0.7F);
+        float previousSource = -Float.MAX_VALUE;
+        for (int x = this.keyframes.graphArea.x; x <= this.keyframes.graphArea.ex(); x += 2)
+        {
+            float tick = (float) this.keyframes.fromGraphX(x);
+            float source = this.sheet.channel.getSourceTick(tick);
+            if (source < previousSource) line.push();
+            Object value = this.sheet.channel.interpolate(tick);
+            if (value != null) line.add(x, this.toGraphY(this.sheet.channel.getFactory().getY(value)));
+            previousSource = source;
+        }
+
+        /* Original Bezier handles remain editable in the same place. */
+        List<Keyframe> originals = this.sheet.channel.getKeyframes();
+        for (int index = 0; index < originals.size(); index++)
+        {
+            Keyframe key = originals.get(index);
+            int x = this.keyframes.toGraphX(key.getTick()), y = this.toGraphY(key.getY());
+            if (x < this.keyframes.graphArea.x - 20 || x > this.keyframes.graphArea.ex() + 20) continue;
+            Keyframe previous = this.sheet.channel.get(index - 1);
+            if (key.getInterpolation().getInterp() == Interpolations.BEZIER)
+            {
+                line.push(); line.add(x, y);
+                line.add(this.keyframes.toGraphX(key.getTick() + key.rx), this.toGraphY(key.getY() + key.ry));
+            }
+            if (previous != null && previous.getInterpolation().getInterp() == Interpolations.BEZIER)
+            {
+                line.push(); line.add(x, y);
+                line.add(this.keyframes.toGraphX(key.getTick() - key.lx), this.toGraphY(key.getY() + key.ly));
+            }
+        }
+        line.render(context.batcher, SolidColorLineRenderer.get(Colors.COLOR.set(Colors.setA(this.sheet.color, 1F))));
+        builder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
+        this.renderGraphPointShapes(context, builder, matrix, this.sheet.channel.getKeyframes());
         RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
         BufferRenderer.drawWithGlobalProgram(builder.end());

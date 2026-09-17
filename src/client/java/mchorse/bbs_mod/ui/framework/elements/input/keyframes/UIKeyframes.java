@@ -67,6 +67,7 @@ public class UIKeyframes extends UITimelineCanvas
     private Object originalV;
 
     private Runnable changeCallback;
+    private final UIKeyframeLoops loops = new UIKeyframeLoops(this);
 
     /* Fields */
 
@@ -133,6 +134,7 @@ public class UIKeyframes extends UITimelineCanvas
             boolean hasSelected = this.currentGraph.getSelected() != null;
 
             this.copyPasteController.install(menu, context, mouseX, mouseY);
+            this.loops.menu(menu, context);
 
             menu.icon(MenuVerb.REMOVE, () -> this.currentGraph.removeSelected()).label(UIKeys.KEYFRAMES_CONTEXT_REMOVE).enabled(hasSelected);
 
@@ -190,7 +192,7 @@ public class UIKeyframes extends UITimelineCanvas
 
                         for (Keyframe kf : selected)
                         {
-                            kf.setTick(Math.round(kf.getTick()), false);
+                            kf.setTick(sheet.channel.constrainKeyframeTick(kf, Math.round(kf.getTick())), false);
                         }
 
                         sheet.channel.postNotify();
@@ -558,7 +560,7 @@ public class UIKeyframes extends UITimelineCanvas
                             Keyframe kf = current.channel.get(index);
                             
                             kf.copy(keyframe);
-                            kf.setTick(tick);
+                            kf.setTick(current.channel.getSourceTick(tick));
                             current.selection.add(index);
                         }
 
@@ -623,7 +625,7 @@ public class UIKeyframes extends UITimelineCanvas
 
             for (Keyframe keyframe : sheet.selection.getSelected())
             {
-                keyframe.setTick(pivot - keyframe.getTick(), false);
+                keyframe.setTick(sheet.channel.constrainKeyframeTick(keyframe, pivot - keyframe.getTick()), false);
             }
 
             sheet.channel.postNotify();
@@ -669,7 +671,7 @@ public class UIKeyframes extends UITimelineCanvas
                 int index = i + min;
                 Keyframe kf = sheet.channel.get(index);
 
-                kf.setTick(minKf.getTick() + i * distance);
+                kf.setTick(sheet.channel.constrainKeyframeTick(kf, minKf.getTick() + i * distance));
             }
 
             sheet.channel.postNotify();
@@ -898,7 +900,7 @@ public class UIKeyframes extends UITimelineCanvas
 
         for (Keyframe keyframe : pastedKeyframes.keyframes)
         {
-            keyframe.setTick(keyframe.getTick() - firstX + offset);
+            keyframe.setTick(sheet.channel.getSourceTick(keyframe.getTick() - firstX + offset));
 
             int index = sheet.channel.insert(keyframe.getTick(), keyframe.getValue());
             Keyframe inserted = sheet.channel.get(index);
@@ -966,13 +968,14 @@ public class UIKeyframes extends UITimelineCanvas
     /** Whether the user is in the middle of any mouse interaction (dragging, selecting, navigating, scaling or stacking). */
     public boolean isInteracting()
     {
-        return this.dragging >= 0 || this.marquee.isPressed() || this.navigating || this.scaling || this.stacking;
+        return this.loops.isDragging() || this.dragging >= 0 || this.marquee.isPressed() || this.navigating || this.scaling || this.stacking;
     }
 
     /* Sheet management */
 
     public void removeAllSheets()
     {
+        this.loops.reset();
         this.dopeSheet.removeAllSheets();
     }
 
@@ -1032,6 +1035,11 @@ public class UIKeyframes extends UITimelineCanvas
             }
 
             c = Math.max(c, keyframes.size());
+            if (!property.channel.getLoops().isEmpty())
+            {
+                max = Math.max(max, (int) Math.ceil(property.channel.getLength()));
+                c = Math.max(c, 2);
+            }
         }
 
         if (c <= 1)
@@ -1102,6 +1110,7 @@ public class UIKeyframes extends UITimelineCanvas
     @Override
     protected boolean subMouseClicked(UIContext context)
     {
+        if (!this.scaling && !this.stacking && this.loops.mouseClicked(context)) return true;
         if (this.currentGraph.mouseClicked(context))
         {
             return true;
@@ -1235,6 +1244,7 @@ public class UIKeyframes extends UITimelineCanvas
     @Override
     protected boolean subMouseReleased(UIContext context)
     {
+        if (this.loops.release(false)) return true;
         this.currentGraph.mouseReleased(context);
 
         if (this.marquee.isPressed())
@@ -1279,6 +1289,7 @@ public class UIKeyframes extends UITimelineCanvas
     @Override
     protected boolean subKeyPressed(UIContext context)
     {
+        if (this.loops.keyPressed(context)) return true;
         if (this.currentGraph != this.dopeSheet && context.isPressed(GLFW.GLFW_KEY_ESCAPE) && !this.single)
         {
             this.editSheet(null);
@@ -1342,6 +1353,7 @@ public class UIKeyframes extends UITimelineCanvas
 
     protected void renderOverlay(UIContext context)
     {
+        this.loops.render(context);
         this.currentGraph.renderTopmostKeyframes(context);
     }
 
@@ -1358,6 +1370,11 @@ public class UIKeyframes extends UITimelineCanvas
      */
     protected void handleMouse(UIContext context)
     {
+        if (this.loops.isDragging())
+        {
+            this.loops.handleMouse(context);
+            return;
+        }
         this.currentGraph.handleMouse(context, this.lastX, this.lastY);
 
         int mouseX = context.mouseX;
@@ -1381,7 +1398,7 @@ public class UIKeyframes extends UITimelineCanvas
                     newTick = Math.round(newTick);
                 }
 
-                keyframe.setTick(newTick, true);
+                keyframe.setTick(((KeyframeChannel) keyframe.getParent()).constrainKeyframeTick(keyframe, newTick), true);
             }
         }
         else if (this.dragging == 0 && mouseHasMoved)

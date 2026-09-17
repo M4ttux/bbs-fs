@@ -592,7 +592,7 @@ public class ReplayKeyframes extends ValueGroup
             return new Vector2d(prev, prev);
         }
 
-        if (frame.preA != frame.a && frame.a.getTick() == tick && (frame.preA.getInterpolation().getInterp() == Interpolations.CONST || frame.preA.getInterpolation().getInterp() == Interpolations.STEP))
+        if (frame.preA != frame.a && frame.a.getTick() == tick - frame.timeOffset && (frame.preA.getInterpolation().getInterp() == Interpolations.CONST || frame.preA.getInterpolation().getInterp() == Interpolations.STEP))
         {
             if (interpolated != null)
             {
