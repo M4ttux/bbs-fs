@@ -142,6 +142,8 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
     private boolean timelineVisible = true;
     private boolean propertiesVisible = true;
     private Set<String> keys = new LinkedHashSet<>();
+    private int poseOverlayCount;
+    private int transformOverlayCount;
     /**
      * Which rows the user left unfolded, per replay. Every rebuild of the timeline throws the dope
      * sheet away — switching category, toggling "all tracks", changing the track filter — so this
@@ -625,7 +627,8 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
     {
         if (this.replay != null)
         {
-            int cursor = this.filmPanel.getCursor();
+            UIContext context = this.getContext();
+            float cursor = this.filmPanel.getKeyframeCursor(context == null ? 0F : context.getTransition());
 
             this.replay.keyframes.x.insert(cursor, x);
             this.replay.keyframes.y.insert(cursor, y);
@@ -635,6 +638,8 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
 
     public void updateChannelsList()
     {
+        this.poseOverlayCount = BBSSettings.recordingPoseOverlays.get();
+        this.transformOverlayCount = BBSSettings.recordingTransformOverlays.get();
         this.selectedPart = this.replaysList.setBodyPartsReplay(this.replay, this.selectedPart);
         this.replaysList.resize();
 
@@ -734,6 +739,12 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
                 int mouseY = this.getContext().mouseY;
                 UIKeyframeSheet sheet = this.keyframeEditor.view.getGraph().getSheet(mouseY);
 
+                UIReplaysEditorUtils.addOverlayTrackAction(menu, sheet, parent ->
+                {
+                    this.getExpandedTracks().set(parent.toKey(), true);
+                    this.updateChannelsList();
+                });
+
                 ModelForm poseModelForm = sheet == null ? null : sheet.getPoseForm();
                 IPosedForm posedForm = sheet == null ? null : sheet.getPosedForm();
 
@@ -750,7 +761,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
                                 new UIAnimationToPoseOverlayPanel(
                                     (animationKey, onlyKeyframes, length, step) ->
                                     {
-                                        int current = this.filmPanel.getCursor();
+                                        float current = this.keyframeEditor.view.getTick();
                                         IEntity entity = this.filmPanel.getController().getCurrentEntity();
 
                                         UIReplaysEditorUtils.animationToPoseKeyframes(this.keyframeEditor, sheet, poseModelForm, entity, current, animationKey, onlyKeyframes, length, step);
@@ -768,10 +779,11 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
                 {
                     menu.action(Icons.LIMB, UIKeys.FILM_REPLAY_CONTEXT_POSES_TO_LIMBS, () ->
                     {
-                        UIReplaysEditorUtils.posesToLimbTracks(this.replay, sheet, posedForm);
-
-                        sheet.selection.removeSelected();
-                        this.updateChannelsList();
+                        if (UIReplaysEditorUtils.posesToLimbTracks(this.replay.properties, sheet))
+                        {
+                            this.getExpandedTracks().set(sheet.id, true);
+                            this.updateChannelsList();
+                        }
                     });
                 }
 
@@ -1225,6 +1237,13 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
     @Override
     public void render(UIContext context)
     {
+        /* Settings can change while this timeline remains open behind another panel. */
+        if (this.replay != null && (this.poseOverlayCount != BBSSettings.recordingPoseOverlays.get()
+            || this.transformOverlayCount != BBSSettings.recordingTransformOverlays.get()))
+        {
+            this.updateChannelsList();
+        }
+
         /* Hide category bar + actions toggle while the "edit track" overlay is open */
         boolean notEditing = this.keyframeEditor == null || !this.keyframeEditor.view.isEditing();
 
