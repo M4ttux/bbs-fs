@@ -56,6 +56,7 @@ public class UIKeyframes extends UITimelineCanvas
 
     private int dragging = -1;
     private boolean scrubbing;
+    private boolean controlFirst;
     private Pair<Keyframe, KeyframeType> draggingData;
     private boolean scaling;
     private float scalingAnchor;
@@ -1123,6 +1124,8 @@ public class UIKeyframes extends UITimelineCanvas
     @Override
     protected boolean subMouseClicked(UIContext context)
     {
+        this.updateModifierOrder();
+
         if (this.area.isInside(context))
         {
             this.xAxis.stopZoom();
@@ -1139,9 +1142,17 @@ public class UIKeyframes extends UITimelineCanvas
             return true;
         }
         if (!this.scaling && !this.stacking && context.mouseButton == 0
-            && this.graphArea.isInside(context) && this.isDuplicatingAtPlayhead())
+            && this.graphArea.isInside(context) && (this.isDuplicatingAtPlayhead() || this.isCreatingAtPlayhead()))
         {
-            this.duplicateOrSelectColumn(context);
+            if (this.isCreatingAtPlayhead())
+            {
+                this.removeOrCreateKeyframe(context);
+            }
+            else
+            {
+                this.duplicateOrSelectColumn(context);
+            }
+
             return true;
         }
         if (!this.scaling && !this.stacking && this.loops.mouseClicked(context)) return true;
@@ -1194,6 +1205,12 @@ public class UIKeyframes extends UITimelineCanvas
 
     private void removeOrCreateKeyframe(UIContext context)
     {
+        if (this.isCreatingAtPlayhead())
+        {
+            this.currentGraph.addKeyframeAt(this.getCreationTick(context), context.mouseY);
+            return;
+        }
+
         Pair<Keyframe, KeyframeType> keyframe = this.currentGraph.findKeyframe(context.mouseX, context.mouseY);
 
         if (keyframe != null)
@@ -1223,8 +1240,35 @@ public class UIKeyframes extends UITimelineCanvas
 
     public boolean isDuplicatingAtPlayhead()
     {
-        return Window.isAltPressed() && Window.isCtrlPressed() && !Window.isShiftPressed()
+        this.updateModifierOrder();
+
+        return !this.controlFirst && Window.isAltPressed() && Window.isCtrlPressed() && !Window.isShiftPressed()
             && this.currentGraph.getSelected() != null;
+    }
+
+    private void updateModifierOrder()
+    {
+        /* Keep the first modifier's mode while both are held, even after creating a
+         * key selects it. Releasing one modifier lets the remaining one choose again. */
+        if (!Window.isAltPressed() || !Window.isCtrlPressed())
+        {
+            this.controlFirst = Window.isCtrlPressed();
+        }
+    }
+
+    public boolean isCreatingAtPlayhead()
+    {
+        return this.hasCursor() && Window.isCtrlPressed() && Window.isAltPressed() && !this.isDuplicatingAtPlayhead();
+    }
+
+    public boolean isRemovingKeyframe()
+    {
+        return Window.isCtrlPressed() && !this.isDuplicatingAtPlayhead() && !this.isCreatingAtPlayhead();
+    }
+
+    public float getCreationTick(UIContext context)
+    {
+        return this.isCreatingAtPlayhead() ? this.getPlayheadTick(context) : this.fromGraphCursor(context.mouseX);
     }
 
     public float getDuplicationTick(UIContext context)
@@ -1341,6 +1385,17 @@ public class UIKeyframes extends UITimelineCanvas
     @Override
     protected boolean subKeyPressed(UIContext context)
     {
+        this.updateModifierOrder();
+
+        if (Window.isCtrlPressed() && (context.isPressed(GLFW.GLFW_KEY_LEFT_ALT) || context.isPressed(GLFW.GLFW_KEY_RIGHT_ALT)))
+        {
+            this.controlFirst = true;
+        }
+        else if (Window.isAltPressed() && (context.isPressed(GLFW.GLFW_KEY_LEFT_CONTROL) || context.isPressed(GLFW.GLFW_KEY_RIGHT_CONTROL)))
+        {
+            this.controlFirst = false;
+        }
+
         this.xAxis.stopZoom();
         this.currentGraph.stopZoom();
         if (this.loops.keyPressed(context)) return true;
@@ -1377,6 +1432,8 @@ public class UIKeyframes extends UITimelineCanvas
     @Override
     public void render(UIContext context)
     {
+        this.updateModifierOrder();
+
         if (this.isInteracting())
         {
             this.xAxis.stopZoom();

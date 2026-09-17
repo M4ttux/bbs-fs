@@ -471,13 +471,13 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     @Override
     public boolean addKeyframe(int mouseX, int mouseY)
     {
-        float tick = (float) this.keyframes.fromGraphX(mouseX);
-        UIKeyframeSheet sheet = this.getSheet(mouseY);
+        return this.addKeyframeAt(this.keyframes.fromGraphCursor(mouseX), mouseY);
+    }
 
-        if (this.keyframes.isSnappingToTicks())
-        {
-            tick = Math.round(tick);
-        }
+    @Override
+    public boolean addKeyframeAt(float tick, int mouseY)
+    {
+        UIKeyframeSheet sheet = this.getSheet(mouseY);
 
         if (sheet != null)
         {
@@ -864,12 +864,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
             if (sheet != null)
             {
-                float tick = (float) this.keyframes.fromGraphX(context.mouseX);
-
-                if (this.keyframes.isSnappingToTicks())
-                {
-                    tick = Math.round(tick);
-                }
+                float tick = this.keyframes.getCreationTick(context);
 
                 this.renderPreviewKeyframe(context, sheet, tick, Colors.WHITE);
             }
@@ -1246,7 +1241,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             }
 
             boolean isPointHover = this.isNear(x1, my, context.mouseX, context.mouseY, Window.isAltPressed() && Window.isShiftPressed());
-            boolean toRemove = Window.isCtrlPressed() && isPointHover;
+            boolean toRemove = this.keyframes.isRemovingKeyframe() && isPointHover;
 
             if (this.keyframes.isSelecting())
             {
