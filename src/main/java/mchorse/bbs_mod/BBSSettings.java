@@ -200,7 +200,8 @@ public class BBSSettings {
 	public static ValueFloat recordingCountdown;
 	public static ValueBoolean recordingSwipeDamage;
 	public static ValueBoolean recordingOverlays;
-	public static ValueInt recordingPoseTransformOverlays;
+	public static ValueInt recordingPoseOverlays;
+	public static ValueInt recordingTransformOverlays;
 	public static ValueBoolean recordingCameraPreview;
 	public static ValueBoolean recordingTeleport;
 
@@ -573,6 +574,8 @@ public class BBSSettings {
 		migrated |= migrateLegacyValue(root, "shader_curves", "enabled", "misc", "shader_curves");
 		migrated |= migrateLegacyValue(root, "multiskin", "multithreaded", "misc", "multiskin_multithreaded");
 		migrated |= migrateLegacyValue(root, "entity_selectors", "whitelist", "misc", "entity_selectors_whitelist");
+		migrated |= migrateLegacyValue(root, "recording", "pose_transform_overlays", "recording", "pose_overlays");
+		migrated |= migrateLegacyValue(root, "recording", "pose_transform_overlays", "recording", "transform_overlays");
 
 		return migrated;
 	}
@@ -842,7 +845,8 @@ public class BBSSettings {
 		recordingCountdown = builder.getFloat("countdown", 1.5F, 0F, 30F);
 		recordingSwipeDamage = builder.getBoolean("swipe_damage", false);
 		recordingOverlays = builder.getBoolean("overlays", true);
-		recordingPoseTransformOverlays = builder.getInt("pose_transform_overlays", 0, 0, 42);
+		recordingPoseOverlays = builder.getInt("pose_overlays", 0, 0, 42);
+		recordingTransformOverlays = builder.getInt("transform_overlays", 0, 0, 42);
 		recordingCameraPreview = builder.getBoolean("camera_preview", true);
 		recordingTeleport = builder.getBoolean("teleport", true);
 

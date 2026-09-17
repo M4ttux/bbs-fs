@@ -250,6 +250,12 @@ public class UIAnimationStateEditor extends UIElement
                 int mouseY = this.getContext().mouseY;
                 UIKeyframeSheet sheet = this.keyframeEditor.view.getGraph().getSheet(mouseY);
 
+                UIReplaysEditorUtils.addOverlayTrackAction(menu, sheet, parent ->
+                {
+                    this.expandedTabs.set(parent.toKey(), true);
+                    this.setState(this.state);
+                });
+
                 ModelForm poseModelForm = sheet == null ? null : sheet.getPoseForm();
 
                 if (poseModelForm != null)

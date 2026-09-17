@@ -734,6 +734,12 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
                 int mouseY = this.getContext().mouseY;
                 UIKeyframeSheet sheet = this.keyframeEditor.view.getGraph().getSheet(mouseY);
 
+                UIReplaysEditorUtils.addOverlayTrackAction(menu, sheet, parent ->
+                {
+                    this.getExpandedTracks().set(parent.toKey(), true);
+                    this.updateChannelsList();
+                });
+
                 ModelForm poseModelForm = sheet == null ? null : sheet.getPoseForm();
                 IPosedForm posedForm = sheet == null ? null : sheet.getPosedForm();
 

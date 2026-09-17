@@ -1,6 +1,10 @@
 package mchorse.bbs_mod.ui.film.replays;
 
 import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
+import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.l10n.L10n;
+import mchorse.bbs_mod.settings.values.numeric.ValueInt;
+import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.film.BaseFilmController;
 import mchorse.bbs_mod.film.FilmMatrices;
@@ -70,6 +74,30 @@ import java.util.function.Supplier;
 public class UIReplaysEditorUtils
 {
     private static final int BONE_TRACK_HUE_COUNT = 12;
+
+    /** Overlay counts are global; both timeline editors use the same creation action. */
+    public static void addOverlayTrackAction(ContextMenuManager menu, UIKeyframeSheet sheet, Consumer<TrackId> refresh)
+    {
+        if (sheet == null) return;
+        TrackId track = TrackId.parse(sheet.id);
+        Form owner = UIReplaysEditor.getSheetForm(sheet);
+        if (track == null || track.kind() != TrackKind.PROPERTY || owner == null) return;
+
+        String name = track.subject();
+        boolean pose = name.equals("pose") || name.startsWith("pose_overlay");
+        boolean transform = name.equals("transform") || name.startsWith("transform_overlay");
+        if ((!pose && !transform) || (pose && !(owner instanceof IPosedForm))) return;
+
+        ValueInt count = pose ? BBSSettings.recordingPoseOverlays : BBSSettings.recordingTransformOverlays;
+        if (count.get() >= count.getMax()) return;
+        menu.action(Icons.ADD, L10n.lang(pose ? "bbs.ui.keyframes.context.add_pose_track" : "bbs.ui.keyframes.context.add_transform_track"), () ->
+        {
+            if (count.get() >= count.getMax()) return;
+            count.set(count.get() + 1);
+            owner.syncOverlayTracks();
+            refresh.accept(TrackId.property(track.formPath(), pose ? "pose" : "transform"));
+        });
+    }
 
     /**
      * Key the pose at the tick, following what the timeline is showing: a pose track with its limbs
