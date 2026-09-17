@@ -210,17 +210,19 @@ public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
             if (ticks > end && (next == null || ticks < next.getTick()))
             {
                 float local = loop.sourceTick(end);
-                KeyframeSegment<T> source = this.findSourceSegment(local, first, after);
+                float passOffset = end - local;
+                KeyframeSegment<T> source = this.findSourceSegment(local, first, after, loop, passOffset, end);
                 if (next == null)
                 {
                     source.timeOffset = ticks - local;
                     source.setup(ticks);
                     return source;
                 }
-                Keyframe<T> endpoint = new Keyframe<>("", this.factory, end, source.createInterpolated());
-                endpoint.copyOverExtra(source.a);
-                endpoint.setParent(this);
+                Keyframe<T> endpoint = this.loopEndpoint(source, end);
                 KeyframeSegment<T> result = new KeyframeSegment<>(endpoint, next, -1);
+                result.preA = this.shiftLoopNeighbour(source.a.getTick() < local ? source.a : source.preA, passOffset);
+                Keyframe<T> post = this.get(after + 1);
+                result.postB = post == null ? next : post;
                 result.setup(ticks);
                 return result;
             }
@@ -228,14 +230,46 @@ public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
             if (ticks <= end && (next == null || ticks < next.getTick()))
             {
                 float local = loop.sourceTick(ticks);
-                KeyframeSegment<T> result = this.findSourceSegment(local, first, after);
+                KeyframeSegment<T> result = this.findSourceSegment(local, first, after, loop, ticks - local, end);
                 result.timeOffset = ticks - local;
                 result.setup(ticks);
                 return result;
             }
         }
 
-        return this.findRawSegment(ticks);
+        KeyframeSegment<T> result = this.findRawSegment(ticks);
+        if (result != null) this.fillLoopPredecessor(result);
+        return result;
+    }
+
+    /** The first real key after a loop follows its virtual endpoint, not the source pass. */
+    private void fillLoopPredecessor(KeyframeSegment<T> segment)
+    {
+        for (KeyframeLoop loop : this.loops)
+        {
+            if (loop.sourceEnd() >= segment.a.getTick()) break;
+
+            int after = this.upperBound(loop.sourceEnd());
+            if (this.get(after) != segment.a) continue;
+            int first = this.lowerBound(loop.start());
+            if (first >= after) continue;
+
+            float end = this.getLoopEnd(loop);
+            float local = loop.sourceTick(end);
+            float passOffset = end - local;
+            KeyframeSegment<T> source = this.findSourceSegment(local, first, after, loop, passOffset, end);
+            segment.preA = end < segment.a.getTick() ? this.loopEndpoint(source, end)
+                : this.shiftLoopNeighbour(source.a.getTick() < local ? source.a : source.preA, passOffset);
+            return;
+        }
+    }
+
+    private Keyframe<T> loopEndpoint(KeyframeSegment<T> source, float end)
+    {
+        Keyframe<T> endpoint = new Keyframe<>("", this.factory, end, source.createInterpolated());
+        endpoint.copyOverExtra(source.a);
+        endpoint.setParent(this);
+        return endpoint;
     }
 
     private int lowerBound(float tick)
@@ -257,15 +291,57 @@ public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
         return low;
     }
 
-    private KeyframeSegment<T> findSourceSegment(float tick, int first, int after)
+    private KeyframeSegment<T> findSourceSegment(float tick, int first, int after, KeyframeLoop loop, float passOffset, float end)
     {
         int right = Math.min(after - 1, Math.max(first, this.upperBound(tick)));
         int left = tick >= this.list.get(after - 1).getTick() ? after - 1 : Math.max(first, right - 1);
         KeyframeSegment<T> segment = new KeyframeSegment<>(this.list.get(left), this.list.get(right), left);
-        /* Preserve the original curve's tangents: outside neighbours may shape Auto/Bezier,
-         * but cannot become endpoints of the repeated source interval. */
+        /* Neighbours live on the repeated timeline, in the same local time as a/b.
+         * Skip a coincident seam key: Auto needs a neighbour at a distinct tick. */
+        if (left == first && passOffset > 0)
+        {
+            int previous = this.lowerBound(segment.a.getTick() + loop.period()) - 1;
+            previous = Math.min(after - 1, previous);
+            segment.preA = previous < first ? segment.a : this.shiftLoopNeighbour(this.get(previous), -loop.period());
+        }
+        else if (left == first)
+        {
+            this.fillLoopPredecessor(segment);
+        }
+
+        if (right == after - 1)
+        {
+            int following = Math.max(first, this.upperBound(segment.b.getTick() - loop.period()));
+            Keyframe<T> next = this.get(after);
+            if (next != null && next.getTick() <= segment.b.getTick() + passOffset)
+            {
+                next = this.get(this.upperBound(segment.b.getTick() + passOffset));
+            }
+            Keyframe<T> repeated = following < after ? this.get(following) : null;
+            float repeatedTick = repeated == null ? Float.POSITIVE_INFINITY : repeated.getTick() + loop.period() + passOffset;
+
+            if (repeatedTick <= end && (next == null || repeatedTick < next.getTick()))
+            {
+                segment.postB = this.shiftLoopNeighbour(repeated, loop.period());
+            }
+            else
+            {
+                segment.postB = next == null ? segment.b : this.shiftLoopNeighbour(next, -passOffset);
+            }
+        }
         segment.setup(tick);
         return segment;
+    }
+
+    /** A transient neighbour keeps the source value live without moving or copying stored keys. */
+    private Keyframe<T> shiftLoopNeighbour(Keyframe<T> key, float offset)
+    {
+        if (offset == 0) return key;
+
+        Keyframe<T> shifted = new Keyframe<>("", this.factory, key.getTick() + offset, key.getValue());
+        shifted.copyOverExtra(key);
+        shifted.setParent(this);
+        return shifted;
     }
 
     private KeyframeSegment<T> findRawSegment(float ticks)

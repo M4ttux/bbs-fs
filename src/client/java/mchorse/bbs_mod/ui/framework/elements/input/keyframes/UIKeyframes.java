@@ -1355,6 +1355,7 @@ public class UIKeyframes extends UITimelineCanvas
     {
         this.loops.render(context);
         this.currentGraph.renderTopmostKeyframes(context);
+        this.loops.renderStatus(context);
     }
 
     public void renderRuler(UIContext context)

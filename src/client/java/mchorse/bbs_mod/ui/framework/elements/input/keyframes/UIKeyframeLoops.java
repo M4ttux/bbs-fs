@@ -316,14 +316,23 @@ public class UIKeyframeLoops
             }
         }
         context.batcher.unclip(context);
+    }
 
+    public void renderStatus(UIContext context)
+    {
         if (this.isDragging())
         {
             KeyframeLoop loop = this.selectedChannel.getLoop(this.selectedId);
             if (loop != null)
             {
                 String label = L10n.lang("bbs.ui.keyframes.loop.status").format(String.format(java.util.Locale.ROOT, "%.2f", loop.end()), String.format(java.util.Locale.ROOT, "%.2f", loop.passes())).get();
-                context.batcher.textShadow(label, this.view.graphArea.x + 6, this.view.area.y + 4, Colors.WHITE);
+                int width = context.batcher.getFont().getWidth(label);
+                int height = context.batcher.getFont().getHeight();
+                int x = Math.max(this.view.area.x + 4, Math.min(context.mouseX + 12, this.view.area.ex() - width - 4));
+                int y = context.mouseY + 12;
+                if (y + height + 4 > this.view.area.ey()) y = context.mouseY - height - 12;
+                y = Math.max(this.view.area.y + 4, y);
+                context.batcher.textCard(label, x, y, Colors.WHITE, 0xE6181818);
             }
         }
     }
