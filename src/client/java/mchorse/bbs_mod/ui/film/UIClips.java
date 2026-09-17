@@ -1996,7 +1996,7 @@ public class UIClips extends UITimelineCanvas
         batcher.unclip(context);
         batcher.clip(this.area, context);
 
-        float cursor = this.delegate.getCursor(context.getTransition());
+        float cursor = this.delegate.getTimelineCursor(context.getTransition());
         String label = TimeUtils.formatCursorTime(cursor) + "/" + TimeUtils.formatTime(this.clips.calculateDuration());
 
         renderCursor(context, label, area, this.toGraphX(cursor));

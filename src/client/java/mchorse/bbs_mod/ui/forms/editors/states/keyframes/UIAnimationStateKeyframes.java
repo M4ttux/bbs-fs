@@ -42,7 +42,7 @@ public class UIAnimationStateKeyframes extends UIKeyframes
     @Override
     public float getPlayheadTick(UIContext context)
     {
-        return this.editor == null ? 0F : this.editor.getCursor(context.getTransition());
+        return this.editor == null ? 0F : this.editor.getTimelineCursor(context.getTransition());
     }
 
     @Override

@@ -82,7 +82,7 @@ public class UIFilmKeyframes extends UIKeyframes
     @Override
     public float getPlayheadTick(UIContext context)
     {
-        return this.editor == null ? 0F : this.editor.getCursor(context.getTransition()) - this.getClipOffset();
+        return this.editor == null ? 0F : this.editor.getTimelineCursor(context.getTransition()) - this.getClipOffset();
     }
 
     /**

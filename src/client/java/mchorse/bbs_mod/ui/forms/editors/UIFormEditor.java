@@ -1332,6 +1332,12 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
     }
 
     @Override
+    public boolean isRunning()
+    {
+        return this.playing;
+    }
+
+    @Override
     public int getCursor()
     {
         return this.cursor;

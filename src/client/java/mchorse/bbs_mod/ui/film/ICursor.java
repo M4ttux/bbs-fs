@@ -8,6 +8,17 @@ public interface ICursor
 
     public void setCursor(int tick);
 
+    public default boolean isRunning()
+    {
+        return false;
+    }
+
+    /** The timeline steps during snapped playback; paused Shift scrubbing keeps its fraction. */
+    public default float getTimelineCursor(float transition)
+    {
+        return this.isRunning() && BBSSettings.editorSnapToTicks.get() ? this.getCursor() : this.getCursor(transition);
+    }
+
     /** Render/sample time, including the fraction between simulation ticks. */
     public default float getCursor(float transition)
     {
