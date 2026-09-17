@@ -359,7 +359,7 @@ public class UIAnimationStateEditor extends UIElement
                         {
                             UIOverlay.addOverlay(this.getContext(), new UIAnimationToPoseOverlayPanel((animationKey, onlyKeyframes, length, step) ->
                             {
-                                int current = this.editor.getCursor();
+                                float current = this.keyframeEditor.view.getTick();
                                 IEntity entity = this.editor.renderer.getTargetEntity();
 
                                 UIReplaysEditorUtils.animationToPoseKeyframes(this.keyframeEditor, sheet, poseModelForm, entity, current, animationKey, onlyKeyframes, length, step);

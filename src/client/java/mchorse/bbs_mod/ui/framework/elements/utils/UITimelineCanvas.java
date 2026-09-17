@@ -82,6 +82,19 @@ public abstract class UITimelineCanvas extends UIElement
         return this.xAxis.from(mouseX);
     }
 
+    public boolean isSnappingToTicks()
+    {
+        return BBSSettings.editorSnapToTicks.get() && !Window.isShiftPressed();
+    }
+
+    /** Mouse authoring uses the shared tick grid, with Shift temporarily bypassing it. */
+    public float fromGraphCursor(int mouseX)
+    {
+        double tick = this.fromGraphX(mouseX);
+
+        return (float) (this.isSnappingToTicks() ? Math.round(tick) : tick);
+    }
+
     public boolean isNavigating()
     {
         return this.navigating;

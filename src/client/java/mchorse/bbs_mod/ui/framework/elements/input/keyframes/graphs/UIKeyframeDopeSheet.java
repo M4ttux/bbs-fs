@@ -474,7 +474,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         float tick = (float) this.keyframes.fromGraphX(mouseX);
         UIKeyframeSheet sheet = this.getSheet(mouseY);
 
-        if (!Window.isShiftPressed())
+        if (this.keyframes.isSnappingToTicks())
         {
             tick = Math.round(tick);
         }
@@ -710,7 +710,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         float offset = (float) (this.keyframes.fromGraphX(originalX) - originalT);
         float tick = (float) this.keyframes.fromGraphX(context.mouseX) - offset;
 
-        if (!Window.isShiftPressed())
+        if (this.keyframes.isSnappingToTicks())
         {
             tick = Math.round(this.keyframes.fromGraphX(context.mouseX) - offset);
         }
@@ -866,7 +866,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             {
                 float tick = (float) this.keyframes.fromGraphX(context.mouseX);
 
-                if (!Window.isShiftPressed())
+                if (this.keyframes.isSnappingToTicks())
                 {
                     tick = Math.round(tick);
                 }

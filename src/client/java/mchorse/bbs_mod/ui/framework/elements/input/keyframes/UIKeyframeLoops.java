@@ -230,7 +230,7 @@ public class UIKeyframeLoops
         KeyframeLoop loop = this.selectedChannel.getLoop(this.selectedId);
         if (loop == null) return;
         float delta = (float) this.view.fromGraphX(context.mouseX) - this.pressTick;
-        if (!Window.isShiftPressed()) delta = Math.round(delta);
+        if (this.view.isSnappingToTicks()) delta = Math.round(delta);
         if (this.resizing)
         {
             float end = this.originalEnd + delta;

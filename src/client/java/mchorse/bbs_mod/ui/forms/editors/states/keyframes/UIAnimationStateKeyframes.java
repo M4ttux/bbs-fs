@@ -21,14 +21,16 @@ public class UIAnimationStateKeyframes extends UIKeyframes
         this.editor = delegate;
     }
 
-    public int getOffset()
+    public float getOffset()
     {
         if (this.editor == null)
         {
             return 0;
         }
 
-        return this.editor.getCursor();
+        UIContext context = this.getContext();
+
+        return this.editor.getKeyframeCursor(context == null ? 0F : context.getTransition());
     }
 
     @Override
@@ -38,7 +40,7 @@ public class UIAnimationStateKeyframes extends UIKeyframes
     }
 
     @Override
-    public Integer getAutoKeyframeTick()
+    public Float getAutoKeyframeTick()
     {
         return this.editor != null && BBSSettings.autoKeyframe.get() ? this.getOffset() : null;
     }
@@ -52,8 +54,14 @@ public class UIAnimationStateKeyframes extends UIKeyframes
 
         if (keyframe != null)
         {
-            this.editor.setCursor((int) keyframe.getTick());
+            this.editor.setCursor(keyframe.getTick());
         }
+    }
+
+    @Override
+    protected boolean hasCursor()
+    {
+        return this.editor != null;
     }
 
     @Override
@@ -61,7 +69,8 @@ public class UIAnimationStateKeyframes extends UIKeyframes
     {
         if (this.editor != null)
         {
-            this.editor.setCursor(Math.max(0, (int) Math.round(this.fromGraphX(context.mouseX))));
+            this.editor.stopPlaybackOnScrub();
+            this.editor.setCursor(Math.max(0F, this.fromGraphCursor(context.mouseX)));
         }
     }
 
@@ -72,8 +81,9 @@ public class UIAnimationStateKeyframes extends UIKeyframes
          * mirroring UIFilmKeyframes; rendering it in renderBackground left it under the keyframes. */
         if (this.editor != null)
         {
-            int cx = this.toGraphX(this.getOffset());
-            String label = TimeUtils.formatTime(this.getOffset()) + "/" + TimeUtils.formatTime(this.getDuration());
+            float cursor = this.editor.getCursor(context.getTransition());
+            int cx = this.toGraphX(cursor);
+            String label = TimeUtils.formatCursorTime(cursor) + "/" + TimeUtils.formatTime(this.getDuration());
 
             context.batcher.clip(this.graphArea, context);
             UITimelineCanvas.renderCursor(context, label, this.area, cx - 1);

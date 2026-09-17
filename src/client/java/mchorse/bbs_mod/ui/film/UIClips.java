@@ -1325,7 +1325,7 @@ public class UIClips extends UITimelineCanvas
             }
         }
 
-        if (shift && !this.hasEmbeddedView())
+        if (shift && !this.hasEmbeddedView() && !this.isInRuler(mouseY))
         {
             this.marquee.press(mouseX, mouseY);
 
@@ -1357,7 +1357,7 @@ public class UIClips extends UITimelineCanvas
 
             this.scrubbing = true;
             this.delegate.stopPlaybackOnScrub();
-            this.delegate.setCursor(this.fromGraphTick(mouseX));
+            this.delegate.setCursor(Math.max(0F, this.fromGraphCursor(mouseX)));
 
             return true;
         }
@@ -1492,6 +1492,11 @@ public class UIClips extends UITimelineCanvas
 
         this.commitMarkerDrag();
 
+        if (this.scrubbing)
+        {
+            this.delegate.setCursor(Math.max(0F, this.fromGraphCursor(context.mouseX)));
+        }
+
         if (this.marquee.isPressed())
         {
             this.pickLastSelectedClip();
@@ -1569,7 +1574,7 @@ public class UIClips extends UITimelineCanvas
         }
         else if (this.scrubbing)
         {
-            this.delegate.setCursor(this.fromGraphTick(mouseX));
+            this.delegate.setCursor(Math.max(0F, this.fromGraphCursor(mouseX)));
         }
         else if (this.selectingLoop == 0)
         {
@@ -1991,9 +1996,10 @@ public class UIClips extends UITimelineCanvas
         batcher.unclip(context);
         batcher.clip(this.area, context);
 
-        String label = TimeUtils.formatTime(this.delegate.getCursor()) + "/" + TimeUtils.formatTime(this.clips.calculateDuration());
+        float cursor = this.delegate.getCursor(context.getTransition());
+        String label = TimeUtils.formatCursorTime(cursor) + "/" + TimeUtils.formatTime(this.clips.calculateDuration());
 
-        renderCursor(context, label, area, this.toGraphX(this.delegate.getCursor()));
+        renderCursor(context, label, area, this.toGraphX(cursor));
         this.renderSelection(context);
 
         batcher.unclip(context);

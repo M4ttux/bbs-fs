@@ -627,7 +627,8 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
     {
         if (this.replay != null)
         {
-            int cursor = this.filmPanel.getCursor();
+            UIContext context = this.getContext();
+            float cursor = this.filmPanel.getKeyframeCursor(context == null ? 0F : context.getTransition());
 
             this.replay.keyframes.x.insert(cursor, x);
             this.replay.keyframes.y.insert(cursor, y);
@@ -760,7 +761,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
                                 new UIAnimationToPoseOverlayPanel(
                                     (animationKey, onlyKeyframes, length, step) ->
                                     {
-                                        int current = this.filmPanel.getCursor();
+                                        float current = this.keyframeEditor.view.getTick();
                                         IEntity entity = this.filmPanel.getController().getCurrentEntity();
 
                                         UIReplaysEditorUtils.animationToPoseKeyframes(this.keyframeEditor, sheet, poseModelForm, entity, current, animationKey, onlyKeyframes, length, step);

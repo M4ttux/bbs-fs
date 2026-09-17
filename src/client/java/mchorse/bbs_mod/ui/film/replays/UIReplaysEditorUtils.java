@@ -233,7 +233,7 @@ public class UIReplaysEditorUtils
             return;
         }
 
-        Integer tick = editor.getAutoKeyframeTick();
+        Float tick = editor.getAutoKeyframeTick();
 
         for (UIKeyframeSheet sheet : editor.getGraph().getSheets())
         {
@@ -313,7 +313,7 @@ public class UIReplaysEditorUtils
             replayTransform.syncFromReplay(
                 panel.replayEditor.getReplay(),
                 panel.getController().getCurrentEntity(),
-                panel.getCursor()
+                panel.getKeyframeCursor(transition)
             );
 
             return replayTransform;
@@ -365,7 +365,7 @@ public class UIReplaysEditorUtils
         replayTransform.syncFromReplay(
             panel.replayEditor.getReplay(),
             panel.getController().getCurrentEntity(),
-            panel.getCursor()
+            panel.getKeyframeCursor(transition)
         );
         replayTransform.hotkeyDrag(() -> buildFilmGizmoDrag(
             panel,
@@ -661,7 +661,7 @@ public class UIReplaysEditorUtils
 
         if (form != null)
         {
-            replay.properties.applyProperties(form, panel.getCursor() + (panel.getRunner().isRunning() ? transition : 0F));
+            replay.properties.applyProperties(form, replay.getTick(panel.getCursor()) + panel.getRunner().getTransition(transition));
         }
     }
 
@@ -708,7 +708,7 @@ public class UIReplaysEditorUtils
             }
             if (isPoseSheet(currentSheet, path))
             {
-                int tick = cursor.getCursor();
+                float tick = keyframeEditor.view.getTick();
                 Keyframe closest = getClosestKeyframe(currentSheet, tick);
                 if (closest != null)
                 {
@@ -716,7 +716,7 @@ public class UIReplaysEditorUtils
                     {
                         forceSelectInSheet(graph, currentSheet, closest);
                     }
-                    cursor.setCursor((int) closest.getTick());
+                    cursor.setCursor(closest.getTick());
                 }
                 updatePoseEditorBoneSelection(keyframeEditor, bone);
                 return;
@@ -853,7 +853,7 @@ public class UIReplaysEditorUtils
     private static void pickProperty(UIKeyframeEditor keyframeEditor, ICursor filmPanel, String bone, UIKeyframeSheet sheet, boolean insert)
     {
         IUIKeyframeGraph graph = keyframeEditor.view.getGraph();
-        int tick = filmPanel.getCursor();
+        float tick = keyframeEditor.view.getTick();
 
         if (insert)
         {
@@ -874,7 +874,7 @@ public class UIReplaysEditorUtils
                 forceSelectInSheet(graph, sheet, closest);
             }
             updatePoseEditorBoneSelection(keyframeEditor, boneForEditor);
-            filmPanel.setCursor((int) closest.getTick());
+            filmPanel.setCursor(closest.getTick());
         }
         else
         {
@@ -882,20 +882,20 @@ public class UIReplaysEditorUtils
         }
     }
 
-    private static Keyframe getClosestKeyframe(UIKeyframeSheet sheet, int tick)
+    private static Keyframe getClosestKeyframe(UIKeyframeSheet sheet, float tick)
     {
         KeyframeSegment segment = sheet.channel.find(tick);
 
         return segment != null ? segment.getClosest() : null;
     }
 
-    private static Keyframe getKeyframeAt(UIKeyframeSheet sheet, int tick)
+    private static Keyframe getKeyframeAt(UIKeyframeSheet sheet, float tick)
     {
         for (Object o : sheet.channel.getKeyframes())
         {
             Keyframe keyframe = (Keyframe) o;
 
-            if ((int) keyframe.getTick() == tick)
+            if (keyframe.getTick() == tick)
             {
                 return keyframe;
             }
@@ -913,7 +913,7 @@ public class UIReplaysEditorUtils
     private static void insertIntoPoseSheet(UIKeyframeEditor keyframeEditor, ICursor cursor, String bone, UIKeyframeSheet poseSheet)
     {
         IUIKeyframeGraph graph = keyframeEditor.view.getGraph();
-        int tick = cursor.getCursor();
+        float tick = keyframeEditor.view.getTick();
         Keyframe existing = getKeyframeAt(poseSheet, tick);
 
         if (existing != null)
@@ -968,7 +968,7 @@ public class UIReplaysEditorUtils
     public static void animationToPoseKeyframes(
         UIKeyframeEditor keyframeEditor, UIKeyframeSheet sheet,
         ModelForm modelForm, IEntity entity,
-        int tick, String animationKey, boolean onlyKeyframes, int length, int step
+        float tick, String animationKey, boolean onlyKeyframes, int length, int step
     ) {
         ModelInstance model = ModelFormRenderer.getModel(modelForm);
         Animation animation = model.animations.get(animationKey);
@@ -1020,7 +1020,7 @@ public class UIReplaysEditorUtils
         return ticks;
     }
 
-    private static void fillAnimationPose(UIKeyframeSheet sheet, float i, ModelInstance model, IEntity entity, Animation animation, int current)
+    private static void fillAnimationPose(UIKeyframeSheet sheet, float i, ModelInstance model, IEntity entity, Animation animation, float current)
     {
         model.model.resetPose();
         model.model.apply(entity, animation, i, 1F, 0F, false);

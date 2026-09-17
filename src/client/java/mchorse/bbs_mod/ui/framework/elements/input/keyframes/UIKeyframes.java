@@ -38,6 +38,7 @@ import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.context.MenuVerb;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
+import mchorse.bbs_mod.ui.utils.renderers.TimelineRulerRenderer;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Pair;
@@ -54,6 +55,7 @@ public class UIKeyframes extends UITimelineCanvas
     /* Editing states */
 
     private int dragging = -1;
+    private boolean scrubbing;
     private Pair<Keyframe, KeyframeType> draggingData;
     private boolean scaling;
     private float scalingAnchor;
@@ -118,7 +120,7 @@ public class UIKeyframes extends UITimelineCanvas
             .supplier(this::serializeKeyframes)
             .consumer((data, mouseX, mouseY) ->
             {
-                double offset = Math.round(this.fromGraphX(mouseX));
+                double offset = BBSSettings.editorSnapToTicks.get() ? Math.round(this.fromGraphX(mouseX)) : this.fromGraphX(mouseX);
 
                 this.pasteKeyframes(parseKeyframes(data), (float) offset, mouseY);
             })
@@ -960,7 +962,7 @@ public class UIKeyframes extends UITimelineCanvas
      * yet makes one rather than dragging the past along with it. A timeline without a playhead has
      * no tick to key at, so it never auto-keyframes. Film and animation-state timelines supply it.
      */
-    public Integer getAutoKeyframeTick()
+    public Float getAutoKeyframeTick()
     {
         return null;
     }
@@ -973,7 +975,7 @@ public class UIKeyframes extends UITimelineCanvas
     /** Whether the user is in the middle of any mouse interaction (dragging, selecting, navigating, scaling or stacking). */
     public boolean isInteracting()
     {
-        return this.loops.isDragging() || this.dragging >= 0 || this.marquee.isPressed() || this.navigating || this.scaling || this.stacking;
+        return this.scrubbing || this.loops.isDragging() || this.dragging >= 0 || this.marquee.isPressed() || this.navigating || this.scaling || this.stacking;
     }
 
     /* Sheet management */
@@ -1120,6 +1122,16 @@ public class UIKeyframes extends UITimelineCanvas
             this.xAxis.stopZoom();
             this.currentGraph.stopZoom();
         }
+        if (this.hasCursor() && !this.scaling && !this.stacking && context.mouseButton == 0
+            && !Window.isAltPressed() && !Window.isCtrlPressed()
+            && this.graphArea.isInside(context)
+            && context.mouseY < TimelineRulerRenderer.getRulerBottom(this.area))
+        {
+            this.scrubbing = true;
+            this.moveNoKeyframes(context);
+
+            return true;
+        }
         if (!this.scaling && !this.stacking && context.mouseButton == 0
             && this.graphArea.isInside(context) && this.isDuplicatingAtPlayhead())
         {
@@ -1211,7 +1223,7 @@ public class UIKeyframes extends UITimelineCanvas
 
     public float getDuplicationTick(UIContext context)
     {
-        return this.isDuplicatingAtPlayhead() ? this.getTick() : Math.round(this.fromGraphX(context.mouseX));
+        return this.isDuplicatingAtPlayhead() ? this.getTick() : this.fromGraphCursor(context.mouseX);
     }
 
     private void pickOrStartSelectingKeyframes(UIContext context)
@@ -1270,6 +1282,14 @@ public class UIKeyframes extends UITimelineCanvas
     @Override
     protected boolean subMouseReleased(UIContext context)
     {
+        if (this.scrubbing && context.mouseButton == 0)
+        {
+            this.moveNoKeyframes(context);
+            this.scrubbing = false;
+
+            return true;
+        }
+
         if (this.loops.release(false)) return true;
         this.currentGraph.mouseReleased(context);
 
@@ -1410,6 +1430,12 @@ public class UIKeyframes extends UITimelineCanvas
      */
     protected void handleMouse(UIContext context)
     {
+        if (this.scrubbing)
+        {
+            this.moveNoKeyframes(context);
+            return;
+        }
+
         if (this.loops.isDragging())
         {
             this.loops.handleMouse(context);
@@ -1463,6 +1489,11 @@ public class UIKeyframes extends UITimelineCanvas
 
     protected void moveNoKeyframes(UIContext context)
     {}
+
+    protected boolean hasCursor()
+    {
+        return false;
+    }
 
     /**
      * Render background, specifically backdrop and borders if the duration is present

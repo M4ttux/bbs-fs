@@ -203,7 +203,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
         float tick = (float) this.keyframes.fromGraphX(mouseX);
         UIKeyframeSheet sheet = this.sheet;
 
-        if (!Window.isShiftPressed())
+        if (this.keyframes.isSnappingToTicks())
         {
             tick = Math.round(tick);
         }
@@ -345,7 +345,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
             float fx = (float) this.keyframes.fromGraphX(context.mouseX) - offsetX;
             Object fy = factory.yToValue(this.fromGraphY(context.mouseY) - offsetY);
 
-            if (!Window.isShiftPressed())
+            if (this.keyframes.isSnappingToTicks())
             {
                 fx = Math.round(this.keyframes.fromGraphX(context.mouseX) - offsetX);
             }
@@ -485,7 +485,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
             {
                 float tick = currentTick;
 
-                if (!Window.isShiftPressed())
+                if (this.keyframes.isSnappingToTicks())
                 {
                     tick = Math.round(tick);
                 }
