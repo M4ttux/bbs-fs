@@ -142,6 +142,8 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
     private boolean timelineVisible = true;
     private boolean propertiesVisible = true;
     private Set<String> keys = new LinkedHashSet<>();
+    private int poseOverlayCount;
+    private int transformOverlayCount;
     /**
      * Which rows the user left unfolded, per replay. Every rebuild of the timeline throws the dope
      * sheet away — switching category, toggling "all tracks", changing the track filter — so this
@@ -635,6 +637,8 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
 
     public void updateChannelsList()
     {
+        this.poseOverlayCount = BBSSettings.recordingPoseOverlays.get();
+        this.transformOverlayCount = BBSSettings.recordingTransformOverlays.get();
         this.selectedPart = this.replaysList.setBodyPartsReplay(this.replay, this.selectedPart);
         this.replaysList.resize();
 
@@ -1231,6 +1235,13 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
     @Override
     public void render(UIContext context)
     {
+        /* Settings can change while this timeline remains open behind another panel. */
+        if (this.replay != null && (this.poseOverlayCount != BBSSettings.recordingPoseOverlays.get()
+            || this.transformOverlayCount != BBSSettings.recordingTransformOverlays.get()))
+        {
+            this.updateChannelsList();
+        }
+
         /* Hide category bar + actions toggle while the "edit track" overlay is open */
         boolean notEditing = this.keyframeEditor == null || !this.keyframeEditor.view.isEditing();
 

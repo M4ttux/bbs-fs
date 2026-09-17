@@ -68,6 +68,8 @@ public class UIAnimationStateEditor extends UIElement
 
     private AnimationState state;
     private Set<String> keys = new LinkedHashSet<>();
+    private int poseOverlayCount;
+    private int transformOverlayCount;
 
     /** Track rows the user has unfolded right now; handed to the dope sheet, which folds them in place. */
     private final FoldState<String> expandedTabs = new FoldState<>();
@@ -139,6 +141,8 @@ public class UIAnimationStateEditor extends UIElement
 
     public void setState(AnimationState state)
     {
+        this.poseOverlayCount = BBSSettings.recordingPoseOverlays.get();
+        this.transformOverlayCount = BBSSettings.recordingTransformOverlays.get();
         UIKeyframes lastEditor = null;
 
         if (this.keyframeEditor != null)
@@ -568,6 +572,13 @@ public class UIAnimationStateEditor extends UIElement
     @Override
     public void render(UIContext context)
     {
+        /* Settings can change while this timeline remains open behind another panel. */
+        if (this.state != null && (this.poseOverlayCount != BBSSettings.recordingPoseOverlays.get()
+            || this.transformOverlayCount != BBSSettings.recordingTransformOverlays.get()))
+        {
+            this.setState(this.state);
+        }
+
         if (this.keyframeEditor != null)
         {
             UIPropTransform transform = UIReplaysEditorUtils.getEditableTransform(this.keyframeEditor);
