@@ -108,7 +108,7 @@ public abstract class UITimelineCanvas extends UIElement
 
     public double getZoomSpeed()
     {
-        return Window.isShiftPressed() ? 3D : 1D;
+        return Window.isShiftPressed() && Window.isCtrlPressed() ? 3D : 1D;
     }
 
     /** Pan the time axis by a cursor movement of {@code dx} pixels (middle-drag navigation). */

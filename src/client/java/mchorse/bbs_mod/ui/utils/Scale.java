@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.utils;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
@@ -13,6 +14,7 @@ public class Scale
 
     private boolean zoomAnimating;
     private long zoomStarted;
+    private long zoomDuration;
     private double zoomStart;
     private double zoomTarget;
     private float zoomAnchor;
@@ -407,6 +409,14 @@ public class Scale
         this.zoomStarted = this.zoomTime();
         this.zoomAreaPosition = this.direction.getPosition(this.area, 0F);
         this.zoomAreaSize = this.direction.getSide(this.area);
+        this.zoomDuration = (long) (ZOOM_DURATION_NS * (double) BBSSettings.getScrollSmoothingIntensity());
+
+        if (this.zoomDuration <= 0L)
+        {
+            this.zoomAnchor(anchor, this.zoomTarget - this.getZoom());
+            return;
+        }
+
         this.zoomAnimating = this.zoomStart > 0 && this.zoomTarget != this.zoomStart;
     }
 
@@ -420,7 +430,8 @@ public class Scale
             return;
         }
 
-        double progress = MathUtils.clamp((this.zoomTime() - this.zoomStarted) / (double) ZOOM_DURATION_NS, 0D, 1D);
+        double progress = BBSSettings.getScrollSmoothingIntensity() <= 0F ? 1D
+            : MathUtils.clamp((this.zoomTime() - this.zoomStarted) / (double) this.zoomDuration, 0D, 1D);
         double eased = 1D - Math.pow(1D - progress, 3D);
         double zoom = progress == 1D ? this.zoomTarget
             : Math.exp(Math.log(this.zoomStart) + (Math.log(this.zoomTarget) - Math.log(this.zoomStart)) * eased);
