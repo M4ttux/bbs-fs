@@ -102,7 +102,7 @@ public abstract class UITimelineCanvas extends UIElement
     /** Zoom the time axis one step in the wheel's direction, anchored under the cursor. */
     public void zoomTimeAt(UIContext context, double wheel)
     {
-        this.xAxis.zoomAnchor(Scale.getAnchorX(context, this.xAxis.area), Math.copySign(this.xAxis.getZoomFactor(), wheel));
+        this.xAxis.animateZoom(Scale.getAnchorX(context, this.xAxis.area), wheel);
     }
 
     /** Pan the time axis by a cursor movement of {@code dx} pixels (middle-drag navigation). */

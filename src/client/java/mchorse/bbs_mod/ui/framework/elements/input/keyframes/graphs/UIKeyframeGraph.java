@@ -55,6 +55,18 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
         return this.keyframes;
     }
 
+    @Override
+    public void updateZoom()
+    {
+        this.yAxis.updateZoom();
+    }
+
+    @Override
+    public void stopZoom()
+    {
+        this.yAxis.stopZoom();
+    }
+
     /* Graphing */
 
     public int toGraphY(double value)
@@ -306,7 +318,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
             {
                 if (context.mouseWheel != 0D)
                 {
-                    this.yAxis.zoomAnchor(Scale.getAnchorY(context, this.keyframes.area), Math.copySign(this.yAxis.getZoomFactor(), context.mouseWheel));
+                    this.yAxis.animateZoom(Scale.getAnchorY(context, this.keyframes.area), context.mouseWheel);
                 }
             }
         }

@@ -1201,6 +1201,7 @@ public class UIClips extends UITimelineCanvas
     @Override
     protected boolean subMouseClicked(UIContext context)
     {
+        if (this.area.isInside(context)) this.xAxis.stopZoom();
         if (this.vertical.mouseClicked(context))
         {
             return true;
@@ -1514,6 +1515,7 @@ public class UIClips extends UITimelineCanvas
     @Override
     protected boolean subKeyPressed(UIContext context)
     {
+        this.xAxis.stopZoom();
         if (this.embedded != null && context.isPressed(GLFW.GLFW_KEY_ESCAPE))
         {
             this.embedView(null);
@@ -1528,6 +1530,16 @@ public class UIClips extends UITimelineCanvas
     @Override
     public void render(UIContext context)
     {
+        if (this.grabbing || this.scrubbing || this.navigating || this.marquee.isPressed()
+            || this.selectingLoop >= 0 || this.markers.isDragging() || this.hasEmbeddedView())
+        {
+            this.xAxis.stopZoom();
+        }
+        else
+        {
+            this.xAxis.updateZoom();
+        }
+
         this.updateScrollSize();
 
         if (this.centerScrollOnRender)

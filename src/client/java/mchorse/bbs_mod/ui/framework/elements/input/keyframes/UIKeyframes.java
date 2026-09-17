@@ -1115,6 +1115,11 @@ public class UIKeyframes extends UITimelineCanvas
     @Override
     protected boolean subMouseClicked(UIContext context)
     {
+        if (this.area.isInside(context))
+        {
+            this.xAxis.stopZoom();
+            this.currentGraph.stopZoom();
+        }
         if (!this.scaling && !this.stacking && context.mouseButton == 0
             && this.graphArea.isInside(context) && this.isDuplicatingAtPlayhead())
         {
@@ -1310,6 +1315,8 @@ public class UIKeyframes extends UITimelineCanvas
     @Override
     protected boolean subKeyPressed(UIContext context)
     {
+        this.xAxis.stopZoom();
+        this.currentGraph.stopZoom();
         if (this.loops.keyPressed(context)) return true;
         if (this.currentGraph != this.dopeSheet && context.isPressed(GLFW.GLFW_KEY_ESCAPE) && !this.single)
         {
@@ -1344,6 +1351,17 @@ public class UIKeyframes extends UITimelineCanvas
     @Override
     public void render(UIContext context)
     {
+        if (this.isInteracting())
+        {
+            this.xAxis.stopZoom();
+            this.currentGraph.stopZoom();
+        }
+        else
+        {
+            this.xAxis.updateZoom();
+            this.currentGraph.updateZoom();
+        }
+
         super.render(context);
 
         BBSProfiler.begin(BBSProfiler.Timer.UI_TIMELINE);

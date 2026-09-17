@@ -25,6 +25,12 @@ public interface IUIKeyframeGraph
 
     public void resetView();
 
+    public default void updateZoom()
+    {}
+
+    public default void stopZoom()
+    {}
+
     /** The timeline this graph draws, so a graph can ask the editor about the playhead. */
     public UIKeyframes getKeyframes();
 
