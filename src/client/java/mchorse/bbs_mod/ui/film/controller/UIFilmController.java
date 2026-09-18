@@ -539,6 +539,11 @@ public class UIFilmController extends UIElement implements GizmoViewport
             return true;
         }
 
+        if (this.picker.pickTarget(context))
+        {
+            return true;
+        }
+
         boolean gizmoShown = this.canShowGizmo();
 
         /* Gizmo handles beat everything (rendered on top). The trackball
@@ -642,6 +647,13 @@ public class UIFilmController extends UIElement implements GizmoViewport
     @Override
     protected boolean subKeyPressed(UIContext context)
     {
+        if (this.picker.isPickingTarget() && context.isPressed(GLFW.GLFW_KEY_ESCAPE))
+        {
+            this.picker.cancelTargetPick();
+
+            return true;
+        }
+
         if (this.canControl())
         {
             if (this.isControlling() && context.isPressed(GLFW.GLFW_KEY_ESCAPE))
@@ -1066,7 +1078,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
      */
     boolean canShowGizmo()
     {
-        return UIBaseMenu.shouldRenderAxes() && !this.getEditTarget().isNone();
+        return !this.picker.isPickingTarget() && UIBaseMenu.shouldRenderAxes() && !this.getEditTarget().isNone();
     }
 
 }

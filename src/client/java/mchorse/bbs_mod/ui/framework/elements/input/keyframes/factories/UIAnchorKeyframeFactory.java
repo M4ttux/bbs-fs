@@ -4,6 +4,11 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.film.AnchorRebase;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtilsClient;
+import mchorse.bbs_mod.forms.FormUtils;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
+import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.utils.StringUtils;
+import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
@@ -11,11 +16,13 @@ import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
+import mchorse.bbs_mod.ui.film.controller.ReplayContextAction;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditorUtils;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIconToggles;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
+import mchorse.bbs_mod.ui.framework.elements.context.UISimpleContextMenu;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
@@ -49,13 +56,18 @@ public class UIAnchorKeyframeFactory extends UIKeyframeFactory<Anchor>
         UIFilmPanel panel = children.isEmpty() ? null : children.get(0);
         List<Replay> replays = panel != null ? panel.getData().replays.getList() : List.of();
 
+        UISimpleContextMenu replayMenu = new UISimpleContextMenu();
+
+        replayMenu.actions.scroll.scrollItemSize = 30;
+
         context.replaceContextMenu((menu) ->
         {
+            menu.custom(replayMenu);
+            menu.autoKeys();
             menu.action(Icons.CLOSE, UIKeys.GENERAL_NONE, Colors.NEGATIVE, () -> callback.accept(Anchor.NO_ATTACHMENT));
 
-            for (int i = 0; i < replays.size(); i++)
+            for (Replay replay : replays)
             {
-                Replay replay = replays.get(i);
                 String actor = replay.getId();
                 IEntity entity = entities.get(actor);
 
@@ -64,9 +76,9 @@ public class UIAnchorKeyframeFactory extends UIKeyframeFactory<Anchor>
                     continue;
                 }
 
-                IKey label = IKey.constant(i + " - " + replay.getName());
+                int color = actor.equals(value) ? BBSSettings.primaryColor(0) : 0;
 
-                menu.action(Icons.CLOSE, label, actor.equals(value), () -> callback.accept(actor));
+                menu.action(new ReplayContextAction(replay, IKey.raw(replay.getName()), () -> callback.accept(actor), color));
             }
         });
     }
@@ -103,6 +115,7 @@ public class UIAnchorKeyframeFactory extends UIKeyframeFactory<Anchor>
         this.actor = new UIButton(UIKeys.GENERIC_KEYFRAMES_ANCHOR_PICK_ACTOR, (b) -> this.displayActors());
         this.attachment = new UIButton(UIKeys.GENERIC_KEYFRAMES_ANCHOR_PICK_ATTACHMENT, (b) ->
         {
+            this.getPanel().getController().picker.cancelTargetPick();
             displayAttachments(this.getPanel(), this.keyframe.getValue().replay, this.keyframe.getValue().attachment, this::setAttachment);
         });
         /* Which components of the target's frame the form rides, as one strip: the same three icons
@@ -118,13 +131,45 @@ public class UIAnchorKeyframeFactory extends UIKeyframeFactory<Anchor>
         this.transform.enableHotkeys();
         this.transform.setTransform(keyframe.getValue().transform);
 
-        this.scroll.add(this.actor, this.attachment, this.keepTransform, this.inherit.labelRow(UIKeys.INHERIT_TITLE), this.transform);
+        UIIcon pickActor = new UIIcon(Icons.EYEDROPPER, (b) -> this.pickTarget(b, false));
+        UIIcon pickAttachment = new UIIcon(Icons.EYEDROPPER, (b) -> this.pickTarget(b, true));
+
+        pickActor.wh(16, 16);
+        pickAttachment.wh(16, 16);
+        pickActor.highlight(() -> this.getPanel() != null && this.getPanel().getController().picker.isPickingTarget(pickActor), Direction.BOTTOM);
+        pickAttachment.highlight(() -> this.getPanel() != null && this.getPanel().getController().picker.isPickingTarget(pickAttachment), Direction.BOTTOM);
+        pickActor.tooltip(UIKeys.GENERIC_KEYFRAMES_ANCHOR_PICK_ACTOR);
+        pickAttachment.tooltip(UIKeys.GENERIC_KEYFRAMES_ANCHOR_PICK_ATTACHMENT);
+        this.scroll.add(UI.row(this.actor, pickActor), UI.row(this.attachment, pickAttachment), this.keepTransform, this.inherit.labelRow(UIKeys.INHERIT_TITLE), this.transform);
+    }
+
+    private void pickTarget(UIIcon owner, boolean bone)
+    {
+        UIFilmPanel panel = this.getPanel();
+        Replay replay = panel == null ? null : panel.replayEditor.getReplay();
+
+        if (replay == null)
+        {
+            return;
+        }
+
+        panel.getController().picker.toggleTargetPick(owner, replay.getId(), (actor, pair) ->
+        {
+            String attachment = bone ? StringUtils.combinePaths(FormUtils.getPath(pair.a), pair.b) : Anchor.NO_ATTACHMENT;
+
+            this.retarget((anchor) ->
+            {
+                anchor.replay = actor;
+                anchor.attachment = attachment;
+            });
+        });
     }
 
     private void displayActors()
     {
         UIFilmPanel panel = this.getPanel();
 
+        panel.getController().picker.cancelTargetPick();
         displayActors(this.getContext(), panel.getController().getEntities(), this.keyframe.getValue().replay, this::setActor);
     }
 

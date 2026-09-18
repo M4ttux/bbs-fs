@@ -8,12 +8,14 @@ import mchorse.bbs_mod.film.FilmEntityRenderer;
 import mchorse.bbs_mod.film.FilmControllerContext;
 import mchorse.bbs_mod.film.FilmTarget;
 import mchorse.bbs_mod.film.replays.Replay;
+import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.ui.utils.Area;
@@ -29,6 +31,7 @@ import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 
 import java.util.List;
+import java.util.function.BiConsumer;
 
 /**
  * Hit-testing the film preview: the scene is drawn again into an off-screen buffer where every
@@ -69,6 +72,11 @@ public class FilmStencilPicker
     /** Repick at least this often (in frames) even when no tracked input changed. */
     private static final int PICK_HEARTBEAT = 15;
 
+    /** One-shot target selection, scoped to the visible control that armed it. */
+    private UIElement pickOwner;
+    private String excludedReplay;
+    private BiConsumer<String, Pair<Form, String>> pickCallback;
+
     public FilmStencilPicker(UIFilmController controller)
     {
         this.controller = controller;
@@ -77,6 +85,81 @@ public class FilmStencilPicker
     public StencilFormFramebuffer getStencil()
     {
         return this.stencil;
+    }
+
+    public void toggleTargetPick(UIElement owner, String excludedReplay, BiConsumer<String, Pair<Form, String>> callback)
+    {
+        boolean cancel = this.pickOwner == owner;
+
+        this.cancelTargetPick();
+
+        if (!cancel)
+        {
+            this.pickOwner = owner;
+            this.excludedReplay = excludedReplay;
+            this.pickCallback = callback;
+        }
+    }
+
+    public void cancelTargetPick()
+    {
+        this.pickOwner = null;
+        this.pickCallback = null;
+        this.excludedReplay = null;
+        this.hoveredReplayIndex = -1;
+        this.stencil.clearPicking();
+        this.lastPickMouseX = Integer.MIN_VALUE;
+    }
+
+    public boolean isPickingTarget()
+    {
+        if (this.pickOwner != null && !this.pickOwner.canBeSeen())
+        {
+            this.cancelTargetPick();
+        }
+
+        return this.pickCallback != null;
+    }
+
+    public boolean isPickingTarget(UIElement owner)
+    {
+        return this.isPickingTarget() && this.pickOwner == owner;
+    }
+
+    public boolean pickTarget(UIContext context)
+    {
+        if (!this.isPickingTarget() || !this.controller.panel.preview.getViewport().isInside(context))
+        {
+            return false;
+        }
+
+        if (context.mouseButton == 1)
+        {
+            this.cancelTargetPick();
+        }
+        else if (context.mouseButton == 0)
+        {
+            Pair<Form, String> pair = this.stencil.getPicked();
+
+            if (pair != null && pair.a != null)
+            {
+                Form root = FormUtils.getRoot(pair.a);
+
+                for (var entry : this.controller.getEntities().entrySet())
+                {
+                    if (entry.getValue().getForm() == root && !entry.getKey().equals(this.excludedReplay))
+                    {
+                        BiConsumer<String, Pair<Form, String>> callback = this.pickCallback;
+
+                        this.cancelTargetPick();
+                        callback.accept(entry.getKey(), pair);
+                        break;
+                    }
+                }
+            }
+        }
+
+        return true;
     }
 
     public int getHoveredReplayIndex()
@@ -95,7 +178,7 @@ public class FilmStencilPicker
             return;
         }
 
-        boolean altPressed = Window.isAltPressed();
+        boolean altPressed = Window.isAltPressed() && !this.isPickingTarget();
 
         RenderSystem.depthFunc(GL11.GL_LESS);
 
@@ -191,7 +274,7 @@ public class FilmStencilPicker
 
         IEntity entity = this.controller.getCurrentEntity();
 
-        if ((entity == null || (this.controller.getPovMode() == UIFilmController.CAMERA_MODE_FIRST_PERSON && entity == this.controller.getCurrentEntity())) && !altPressed)
+        if ((entity == null || (this.controller.getPovMode() == UIFilmController.CAMERA_MODE_FIRST_PERSON && entity == this.controller.getCurrentEntity())) && !altPressed && !this.isPickingTarget())
         {
             this.lastPickMouseX = Integer.MIN_VALUE;
 
@@ -218,7 +301,27 @@ public class FilmStencilPicker
         this.stencilMap.setup();
         this.stencil.apply();
 
-        if (altPressed)
+        if (this.isPickingTarget())
+        {
+            this.stencilMap.setIncrement(true);
+
+            for (Replay replay : this.controller.panel.getData().replays.getList())
+            {
+                IEntity replayEntity = this.controller.getEntities().get(replay.getId());
+
+                if (replayEntity == null || replay.getId().equals(this.excludedReplay))
+                {
+                    continue;
+                }
+
+                FilmEntityRenderer.renderEntity(FilmControllerContext.instance
+                    .setup(this.controller.getEntities(), replayEntity, replay, renderContext)
+                    .transition(isPlaying ? renderContext.tickDelta() : 0)
+                    .stencil(this.stencilMap)
+                    .relative(replay.relative.get()));
+            }
+        }
+        else if (altPressed)
         {
             List<Replay> replays = this.controller.panel.getData().replays.getList();
             int selectedReplayIndex = this.controller.getCurrentReplayIndex();
