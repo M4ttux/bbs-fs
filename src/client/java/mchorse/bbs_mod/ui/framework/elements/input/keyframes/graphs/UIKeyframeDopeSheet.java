@@ -333,6 +333,19 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         return !this.sectionYCache.isEmpty();
     }
 
+    public boolean hasExpandedSections()
+    {
+        for (UIKeyframeSheet.Section section : this.sectionYCache.keySet())
+        {
+            if (this.folds.isExpanded(section.id()))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public void setAllSectionsExpanded(boolean expanded)
     {
         for (UIKeyframeSheet.Section section : this.sectionYCache.keySet())
