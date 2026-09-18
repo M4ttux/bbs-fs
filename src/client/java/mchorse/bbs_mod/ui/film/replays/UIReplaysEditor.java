@@ -1108,7 +1108,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
 
         this.selectBodyPart(FormUtils.getPath(form));
 
-        if (form instanceof IPosedForm && bone != null && !bone.isEmpty())
+        if (!(form instanceof IPosedForm) || (bone != null && !bone.isEmpty()))
         {
             if (this.allMode)
             {
