@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.settings.SettingsBuilder;
 import mchorse.bbs_mod.settings.values.core.ValueLink;
@@ -585,6 +586,21 @@ public class BBSSettings {
 		migrated |= migrateLegacyValue(root, "recording", "pose_transform_overlays", "recording", "pose_overlays");
 		migrated |= migrateLegacyValue(root, "recording", "pose_transform_overlays", "recording", "transform_overlays");
 
+		/* Sections now keep the replay list compact. Reveal their channels once;
+		 * later manual filtering must survive reloads. */
+		MapType appearance = root.getMap("appearance");
+
+		if (!appearance.getBool("replay_sections_filter_migrated"))
+		{
+			HashSet<String> revealed = new HashSet<>(ReplayKeyframes.CURATED_CHANNELS);
+			revealed.addAll(Arrays.asList("leaning", "roll", "fall"));
+			revealed.removeAll(Arrays.asList("yaw", "vX", "vY", "vZ"));
+			appearance.getList("disabled_sheets").elements.removeIf(value -> value.isString() && revealed.contains(value.asString()));
+			appearance.putBool("replay_sections_filter_migrated", true);
+			root.put("appearance", appearance);
+			migrated = true;
+		}
+
 		return migrated;
 	}
 
@@ -638,20 +654,8 @@ public class BBSSettings {
 
 	public static void register(SettingsBuilder builder)
 	{
-		/* Channels the timeline keeps folded away until they are asked for: the
-		 * inventory past the held slot, the armour, the states the entity is put
-		 * into, the velocity readout, and the gamepad axes nothing binds by default. */
-		HashSet<String> defaultFilters = new HashSet<>(Arrays.asList(
-			"item_slot_1", "item_slot_2", "item_slot_3", "item_slot_4",
-			"item_slot_5", "item_slot_6", "item_slot_7", "item_slot_8",
-			"selected_slot",
-			"item_head", "item_chest", "item_legs", "item_feet",
-			"swimming", "riding", "flying", "gliding",
-			"grounded", "leaning", "yaw", "roll",
-			"vX", "vY", "vZ",
-			"stick_rx", "stick_ry", "trigger_l", "trigger_r",
-			"extra1_x", "extra1_y", "extra2_x", "extra2_y"
-		));
+		/* Replay sections replace the old hidden-by-default groups. */
+		HashSet<String> defaultFilters = new HashSet<>(Arrays.asList("yaw", "vX", "vY", "vZ"));
 
 		/* Interface */
 		builder.category("appearance", Icons.LAYOUT);
@@ -690,6 +694,7 @@ public class BBSSettings {
 		builder.register(favoriteColors);
 		builder.register(recentColors);
 		builder.register(disabledSheets);
+		builder.getBoolean("replay_sections_filter_migrated", true).invisible();
 		trackStyles = new ValueTrackStyles("track_styles");
 		builder.register(trackStyles);
 		disabledMorphFormCategories = new ValueStringKeys("disabled_morph_form_categories");

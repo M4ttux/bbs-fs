@@ -3,6 +3,7 @@ package mchorse.bbs_mod.cubic.model.config;
 import mchorse.bbs_mod.cubic.model.ArmorSlot;
 import mchorse.bbs_mod.cubic.model.ArmorType;
 import mchorse.bbs_mod.cubic.model.View;
+import mchorse.bbs_mod.cubic.weld.ModelWeld;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
@@ -37,6 +38,7 @@ import java.util.Map;
  */
 public class ModelConfig extends ValueGroup
 {
+    public final ValueStringMap proceduralBones = new ValueStringMap("procedural_bones");
     public final ValueBoolean procedural = new ValueBoolean("procedural", false);
     public final ValueBoolean culling = new ValueBoolean("culling", true);
     public final ValueBoolean onCpu = new ValueBoolean("on_cpu", false);
@@ -45,6 +47,7 @@ public class ModelConfig extends ValueGroup
     public final ValueLink texture = new ValueLink("texture", null);
     public final ValueFloat uiScale = new ValueFloat("ui_scale", 1F);
     public final ValueVector3f scale = new ValueVector3f("scale", new Vector3f(1F));
+    public final WeldList welds = new WeldList("welds");
     public final ValueStringKeys disabledBones = new ValueStringKeys("disabledBones");
 
     public final LookAtValue lookAt = new LookAtValue("look_at");
@@ -66,6 +69,7 @@ public class ModelConfig extends ValueGroup
     public final ArmorSlotValue fpMain = new ArmorSlotValue("fp_main");
     public final ArmorSlotValue fpOffhand = new ArmorSlotValue("fp_offhand");
 
+    private final List<ModelWeld> weldsCache = new ArrayList<>();
     private final List<ArmorSlot> itemsMainCache = new ArrayList<>();
     private final List<ArmorSlot> itemsOffCache = new ArrayList<>();
     private final Map<ArmorType, ArmorSlot> armorSlotsCache = new HashMap<>();
@@ -78,6 +82,7 @@ public class ModelConfig extends ValueGroup
         super(id);
 
         this.add(this.procedural);
+        this.add(this.proceduralBones);
         this.add(this.culling);
         this.add(this.onCpu);
         this.add(this.poseGroup);
@@ -85,6 +90,7 @@ public class ModelConfig extends ValueGroup
         this.add(this.texture);
         this.add(this.uiScale);
         this.add(this.scale);
+        this.add(this.welds);
         this.add(this.disabledBones);
         this.add(this.lookAt);
         this.add(this.sneakingPose);
@@ -105,6 +111,11 @@ public class ModelConfig extends ValueGroup
     @Override
     public void fromData(BaseType data)
     {
+        if (data.isMap() && !data.asMap().has("procedural_bones"))
+        {
+            this.proceduralBones.fromData(new MapType());
+        }
+
         super.fromData(data);
 
         this.rebuild();
@@ -114,6 +125,7 @@ public class ModelConfig extends ValueGroup
     protected boolean canPersist(BaseValue value)
     {
         /* Optional blocks stay absent from the file when empty, matching how they were authored. */
+        if (value == this.proceduralBones) return !this.proceduralBones.get().isEmpty();
         if (value == this.lookAt) return this.lookAt.isActive();
         if (value == this.fpMain) return this.fpMain.isActive();
         if (value == this.fpOffhand) return this.fpOffhand.isActive();
@@ -129,12 +141,19 @@ public class ModelConfig extends ValueGroup
     }
 
     /**
-     * Re-derive the per-frame runtime forms (view, armor/item slots) from the value tree. Call
+     * Re-derive the per-frame runtime forms (welds, view, armor/item slots) from the value tree. Call
      * after editing a block so the runtime sees the change. The plain maps (flip/picking) and the pose
      * are read straight off their values, so they don't need rebuilding.
      */
     public void rebuild()
     {
+        this.weldsCache.clear();
+
+        for (WeldValue weld : this.welds.getAllTyped())
+        {
+            this.weldsCache.add(weld.toWeld());
+        }
+
         if (this.lookAt.isActive())
         {
             this.viewCache = new View();
@@ -168,6 +187,11 @@ public class ModelConfig extends ValueGroup
                 out.add(slot.toSlot());
             }
         }
+    }
+
+    public List<ModelWeld> getWelds()
+    {
+        return this.weldsCache;
     }
 
     public Pose getSneakingPose()
@@ -227,7 +251,7 @@ public class ModelConfig extends ValueGroup
 
     /**
      * Point every reference to bone {@code from} at {@code to} — the anchor, the hidden bones, the
-     * look-at head, the two poses, the held-item, armor and first-person slots, the flip
+     * look-at head, the two poses, the welds, the held-item, armor and first-person slots, the flip
      * pairs and the picking overrides — the way the model editor renames a group. Done on the data
      * rather than the values, so the value system has no edits to record: a rename is one undo step
      * of the model editor's, config included.
@@ -244,6 +268,15 @@ public class ModelConfig extends ValueGroup
     private static void renameBone(MapType data, String from, String to)
     {
         renameString(data, "anchor", from, to);
+        MapType procedural = map(data, "procedural_bones");
+
+        if (procedural != null)
+        {
+            for (String role : procedural.keys())
+            {
+                renameString(procedural, role, from, to);
+            }
+        }
         renameStrings(data, "disabledBones", from, to);
         renameString(map(data, "look_at"), "head", from, to);
         renameKey(map(map(data, "sneaking_pose"), "pose"), from, to);
@@ -262,6 +295,20 @@ public class ModelConfig extends ValueGroup
             for (String key : new ArrayList<>(armor.keys()))
             {
                 renameString(map(armor, key), "group", from, to);
+            }
+        }
+
+        ListType welds = list(data, "welds");
+
+        if (welds != null)
+        {
+            for (BaseType weld : welds)
+            {
+                if (weld.isMap())
+                {
+                    renameString(weld.asMap(), "source_bone", from, to);
+                    renameString(weld.asMap(), "target_bone", from, to);
+                }
             }
         }
     }
@@ -349,6 +396,20 @@ public class ModelConfig extends ValueGroup
             {
                 renameString(slot.asMap(), "group", from, to);
             }
+        }
+    }
+
+    public static class WeldList extends ValueList<WeldValue>
+    {
+        public WeldList(String id)
+        {
+            super(id);
+        }
+
+        @Override
+        protected WeldValue create(String id)
+        {
+            return new WeldValue(id);
         }
     }
 
