@@ -54,6 +54,17 @@ public class UIKeyframeLoops
 
     private record Hit(UIKeyframeSheet sheet, KeyframeLoop loop, int y, int height) {}
 
+    private boolean connectsTo(UIKeyframeSheet sheet, KeyframeLoop loop, int neighborY)
+    {
+        if (this.view.getGraph() != this.view.getDopeSheet()) return false;
+        UIKeyframeSheet neighbor = this.view.getDopeSheet().getSheet(neighborY);
+        if (neighbor == null || neighbor == sheet) return false;
+        KeyframeLoop other = neighbor.channel.getLoop(loop.id());
+
+        return other != null && loop.start() == other.start() && loop.sourceEnd() == other.sourceEnd()
+            && sheet.channel.getLoopEnd(loop) == neighbor.channel.getLoopEnd(other);
+    }
+
     private Hit hit(UIContext context)
     {
         if (!this.view.graphArea.isInside(context) || context.mouseY < this.view.area.y + IUIKeyframeGraph.TOP_MARGIN) return null;
@@ -175,7 +186,8 @@ public class UIKeyframeLoops
         int endX = this.view.toGraphX(hit.sheet.channel.getLoopEnd(hit.loop));
         boolean handle = Math.abs(context.mouseX - endX) <= 5 && context.mouseY >= hit.y && context.mouseY < hit.y + hit.height;
         boolean bar = context.mouseY >= hit.y && context.mouseY < hit.y + hit.height
-            && (context.mouseY < hit.y + 4 || context.mouseY >= hit.y + hit.height - 3);
+            && ((context.mouseY < hit.y + 4 && !this.connectsTo(hit.sheet, hit.loop, hit.y - 1))
+                || (context.mouseY >= hit.y + hit.height - 3 && !this.connectsTo(hit.sheet, hit.loop, hit.y + hit.height)));
         if (!handle && (Window.isCtrlPressed() || Window.isAltPressed() || Window.isShiftPressed())) return false;
 
         /* Original keys retain ordinary selection and dragging. */
@@ -302,16 +314,21 @@ public class UIKeyframeLoops
                 if (end < this.view.graphArea.x || start > this.view.graphArea.ex()) continue;
                 int sourceEnd = this.view.toGraphX(loop.sourceEnd());
                 boolean selected = loop.id().equals(this.selectedId);
-                boolean hover = hovered != null && hovered.sheet == sheet && hovered.loop == loop
-                    && context.mouseY >= y && context.mouseY < y + height;
+                boolean hover = hovered != null && hovered.loop.id().equals(loop.id())
+                    && context.mouseY >= hovered.y && context.mouseY < hovered.y + hovered.height;
                 boolean highlight = selected || hover;
                 int color = selected ? Colors.ACTIVE : sheet.color;
-                context.batcher.box(start, y + 1, end, y + height - 1, Colors.setA(color, 0.12F));
-                context.batcher.box(start, y + 1, end, y + 2, highlight ? Colors.WHITE : Colors.setA(color, 0.9F));
-                context.batcher.box(start, y + height - 2, end, y + height - 1, highlight ? Colors.WHITE : Colors.setA(color, 0.7F));
-                context.batcher.box(start, y + 1, start + 1, y + height - 1, highlight ? Colors.WHITE : Colors.setA(color, 0.8F));
-                context.batcher.box(sourceEnd, y + 3, sourceEnd + 1, y + height - 2, Colors.setA(color, 0.5F));
-                context.batcher.box(end - 2, y + 1, end + 2, y + height - 1, highlight ? Colors.WHITE : Colors.setA(color, 1F));
+                boolean joinsAbove = this.connectsTo(sheet, loop, y - 1);
+                boolean joinsBelow = this.connectsTo(sheet, loop, y + height);
+                int top = joinsAbove ? y : y + 1;
+                int bottom = joinsBelow ? y + height : y + height - 1;
+
+                context.batcher.box(start, top, end, bottom, Colors.setA(color, 0.12F));
+                if (!joinsAbove) context.batcher.box(start, top, end, top + 1, highlight ? Colors.WHITE : Colors.setA(color, 0.9F));
+                if (!joinsBelow) context.batcher.box(start, bottom - 1, end, bottom, highlight ? Colors.WHITE : Colors.setA(color, 0.7F));
+                context.batcher.box(start, top, start + 1, bottom, highlight ? Colors.WHITE : Colors.setA(color, 0.8F));
+                context.batcher.box(sourceEnd, joinsAbove ? top : y + 3, sourceEnd + 1, joinsBelow ? bottom : y + height - 2, Colors.setA(color, 0.5F));
+                context.batcher.box(end - 2, top, end + 2, bottom, highlight ? Colors.WHITE : Colors.setA(color, 1F));
 
                 this.renderGhosts(context, sheet, loop, endTick, y + height / 2);
             }
