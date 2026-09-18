@@ -1178,15 +1178,15 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     {
         if (area.isInside(context))
         {
-            for (int offset : this.sectionYCache.values())
+            for (Map.Entry<UIKeyframeSheet.Section, Integer> entry : this.sectionYCache.entrySet())
             {
-                int y = this.getDopeSheetY() + offset;
+                int y = this.getDopeSheetY() + entry.getValue();
                 int height = (int) this.trackHeight;
 
                 if (context.mouseY >= y && context.mouseY < y + height)
                 {
                     context.batcher.box(area.x, y, area.ex(), y + height,
-                        BBSSettings.color(BBSSettings.raisedSurface(), Colors.A25));
+                        Colors.setA(entry.getKey().color(), 0.12F));
                     break;
                 }
             }
@@ -1232,7 +1232,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
         if (hover)
         {
-            context.batcher.box(area.x, y, area.ex(), y + bh, BBSSettings.color(BBSSettings.raisedSurface(), Colors.A25));
+            context.batcher.box(area.x, y, area.ex(), y + bh, Colors.setA(sheet.color, 0.12F));
         }
 
         builder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
