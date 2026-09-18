@@ -694,7 +694,7 @@ public class Gizmo
         this.mask = mask == null ? HandleMask.ALL : mask;
 
         stack.push();
-        MatrixStackUtils.scaleBack(stack);
+        this.removePlacementScale(stack);
         this.captureRenderMatrix(stack);
         this.drawGizmo(stack);
         stack.pop();
@@ -722,7 +722,7 @@ public class Gizmo
         this.mask = mask == null ? HandleMask.ALL : mask;
 
         stack.push();
-        MatrixStackUtils.scaleBack(stack);
+        this.removePlacementScale(stack);
         this.captureRenderMatrix(stack);
         stack.pop();
     }
@@ -919,7 +919,7 @@ public class Gizmo
      * keep the exact horizontal/vertical they already had, since their columns are not
      * touched. At the centre the eye ray IS the camera's Z, so the frame is the
      * identity again and nothing jumps as the gizmo crosses the middle. The column
-     * stays unit length, so {@link MatrixStackUtils#scaleBack} is unaffected, and the
+     * stays unit length, and the
      * determinant stays positive (~0.82 at the corner), so depth order and winding hold.
      *
      * <p>Only the DRAWING frame is sheared, and both draw passes take it, so the pick
@@ -1190,7 +1190,7 @@ public class Gizmo
         this.mask = mask == null ? HandleMask.ALL : mask;
 
         stack.push();
-        MatrixStackUtils.scaleBack(stack);
+        this.removePlacementScale(stack);
         this.captureRenderMatrix(stack);
         this.drawStencilAxes(stack);
         stack.pop();
@@ -1264,6 +1264,17 @@ public class Gizmo
 
         RenderSystem.viewport(0, 0, mc.getWindow().getFramebufferWidth(), mc.getWindow().getFramebufferHeight());
         MatrixStackUtils.restoreMatrices();
+    }
+
+    /** Keep object stretch/shear out of both the visible handles and their pick geometry. */
+    private void removePlacementScale(MatrixStack stack)
+    {
+        Matrix4f matrix = stack.peek().getPositionMatrix();
+        Vector3f translation = matrix.getTranslation(new Vector3f());
+        Matrix3f basis = GizmoDrag.basisOf(matrix);
+
+        matrix.set(new Matrix4f(basis).setTranslation(translation));
+        stack.peek().getNormalMatrix().set(basis);
     }
 
     private void captureRenderMatrix(MatrixStack stack)
