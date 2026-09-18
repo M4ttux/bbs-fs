@@ -323,7 +323,7 @@ public class Gizmo
      */
     private Matrix4f lensMvp(Matrix4f cameraProjection, GizmoLens lens)
     {
-        lens.set(cameraProjection, this.lastRenderMatrix);
+        lens.set(cameraProjection, this.lastRenderMatrix, this.hasLastCameraView ? this.lastCameraView : null);
 
         return new Matrix4f(lens.projection).mul(lens.viewDelta).mul(this.lastRenderMatrix);
     }
@@ -537,7 +537,7 @@ public class Gizmo
              * else entirely. An inactive lens hands the camera projection straight back. */
             GizmoLens lens = new GizmoLens();
 
-            lens.set(projection, this.lastRenderMatrix);
+            lens.set(projection, this.lastRenderMatrix, this.hasLastCameraView ? this.lastCameraView : null);
 
             RenderSystem.disableDepthTest();
             RenderSystem.setShaderColor(STENCIL_TRACKBALL / 255F, 0F, 0F, 1F);
@@ -848,7 +848,7 @@ public class Gizmo
     /**
      * Swap the gizmo's own lens in for the scene camera's, for the duration of one
      * draw pass: the projection on {@link RenderSystem} and the pass's own copy of
-     * the gizmo's model-view, which the view swing is prepended to.
+     * the gizmo's model-view, which the target-facing view adjustment is prepended to.
      *
      * <p>Both draw passes take it, so the pick stencil keeps matching the visual
      * pixel for pixel; {@link #lastRenderMatrix} is left alone, so the gizmo's world
@@ -862,7 +862,7 @@ public class Gizmo
     {
         LensSwap swap = new LensSwap(new Matrix4f(RenderSystem.getProjectionMatrix()), RenderSystem.getVertexSorting());
 
-        if (!lens.set(swap.projection(), stack.peek().getPositionMatrix()))
+        if (!lens.set(swap.projection(), stack.peek().getPositionMatrix(), this.hasLastCameraView ? this.lastCameraView : null))
         {
             return null;
         }
@@ -928,10 +928,8 @@ public class Gizmo
      * pick projections all keep the orthonormal camera basis they had.
      *
      * <p>This is the fallback for a gizmo drawn through the camera's own lens. With
-     * {@link GizmoLens} active the camera is swung onto the gizmo instead, which makes
-     * the eye ray the frame's own third axis — the shear would have nothing left to
-     * correct, and {@link #reorientForSpace} has already handed the frame the swing's
-     * inverse so the handles come out exactly square to the screen.
+     * {@link GizmoLens} active the origin is centred and the VIEW basis already
+     * cancels its rotation, so no shear is needed.
      */
     private void applyViewShear(MatrixStack stack, GizmoLens lens)
     {
@@ -1343,17 +1341,13 @@ public class Gizmo
         Vector3f translation = matrix.getTranslation(new Vector3f());
         Matrix3f basis = GizmoDrag.stackBasisForSpace(space, cameraView, globalAxes);
 
-        /* VIEW means "square to the screen", and with the lens on, the screen is the
-         * lens's, not the camera's: pre-cancel its view swing here so the draw passes
-         * multiply it back out and the handles land exactly axis-aligned on screen.
-         * The lens's own predicate decides, so the frame and the draw agree on whether
-         * this frame has a lens — and the swing is read off the placement's translation,
-         * which is the gizmo's view-space position, the same value the lens builds from. */
+        /* VIEW alone follows screen axes. Undo the target-facing lens rotation
+         * here, so the drawing pass restores the screen basis exactly. */
         if (space == TransformSpace.VIEW && GizmoLens.canFrame(RenderSystem.getProjectionMatrix(), translation))
         {
             Matrix4f delta = new Matrix4f();
 
-            if (GizmoLens.viewDelta(translation, delta))
+            if (GizmoLens.viewDelta(translation, cameraView, delta))
             {
                 basis = delta.get3x3(new Matrix3f()).transpose().mul(basis);
             }
