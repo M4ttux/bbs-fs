@@ -328,6 +328,33 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         this.updateScrollSize();
     }
 
+    public boolean hasSections()
+    {
+        return !this.sectionYCache.isEmpty();
+    }
+
+    public void setAllSectionsExpanded(boolean expanded)
+    {
+        for (UIKeyframeSheet.Section section : this.sectionYCache.keySet())
+        {
+            this.folds.set(section.id(), expanded);
+        }
+
+        if (!expanded)
+        {
+            for (UIKeyframeSheet sheet : this.sheets)
+            {
+                if (sheet.section != null)
+                {
+                    sheet.selection.clear();
+                }
+            }
+        }
+
+        this.updateScrollSize();
+        this.pickSelected();
+    }
+
     public void removeAllSheets()
     {
         this.sheets.clear();
