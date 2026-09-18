@@ -1176,6 +1176,22 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
     private void renderSheets(UIContext context, BufferBuilder builder, Matrix4f matrix, Area area)
     {
+        if (area.isInside(context))
+        {
+            for (int offset : this.sectionYCache.values())
+            {
+                int y = this.getDopeSheetY() + offset;
+                int height = (int) this.trackHeight;
+
+                if (context.mouseY >= y && context.mouseY < y + height)
+                {
+                    context.batcher.box(area.x, y, area.ex(), y + height,
+                        BBSSettings.color(BBSSettings.raisedSurface(), Colors.A25));
+                    break;
+                }
+            }
+        }
+
         for (UIKeyframeSheet sheet : this.sheets)
         {
             if (!this.isVisible(sheet))
