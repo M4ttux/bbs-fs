@@ -5,10 +5,13 @@ import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
+import mchorse.bbs_mod.camera.clips.CameraClipContext;
 import mchorse.bbs_mod.camera.clips.misc.CurveClip;
 import mchorse.bbs_mod.camera.controller.CameraWorkCameraController;
 import mchorse.bbs_mod.camera.controller.PlayCameraController;
 import mchorse.bbs_mod.api.events.ModelBlockEntityUpdateCallback;
+import mchorse.bbs_mod.film.BaseFilmController;
+import mchorse.bbs_mod.film.WorldFilmController;
 import mchorse.bbs_mod.forms.FormRenderLast;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
 import mchorse.bbs_mod.forms.structure.StructureWand;
@@ -856,89 +859,35 @@ public class BBSRendering
 
     public static Long getTimeOfDay()
     {
-        if (!MinecraftClient.getInstance().isOnThread())
-        {
-            return null;
-        }
+        Double value = getCurveValue(ShaderCurves.SUN_ROTATION, CurveClip::getValues);
 
-        if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
-        {
-            Map<String, Double> values = CurveClip.getValues(controller.getContext());
-            Double v = values != null ? values.get(ShaderCurves.SUN_ROTATION) : null;
-
-            if (v != null)
-            {
-                return (long) (v * 1000L);
-            }
-        }
-
-        return null;
+        return value == null ? null : (long) (value * 1000L);
     }
 
     public static Double getBrightness()
     {
-        if (!MinecraftClient.getInstance().isOnThread())
-        {
-            return null;
-        }
-
-        if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
-        {
-            Map<String, Double> values = CurveClip.getValues(controller.getContext());
-            Double v = values != null ? values.get(ShaderCurves.BRIGHTNESS) : null;
-
-            if (v != null)
-            {
-                return v;
-            }
-        }
-
-        return null;
+        return getCurveValue(ShaderCurves.BRIGHTNESS, CurveClip::getValues);
     }
 
     public static Double getWeather()
     {
-        if (!MinecraftClient.getInstance().isOnThread())
-        {
-            return null;
-        }
-
-        if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
-        {
-            Map<String, Double> values = CurveClip.getValues(controller.getContext());
-            Double v = values != null ? values.get(ShaderCurves.WEATHER) : null;
-
-            if (v != null)
-            {
-                return v;
-            }
-        }
-
-        return null;
+        return getCurveValue(ShaderCurves.WEATHER, CurveClip::getValues);
     }
 
     public static float getSunHorizontalRotation()
     {
-        if (!MinecraftClient.getInstance().isOnThread())
-        {
-            return 0F;
-        }
+        Double value = getCurveValue(ShaderCurves.SUN_HORIZONTAL_ROTATION, CurveClip::getValues);
 
-        if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
-        {
-            Map<String, Double> values = CurveClip.getValues(controller.getContext());
-            Double v = values != null ? values.get(ShaderCurves.SUN_HORIZONTAL_ROTATION) : null;
-
-            if (v != null)
-            {
-                return v.floatValue();
-            }
-        }
-
-        return 0F;
+        return value == null ? 0F : value.floatValue();
     }
 
     public static Integer getChromaSkyColorArgb()
+    {
+        return getCurveValue(CurveClip.CHROMA_SKY_COLOR, CurveClip::getColorValues);
+    }
+
+    /** Camera work takes priority; films played without a camera supply missing values. */
+    private static <T> T getCurveValue(String key, Function<CameraClipContext, Map<String, T>> values)
     {
         if (!MinecraftClient.getInstance().isOnThread())
         {
@@ -947,11 +896,27 @@ public class BBSRendering
 
         if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
         {
-            Map<String, Integer> values = CurveClip.getColorValues(controller.getContext());
+            T value = values.apply(controller.getContext()).get(key);
 
-            if (values != null)
+            if (value != null)
             {
-                return values.get(CurveClip.CHROMA_SKY_COLOR);
+                return value;
+            }
+        }
+
+        if (BBSModClient.getFilms() != null)
+        {
+            for (BaseFilmController controller : BBSModClient.getFilms().getControllers())
+            {
+                if (controller instanceof WorldFilmController worldFilm)
+                {
+                    T value = values.apply(worldFilm.getContext()).get(key);
+
+                    if (value != null)
+                    {
+                        return value;
+                    }
+                }
             }
         }
 
