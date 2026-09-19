@@ -218,7 +218,7 @@ public class UIKeyframeMotionShift
             hit.sheet.channel.get(hit.sheet.channel.indexOf(hit.key) + 1).getTick())));
         boolean dragging = this.dragging != null && this.dragging.key == hit.key;
         boolean active = dragging || (highlighted && this.onHandle(context, hit));
-        int color = active ? Colors.WHITE : Colors.setA(hit.sheet.color, 0.9F);
+        int color = active ? Colors.WHITE : Colors.setA(hit.sheet.color, highlighted ? 1F : 0.5F);
         if (highlighted && this.view.getGraph() instanceof UIKeyframeGraph graph)
         {
             LineBuilder line = new LineBuilder(1F);
