@@ -143,7 +143,9 @@ public class Keyframe <T> extends BaseValue
 
     public boolean supportsMotionShift()
     {
-        return !this.factory.isStepped() && !this.interp.has(Interpolations.CONST);
+        /* Model animation keys have no factory: CubicModelAnimator evaluates
+         * their numeric Molang expressions directly. */
+        return (this.factory == null || !this.factory.isStepped()) && !this.interp.has(Interpolations.CONST);
     }
 
     /** Smooth monotonic time warp: endpoints stay fixed and f(0.5 + shift) = 0.5. */
