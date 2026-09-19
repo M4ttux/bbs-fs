@@ -1,4 +1,10 @@
 {
+	"bbs.ui.film.backups.title": "Backups",
+	"bbs.ui.film.backups.empty": "No backups found for this film.",
+	"bbs.ui.film.backups.error": "Could not read this backup. It may be damaged or require a newer mod version.",
+	"bbs.ui.film.backups.restore": "Restore a copy",
+	"bbs.ui.film.backups.description": "Enter a name for the recovered film. The current film will be kept.",
+	"bbs.ui.film.backups.exists": "A film or folder with this name already exists.",
 	"bbs.ui.model_editor.procedural_tab": "Procedural animation",
 	"bbs.ui.model_editor.procedural_detect": "Detect by name",
 	"bbs.ui.model_editor.procedural_legacy": "Restore automatic assignments",

@@ -1,4 +1,10 @@
 {
+	"bbs.ui.film.backups.title": "Бекапы",
+	"bbs.ui.film.backups.empty": "Для этого фильма пока нет бекапов.",
+	"bbs.ui.film.backups.error": "Не удалось прочитать бекап. Возможно, он повреждён или требует более новой версии мода.",
+	"bbs.ui.film.backups.restore": "Восстановить копию",
+	"bbs.ui.film.backups.description": "Введите имя восстановленного фильма. Текущий фильм будет сохранён.",
+	"bbs.ui.film.backups.exists": "Фильм или папка с таким именем уже существует.",
 	"bbs.ui.model_editor.procedural_tab": "Процедурная анимация",
 	"bbs.ui.model_editor.procedural_detect": "Определить по названиям",
 	"bbs.ui.model_editor.procedural_legacy": "Вернуть автоматические назначения",
