@@ -997,6 +997,7 @@ public class UIKeys
     public static final IKey KEYFRAMES_SHAPES_TRIANGLE = L10n.lang("bbs.ui.keyframes.shapes.triangle");
     public static final IKey KEYFRAMES_SHAPES_TRI_STAR = L10n.lang("bbs.ui.keyframes.shapes.tri_star");
     public static final IKey KEYFRAMES_TICK = L10n.lang("bbs.ui.keyframes.tick");
+    public static final IKey KEYFRAMES_MOTION_SHIFT = L10n.lang("bbs.ui.keyframes.motion_shift");
     public static final IKey KEYS_LIST = L10n.lang("bbs.ui.keys.list");
     public static final IKey KEYS_UI_SCALE_INC = L10n.lang("bbs.ui.keys.ui_scale_inc");
     public static final IKey KEYS_UI_SCALE_DEC = L10n.lang("bbs.ui.keys.ui_scale_dec");

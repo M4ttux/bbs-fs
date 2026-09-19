@@ -103,7 +103,7 @@ public class KeyframeSegment <T>
 
         try
         {
-            return factory.copy(factory.interpolate(this.preA, this.a, this.b, this.postB, this.a.getInterpolation(), this.x));
+            return factory.copy(factory.interpolate(this.preA, this.a, this.b, this.postB, this.a.getInterpolation(), this.a.remapMotion(this.x)));
         }
         finally
         {

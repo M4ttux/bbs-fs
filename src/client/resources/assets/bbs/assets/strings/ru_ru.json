@@ -1403,6 +1403,7 @@
 	"bbs.ui.keyframes.shapes.square": "Квадрат",
 	"bbs.ui.keyframes.shapes.tri_star": "Трехугольная звезда",
 	"bbs.ui.keyframes.shapes.triangle": "Треугольник",
+	"bbs.ui.keyframes.motion_shift": "Смещение движения",
 	"bbs.ui.keyframes.tick": "Тик",
 	"bbs.ui.keys.list": "Список горячих клавиш",
 	"bbs.ui.keys.ui_scale_inc": "Увеличить масштаб интерфейса",

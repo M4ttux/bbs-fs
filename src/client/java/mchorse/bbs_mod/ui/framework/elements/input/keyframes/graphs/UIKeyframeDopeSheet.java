@@ -25,6 +25,7 @@ import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
+import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
 import mchorse.bbs_mod.utils.keyframes.KeyframeShape;
 import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.client.render.BufferRenderer;
@@ -1290,6 +1291,8 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             }
         }
 
+        this.renderMotionShiftBars(context, builder, matrix, area, sheet, my, trackWidth + 2);
+
         /* Render custom duration markers. The keyframe shapes themselves belong to the topmost
          * pass ({@link #renderSheetKeyframeShapes}), which draws over the out-of-range shading. */
         int forcedIndex = 0;
@@ -1328,6 +1331,54 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
         BufferRenderer.drawWithGlobalProgram(builder.end());
+    }
+
+    /** Uniform strip from the midpoint handle to the slow-side key; opacity follows shift intensity. */
+    private void renderMotionShiftBars(UIContext context, BufferBuilder builder, Matrix4f matrix, Area area, UIKeyframeSheet sheet, int y, int width)
+    {
+        boolean shifted = false;
+        for (Object entry : sheet.channel.getKeyframes())
+        {
+            Keyframe<?> key = (Keyframe<?>) entry;
+            if (key.getMotionShift() != 0F && key.supportsMotionShift())
+            {
+                shifted = true;
+                break;
+            }
+        }
+        if (!shifted) return;
+
+        Keyframe<?> previousA = null, previousB = null;
+        boolean same = false;
+        /* Sample playback in screen space: finite loops use their source shift too, and work
+         * stays bounded by the visible width rather than the film's duration or zoom. */
+        for (int x = area.x; x < area.ex(); x += 2)
+        {
+            int end = Math.min(x + 2, area.ex());
+            float tick = (float) this.keyframes.fromGraphX((x + end) / 2);
+            KeyframeSegment<?> segment = sheet.channel.find(tick);
+            if (segment == null || segment.isSame() || segment.a.getMotionShift() == 0F || !segment.a.supportsMotionShift()) continue;
+            if (segment.a != previousA || segment.b != previousB)
+            {
+                previousA = segment.a;
+                previousB = segment.b;
+                same = segment.a.getFactory().compare(segment.a.getValue(), segment.b.getValue());
+            }
+            /* Equal values already have their hold strip; don't make it darker by drawing twice. */
+            if (same) continue;
+
+            float shift = segment.a.getMotionShift();
+            float start = segment.a.getTick() + segment.timeOffset;
+            float finish = segment.b.getTick() + segment.timeOffset;
+            float midpoint = start + segment.duration * (0.5F + shift);
+            int left = Math.max(x, this.keyframes.toGraphX(shift > 0F ? start : midpoint));
+            int right = Math.min(end, this.keyframes.toGraphX(shift > 0F ? Math.min(midpoint, finish) : finish));
+            if (right <= left) continue;
+            float alpha = TRACK_BAR_ALPHA * Math.min(1F, Math.abs(shift) / 0.49F);
+            if (alpha < 1F / 255F) continue;
+            int color = Colors.setA(sheet.color, alpha);
+            context.batcher.fillRect(builder, matrix, left, y - width / 2, right - left, width, color, color, color, color);
+        }
     }
 
     private void renderSheetKeyframeShapes(UIContext context, BufferBuilder builder, Matrix4f matrix, Area area, UIKeyframeSheet sheet, int y)

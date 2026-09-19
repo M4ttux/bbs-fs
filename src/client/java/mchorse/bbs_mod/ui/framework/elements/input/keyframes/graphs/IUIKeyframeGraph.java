@@ -313,6 +313,18 @@ public interface IUIKeyframeGraph
         }
     }
 
+    public default void setMotionShift(float shift, boolean dirty)
+    {
+        for (UIKeyframeSheet sheet : this.getSheets())
+        {
+            for (Keyframe keyframe : sheet.selection.getSelected())
+            {
+                if (keyframe.supportsMotionShift()) keyframe.setMotionShift(shift, dirty);
+            }
+        }
+        this.getKeyframes().triggerChange();
+    }
+
     public default void setInterpolation(Interpolation interpolation)
     {
         for (UIKeyframeSheet sheet : this.getSheets())

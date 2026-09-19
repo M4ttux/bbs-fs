@@ -1409,6 +1409,7 @@
 	"bbs.ui.keyframes.shapes.square": "Square",
 	"bbs.ui.keyframes.shapes.tri_star": "Tri-star",
 	"bbs.ui.keyframes.shapes.triangle": "Triangle",
+	"bbs.ui.keyframes.motion_shift": "Motion shift",
 	"bbs.ui.keyframes.tick": "Tick",
 	"bbs.ui.keys.list": "Keybind list",
 	"bbs.ui.keys.ui_scale_inc": "Increase GUI scale",
