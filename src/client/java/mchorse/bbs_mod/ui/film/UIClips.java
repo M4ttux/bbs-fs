@@ -1996,6 +1996,9 @@ public class UIClips extends UITimelineCanvas
         batcher.unclip(context);
         batcher.clip(this.area, context);
 
+        /* Keep marker lines visible over the clips, below the playhead. */
+        this.markers.render(context, this.area, this.xAxis, 0);
+
         float cursor = this.delegate.getTimelineCursor(context.getTransition());
         String label = TimeUtils.formatCursorTime(cursor) + "/" + TimeUtils.formatTime(this.clips.calculateDuration());
 
@@ -2115,9 +2118,6 @@ public class UIClips extends UITimelineCanvas
             this::toGraphX,
             TimeUtils::formatTime
         );
-
-        /* After the notches, not before: an author's note outranks a measuring aid */
-        this.markers.render(context, this.area, this.xAxis, 0);
     }
 
     /**

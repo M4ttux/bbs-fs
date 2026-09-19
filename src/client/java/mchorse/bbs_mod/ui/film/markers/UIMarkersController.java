@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.film.markers;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.film.markers.FilmMarker;
 import mchorse.bbs_mod.film.markers.FilmMarkers;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -13,7 +14,8 @@ import java.util.List;
 import java.util.function.Supplier;
 
 /**
- * Draws the film's markers onto a timeline's ruler strip and answers which one the mouse is over.
+ * Draws the film's markers, extending their lines across the timeline when its grid is enabled,
+ * and answers which one the mouse is over on the ruler strip.
  *
  * <p>Not a widget: the ruler belongs to the timeline that painted it ({@code UIClips},
  * {@code UIFilmKeyframes}), and every one of them measures ticks with its own {@link Scale} and its
@@ -157,8 +159,9 @@ public class UIMarkersController
         List<FilmMarker> sorted = markers.getSorted();
         FontRenderer font = context.batcher.getFont();
         FilmMarker hovered = this.getMarkerAt(area, scale, context.mouseX, context.mouseY, clipOffset);
+        int lineBottom = BBSSettings.editorTimelineGrid.get() ? area.ey() : rulerBottom;
 
-        context.batcher.clipBox(area.x, area.y, area.ex(), rulerBottom, context);
+        context.batcher.clipBox(area.x, area.y, area.ex(), lineBottom, context);
 
         for (int i = 0, c = sorted.size(); i < c; i++)
         {
@@ -173,7 +176,7 @@ public class UIMarkersController
             boolean active = marker == hovered || marker == this.dragged;
             int color = marker.color.get() & Colors.RGB;
 
-            context.batcher.box(x, area.y, x + LINE_WIDTH, rulerBottom, Colors.setA(color, active ? 1F : 0.85F));
+            context.batcher.box(x, area.y, x + LINE_WIDTH, lineBottom, Colors.setA(color, active ? 1F : 0.85F));
             context.batcher.box(x, area.y, x + PIN_WIDTH, area.y + PIN_HEIGHT, color | Colors.A100);
 
             String title = marker.title.get();
