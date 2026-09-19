@@ -61,8 +61,7 @@ public class UILandingScreen extends UIElement
     private static final Link[] BANNERS = {
         Link.assets("textures/banners/bg1.png"),
         Link.assets("textures/banners/bg2.png"),
-        Link.assets("textures/banners/bg3.png"),
-        Link.assets("textures/banners/bg4.png")
+        Link.assets("textures/banners/bg3.png")
     };
     private static final double BANNER_HOLD_SECONDS = 6;
     private static final double BANNER_FADE_SECONDS = 2;
@@ -314,7 +313,7 @@ public class UILandingScreen extends UIElement
         FontRenderer font = context.batcher.getFont();
         String brand = "\u00a7lBBS FS";
         String credit = "render by ";
-        String artist = "Xavin";
+        String artist = "Kizrum";
         int brandWidth = font.getWidth(brand);
         int versionWidth = this.bannerVersion.isEmpty() ? 0 : font.getWidth(this.bannerVersion) + 16;
         int x = area.x + PADDING;

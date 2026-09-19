@@ -323,6 +323,12 @@ public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
             if (repeatedTick <= end && (next == null || repeatedTick < next.getTick()))
             {
                 segment.postB = this.shiftLoopNeighbour(repeated, loop.period());
+                Keyframe<T> repeatedStart = following > first ? this.get(following - 1) : null;
+
+                if (repeatedStart != null && repeatedStart.getTick() + loop.period() == segment.b.getTick())
+                {
+                    segment.nextStart = this.shiftLoopNeighbour(repeatedStart, loop.period());
+                }
             }
             else
             {

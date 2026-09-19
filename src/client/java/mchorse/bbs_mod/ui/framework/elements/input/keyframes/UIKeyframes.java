@@ -71,6 +71,7 @@ public class UIKeyframes extends UITimelineCanvas
 
     private Runnable changeCallback;
     private final UIKeyframeLoops loops = new UIKeyframeLoops(this);
+    private final UIKeyframeMotionShift motionShift = new UIKeyframeMotionShift(this);
 
     /* Fields */
 
@@ -699,6 +700,7 @@ public class UIKeyframes extends UITimelineCanvas
 
     public void editSheet(UIKeyframeSheet sheet)
     {
+        this.motionShift.release(false);
         if (sheet == null)
         {
             this.currentGraph = this.dopeSheet;
@@ -982,13 +984,14 @@ public class UIKeyframes extends UITimelineCanvas
     /** Whether the user is in the middle of any mouse interaction (dragging, selecting, navigating, scaling or stacking). */
     public boolean isInteracting()
     {
-        return this.scrubbing || this.loops.isDragging() || this.dragging >= 0 || this.marquee.isPressed() || this.navigating || this.scaling || this.stacking;
+        return this.scrubbing || this.loops.isDragging() || this.motionShift.isDragging() || this.dragging >= 0 || this.marquee.isPressed() || this.navigating || this.scaling || this.stacking;
     }
 
     /* Sheet management */
 
     public void removeAllSheets()
     {
+        this.motionShift.release(false);
         this.loops.reset();
         this.dopeSheet.removeAllSheets();
     }
@@ -1155,6 +1158,7 @@ public class UIKeyframes extends UITimelineCanvas
 
             return true;
         }
+        if (!this.scaling && !this.stacking && this.motionShift.mouseClicked(context)) return true;
         if (!this.scaling && !this.stacking && this.loops.mouseClicked(context)) return true;
         if (this.currentGraph.mouseClicked(context))
         {
@@ -1332,6 +1336,11 @@ public class UIKeyframes extends UITimelineCanvas
     @Override
     protected boolean subMouseReleased(UIContext context)
     {
+        if (context.mouseButton == 0 && this.motionShift.isDragging())
+        {
+            this.motionShift.handleMouse(context);
+            return this.motionShift.release(false);
+        }
         if (this.scrubbing && context.mouseButton == 0)
         {
             this.moveNoKeyframes(context);
@@ -1365,6 +1374,7 @@ public class UIKeyframes extends UITimelineCanvas
     @Override
     protected boolean subMouseScrolled(UIContext context)
     {
+        if (this.motionShift.isDragging()) return true;
         if (this.area.isInside(context) && this.stacking)
         {
             this.stackOffset = (float) Math.max(0.05F, this.stackOffset + Math.copySign(Window.isShiftPressed() ? 0.05F : 1, context.mouseWheel));
@@ -1385,6 +1395,7 @@ public class UIKeyframes extends UITimelineCanvas
     @Override
     protected boolean subKeyPressed(UIContext context)
     {
+        if (this.motionShift.keyPressed(context)) return true;
         this.updateModifierOrder();
 
         if (Window.isCtrlPressed() && (context.isPressed(GLFW.GLFW_KEY_LEFT_ALT) || context.isPressed(GLFW.GLFW_KEY_RIGHT_ALT)))
@@ -1476,6 +1487,7 @@ public class UIKeyframes extends UITimelineCanvas
     protected void renderOverlay(UIContext context)
     {
         this.loops.render(context);
+        this.motionShift.render(context);
         this.currentGraph.renderTopmostKeyframes(context);
         this.loops.renderStatus(context);
     }
@@ -1493,6 +1505,11 @@ public class UIKeyframes extends UITimelineCanvas
      */
     protected void handleMouse(UIContext context)
     {
+        if (this.motionShift.isDragging())
+        {
+            this.motionShift.handleMouse(context);
+            return;
+        }
         if (this.scrubbing)
         {
             this.moveNoKeyframes(context);

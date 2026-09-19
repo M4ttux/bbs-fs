@@ -199,11 +199,13 @@ public class GizmoRings
 
         Matrix4f matrix = stack.peek().getPositionMatrix();
         Vector3f toCamera = matrix.getTranslation(new Vector3f()).negate();
-        Matrix3f basis = matrix.get3x3(new Matrix3f());
+        /* Screen-sized handles have a tiny world scale close to the camera.
+         * Test/invert relative to that scale, not an absolute determinant. */
+        Matrix3f inverse = GizmoJacobian.inverse(matrix.get3x3(new Matrix3f()));
 
-        if (Math.abs(basis.determinant()) > 1.0E-8F)
+        if (inverse.isFinite() && inverse.determinant() != 0F)
         {
-            basis.invert().transform(toCamera);
+            inverse.transform(toCamera);
         }
 
         if (toCamera.lengthSquared() > 1.0E-8F)
@@ -237,11 +239,11 @@ public class GizmoRings
          * the model-view applied to the view-space origin), as the billboard
          * ring already does. */
         Vector3f camera = matrix.getTranslation(new Vector3f()).negate();
-        Matrix3f basis = matrix.get3x3(new Matrix3f());
+        Matrix3f inverse = GizmoJacobian.inverse(matrix.get3x3(new Matrix3f()));
 
-        if (Math.abs(basis.determinant()) > 1.0E-8F)
+        if (inverse.isFinite() && inverse.determinant() != 0F)
         {
-            basis.invert().transform(camera);
+            inverse.transform(camera);
         }
 
         /* Move it into the ring's own plane frame, matching the axis rotation

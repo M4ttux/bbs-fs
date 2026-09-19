@@ -539,6 +539,11 @@ public class UIFilmController extends UIElement implements GizmoViewport
             return true;
         }
 
+        if (this.picker.pickTarget(context))
+        {
+            return true;
+        }
+
         boolean gizmoShown = this.canShowGizmo();
 
         /* Gizmo handles beat everything (rendered on top). The trackball
@@ -642,6 +647,13 @@ public class UIFilmController extends UIElement implements GizmoViewport
     @Override
     protected boolean subKeyPressed(UIContext context)
     {
+        if (this.picker.isPickingTarget() && context.isPressed(GLFW.GLFW_KEY_ESCAPE))
+        {
+            this.picker.cancelTargetPick();
+
+            return true;
+        }
+
         if (this.canControl())
         {
             if (this.isControlling() && context.isPressed(GLFW.GLFW_KEY_ESCAPE))
@@ -969,12 +981,6 @@ public class UIFilmController extends UIElement implements GizmoViewport
         return keyframeEditor != null ? keyframeEditor.getBone() : null;
     }
 
-    /** The film camera's world&rarr;camera rotation, for reorienting the gizmo into a space. */
-    public Matrix4f getGizmoView()
-    {
-        return this.panel.getCamera().view;
-    }
-
     /** Whether the selected keyframe is the form's anchor track, so its transform gets a gizmo. */
     public boolean isAnchorGizmo()
     {
@@ -1066,7 +1072,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
      */
     boolean canShowGizmo()
     {
-        return UIBaseMenu.shouldRenderAxes() && !this.getEditTarget().isNone();
+        return !this.picker.isPickingTarget() && UIBaseMenu.shouldRenderAxes() && !this.getEditTarget().isNone();
     }
 
 }

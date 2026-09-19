@@ -473,18 +473,6 @@ public class BBSSettings {
 		return Math.max(scale, 0.0001F);
 	}
 
-	/**
-	 * The same for the gizmo, which is the one overlay that may turn it off: a gizmo that
-	 * shrinks with distance reads as part of the scene rather than as a tool over it, and
-	 * some people prefer it that way.
-	 */
-	public static float getGizmoDistanceScale(float distance, float fov)
-	{
-		boolean keep = gizmoKeepScreenSize == null || gizmoKeepScreenSize.get();
-
-		return keep ? getScreenSizeScale(distance, fov) : 1F;
-	}
-
 	public static boolean isHorizontalClipEditorEffective()
 	{
 		return editorHorizontalClipEditor.get();

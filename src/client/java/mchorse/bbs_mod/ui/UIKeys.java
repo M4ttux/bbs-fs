@@ -141,6 +141,11 @@ public class UIKeys
     public static final IKey CAMERA_PANELS_OFFSET = L10n.lang("bbs.ui.camera.panels.offset");
     public static final IKey CAMERA_PANELS_PATH_POINTS = L10n.lang("bbs.ui.camera.panels.path_points");
     public static final IKey CAMERA_PANELS_PICK_KEY = L10n.lang("bbs.ui.camera.panels.pick_key");
+    public static final IKey CAMERA_PANELS_SHADER_LIST = L10n.lang("bbs.ui.camera.panels.shader_list");
+    public static final IKey CAMERA_PANELS_SHADER_PROFILE = L10n.lang("bbs.ui.camera.panels.shader_profile");
+    public static final IKey CAMERA_PANELS_SHADER_CUSTOM = L10n.lang("bbs.ui.camera.panels.shader_custom");
+    public static final IKey CAMERA_PANELS_SHADER_ON = L10n.lang("bbs.ui.camera.panels.shader_on");
+    public static final IKey CAMERA_PANELS_SHADER_OFF = L10n.lang("bbs.ui.camera.panels.shader_off");
     public static final IKey CAMERA_PANELS_PITCH = L10n.lang("bbs.ui.camera.panels.pitch");
     public static final IKey CAMERA_PANELS_POINT = L10n.lang("bbs.ui.camera.panels.point");
     public static final IKey CAMERA_PANELS_POINTS_CONTEXT_ADD = L10n.lang("bbs.ui.camera.panels.points.context.add");
@@ -263,6 +268,13 @@ public class UIKeys
     public static final IKey ENGINE_KEYSTROKES_POSITION_TOP_RIGHT = L10n.lang("bbs.keystrokes_position.top_right");
     public static final IKey ENGINE_ROTATE_3D_SPHERE_MODE_TRACKBALL = L10n.lang("bbs.rotate_3d_sphere_mode.trackball");
     public static final IKey ENGINE_ROTATE_3D_SPHERE_MODE_ARCBALL = L10n.lang("bbs.rotate_3d_sphere_mode.arcball");
+    public static final IKey FILM_BACKUPS_TITLE = L10n.lang("bbs.ui.film.backups.title");
+    public static final IKey FILM_BACKUPS_EMPTY = L10n.lang("bbs.ui.film.backups.empty");
+    public static final IKey FILM_BACKUPS_ERROR = L10n.lang("bbs.ui.film.backups.error");
+    public static final IKey FILM_BACKUPS_RESTORE = L10n.lang("bbs.ui.film.backups.restore");
+    public static final IKey FILM_BACKUPS_DESCRIPTION = L10n.lang("bbs.ui.film.backups.description");
+    public static final IKey FILM_BACKUPS_EXISTS = L10n.lang("bbs.ui.film.backups.exists");
+
     public static final IKey FILM_CONTROLLER_CONTROL_MODE_TOOLTIP = L10n.lang("bbs.ui.film.controller.control_mode-tooltip");
     public static final IKey FILM_CONTROLLER_FREE_LOOK_TOOLTIP = L10n.lang("bbs.ui.film.controller.free_look-tooltip");
     public static final IKey FILM_CONTROLLER_INSERT_FRAME_DESCRIPTION = L10n.lang("bbs.ui.film.controller.insert_frame-description");
@@ -997,6 +1009,7 @@ public class UIKeys
     public static final IKey KEYFRAMES_SHAPES_TRIANGLE = L10n.lang("bbs.ui.keyframes.shapes.triangle");
     public static final IKey KEYFRAMES_SHAPES_TRI_STAR = L10n.lang("bbs.ui.keyframes.shapes.tri_star");
     public static final IKey KEYFRAMES_TICK = L10n.lang("bbs.ui.keyframes.tick");
+    public static final IKey KEYFRAMES_MOTION_SHIFT = L10n.lang("bbs.ui.keyframes.motion_shift");
     public static final IKey KEYS_LIST = L10n.lang("bbs.ui.keys.list");
     public static final IKey KEYS_UI_SCALE_INC = L10n.lang("bbs.ui.keys.ui_scale_inc");
     public static final IKey KEYS_UI_SCALE_DEC = L10n.lang("bbs.ui.keys.ui_scale_dec");

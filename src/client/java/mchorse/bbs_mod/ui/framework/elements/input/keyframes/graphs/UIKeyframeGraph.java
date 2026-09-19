@@ -235,7 +235,8 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
             int lx = this.keyframes.toGraphX(keyframe.getTick() - keyframe.lx);
             int ly = this.toGraphY(keyframe.getFactory().getY(keyframe.getValue()) + keyframe.ly);
 
-            if (this.isNear(lx, ly, mouseX, mouseY))
+            if (i > 0 && ((Keyframe) keyframes.get(i - 1)).getInterpolation().getInterp() == Interpolations.BEZIER
+                && this.isNear(lx, ly, mouseX, mouseY))
             {
                 return new Pair<>(keyframe, KeyframeType.LEFT_HANDLE);
             }
@@ -243,7 +244,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
             int rx = this.keyframes.toGraphX(keyframe.getTick() + keyframe.rx);
             int ry = this.toGraphY(keyframe.getFactory().getY(keyframe.getValue()) + keyframe.ry);
 
-            if (this.isNear(rx, ry, mouseX, mouseY))
+            if (keyframe.getInterpolation().getInterp() == Interpolations.BEZIER && this.isNear(rx, ry, mouseX, mouseY))
             {
                 return new Pair<>(keyframe, KeyframeType.RIGHT_HANDLE);
             }
@@ -564,7 +565,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
                     lineBuilder.add(x, py);
                     lineBuilder.push();
                 }
-                else if (interp != Interpolations.LINEAR)
+                else if (interp != Interpolations.LINEAR || prev.getMotionShift() != 0F)
                 {
                     /* Sampling a curve nobody can see is the whole cost of a dense channel, and a
                      * pixel-wide segment needs no more points than it has pixels. The straight

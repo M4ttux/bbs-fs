@@ -517,7 +517,8 @@ public class UIAnimationStateEditor extends UIElement
     private void pickFormBone(Form form, String bone, boolean insert)
     {
         this.selectForm(form);
-        if (!this.allMode && this.category != ReplayCategory.POSE && form instanceof IPosedForm && bone != null && !bone.isEmpty())
+        if (!this.allMode && this.category != ReplayCategory.POSE && form != null
+            && (!(form instanceof IPosedForm) || (bone != null && !bone.isEmpty())))
         {
             this.setCategory(ReplayCategory.POSE);
         }
