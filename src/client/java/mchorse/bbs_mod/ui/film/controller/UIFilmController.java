@@ -981,12 +981,6 @@ public class UIFilmController extends UIElement implements GizmoViewport
         return keyframeEditor != null ? keyframeEditor.getBone() : null;
     }
 
-    /** The film camera's world&rarr;camera rotation, for reorienting the gizmo into a space. */
-    public Matrix4f getGizmoView()
-    {
-        return this.panel.getCamera().view;
-    }
-
     /** Whether the selected keyframe is the form's anchor track, so its transform gets a gizmo. */
     public boolean isAnchorGizmo()
     {

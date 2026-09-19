@@ -121,11 +121,7 @@ public class GizmoDrag
 
     public GizmoDrag setup(Camera camera, Area viewport, double gx, double gy, double gz)
     {
-        /* The SCENE camera, deliberately — never GizmoLens, though the handles are drawn
-         * through it: the lens's narrow frustum is also a zoom, so solving a drag through
-         * it reads a cursor move as a much smaller world step and the model crawls. Only
-         * the pick stencil goes through the lens ("which handle is under the cursor" is a
-         * question about the picture; "where does it end up" is about the world). */
+        /* Drawing and dragging share the scene camera. */
         this.projection.set(camera.projection);
         this.view.set(camera.view);
         this.cameraOrigin.set(camera.position);

@@ -913,7 +913,7 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
 
         /* Keep the gizmo the same on-screen size as in the film preview; set before both the
          * visual and the stencil pass so the drawn handles and their pick hitbox match. */
-        Gizmo.INSTANCE.setViewportScale(context.menu.height / (float) this.area.h);
+        Gizmo.INSTANCE.setViewportHeight(this.area.h);
 
         ModelSlotTarget shown = this.shownTarget();
 

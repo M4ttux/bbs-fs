@@ -295,7 +295,10 @@ public class FilmEditorController extends BaseFilmController
         return super.getFilmControllerContext(context, replay, entity)
             .transition(this.getTransition(entity, context.tickDelta()))
             .gizmoTarget(target)
-            .gizmoView(this.controller.getGizmoView())
+            /* The UI camera is copied later in the frame. Use the view that is
+             * actually drawing this pass, before any actor transforms go on it. */
+            .gizmoView(context.matrixStack().peek().getPositionMatrix())
+            .gizmoViewportHeight(this.controller.panel.preview.getViewport().h)
             .bone2(aBone2, TransformSpace.LOCAL);
     }
 

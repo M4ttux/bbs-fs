@@ -115,7 +115,7 @@
 	"bbs.config.transformation.gizmo_plane_size": "Plane size",
 	"bbs.config.transformation.gizmo_plane_size-comment": "How big the gizmo's two-axis planes are. They grow outwards from the same starting point, so a bigger plane is easier to grab without moving away from the origin",
 	"bbs.config.transformation.gizmo_keep_screen_size": "Fixed gizmo size",
-	"bbs.config.transformation.gizmo_keep_screen_size-comment": "When enabled, the gizmo keeps roughly the same on-screen size as the camera distance changes. Markers and motion paths keep their fixed size either way",
+	"bbs.config.transformation.gizmo_keep_screen_size-comment": "When enabled, the gizmo keeps roughly the same on-screen size as the camera distance and FOV change. Markers and motion paths keep their fixed size either way",
 	"bbs.config.transformation.gizmo_elements": "Gizmo elements",
 	"bbs.config.transformation.gizmo_show_translate": "Show movement",
 	"bbs.config.transformation.gizmo_show_translate-comment": "Whether the gizmo shows its movement elements: the axis bars, the two-axis planes and the white centre cube that drags in the screen plane",

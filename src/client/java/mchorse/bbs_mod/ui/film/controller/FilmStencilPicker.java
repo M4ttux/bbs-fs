@@ -292,8 +292,8 @@ public class FilmStencilPicker
         this.ensureFramebuffer();
 
         /* Match the visual gizmo's on-screen size compensation (see
-         * Gizmo#setViewportScale) so the pick handles line up with what is drawn. */
-        Gizmo.INSTANCE.setViewportScale(context.menu.height / (float) viewport.h);
+         * Gizmo#setViewportHeight) so the pick handles line up with what is drawn. */
+        Gizmo.INSTANCE.setViewportHeight(viewport.h);
 
         boolean isPlaying = this.controller.isPlaying();
         Texture mainTexture = this.stencil.getFramebuffer().getMainTexture();
@@ -352,7 +352,7 @@ public class FilmStencilPicker
 
                     filmContext
                         .gizmoTarget(target)
-                        .gizmoView(this.controller.getGizmoView());
+                        .gizmoView(renderContext.matrixStack().peek().getPositionMatrix());
                 }
                 else
                 {
@@ -375,7 +375,7 @@ public class FilmStencilPicker
                 .stencil(this.stencilMap)
                 .relative(replay.relative.get())
                 .gizmoTarget(this.controller.getEditTarget())
-                .gizmoView(this.controller.getGizmoView()));
+                .gizmoView(renderContext.matrixStack().peek().getPositionMatrix()));
         }
 
         int x = (int) ((context.mouseX - viewport.x) / (float) viewport.w * mainTexture.width);
