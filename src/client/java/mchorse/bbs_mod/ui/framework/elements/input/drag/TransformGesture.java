@@ -290,8 +290,8 @@ public class TransformGesture implements DragContext
     }
 
     /**
-     * Start a uniform (three-axis) scale: one lever axis drives all three, the
-     * same math Ctrl+axis-scale uses. Reached by a mouse pick on the centre cube
+     * Start a uniform (three-axis) scale: one lever axis drives all three.
+     * Reached by a mouse pick on the centre cube
      * and as a step of the S-key walk alike.
      */
     public void enableUniformScale(GizmoDrag drag)
