@@ -337,7 +337,11 @@ public class BillboardFormRenderer <T extends BillboardForm> extends FormRendere
                  * whatever stands BEHIND it, and the shadow of that grass or wall is painted over the
                  * billboard's face. Writing depth is also just what the vanilla cutout entity pipeline
                  * this draw now mirrors does. */
-                boolean depthWrite = BBSRendering.isIrisWorldForms();
+                /* Keep depth for every immediate draw too: framebuffer forms suspend the queue,
+                 * and later parts must still be occluded by this quad (e.g. setup-face eyelids).
+                 * Only an actual deferred pass may drop it; submit keeps the opaque half writing. */
+                boolean depthWrite = !FormTranslucentQueue.needsSplit(null, texture, color.a)
+                    && !FormTranslucentQueue.needsWholeDefer(null, color.a);
 
                 FormTranslucentQueue.submit(built,
                     new BBSShaders.ModelVariant(FormTranslucentQueue.PASS_SINGLE, depthWrite, true),
