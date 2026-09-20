@@ -10,7 +10,6 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.RotationAxis;
-import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
@@ -21,10 +20,6 @@ import org.joml.Vector3f;
  * built from the drag's own numbers, and it is composited last, over handles that are
  * already drawn.
  *
- * <p>Two shapes, because the two rotations are measured differently: an axis ring turns in
- * its own plane, while the view ring turns in the screen plane and is therefore built from
- * the cursor's screen angles.
- *
  * <p>Stateless — everything it needs arrives per call.
  */
 public class GizmoPie
@@ -34,7 +29,7 @@ public class GizmoPie
      * a pie at all.
      *
      * @param ringGesture the axis drag's own gesture, whose anchored turn axis decides which
-     *                    way the wedge sweeps; ignored for the view ring.
+     *                    way the wedge sweeps.
      */
     public static void draw(MatrixStack stack, TransformGesture transform, DragStrategy ringGesture)
     {
@@ -43,15 +38,8 @@ public class GizmoPie
             return;
         }
 
-        if (transform.isSphereRotate())
+        if (transform.isSphereRotate() || transform.isViewRotate())
         {
-            return;
-        }
-
-        if (transform.isViewRotate())
-        {
-            drawView(stack, transform);
-
             return;
         }
 
@@ -61,104 +49,6 @@ public class GizmoPie
         {
             drawAxis(stack, transform, ringGesture, axis);
         }
-    }
-
-    /**
-     * Sweep pie for the view (screen-plane) ring. Built straight from the cursor's screen
-     * angles using the gizmo's local directions that map to screen right and down, so it
-     * starts exactly under the grab, its leading edge follows the cursor, and — being in the
-     * gizmo's own (distance-scaled) frame — its radius rides the ring at any FOV.
-     */
-    private static void drawView(MatrixStack stack, TransformGesture transform)
-    {
-        float sweepRad = transform.getViewScreenSweepRad();
-
-        if (Math.abs(sweepRad) < 1.0E-4F)
-        {
-            return;
-        }
-
-        Matrix4f mat = stack.peek().getPositionMatrix();
-        Matrix3f inverse = GizmoJacobian.inverse(mat.get3x3(new Matrix3f()));
-
-        if (!inverse.isFinite() || inverse.determinant() == 0F)
-        {
-            return;
-        }
-
-        /* Local directions mapping to screen right and screen down. Unit vectors,
-         * so a step of {@code radius} along them lands on the ring. */
-        Vector3f right = inverse.transform(new Vector3f(1F, 0F, 0F)).normalize();
-        Vector3f down = inverse.transform(new Vector3f(0F, -1F, 0F)).normalize();
-
-        float startRad = transform.getViewGrabScreenAngle();
-        float scale = BBSSettings.axesScale.get();
-        float radius = 0.22F * scale * GizmoRings.VIEW_RING_SCALE;
-
-        int color = Colors.LIGHTEST_GRAY;
-        float r = Colors.getR(color);
-        float g = Colors.getG(color);
-        float b = Colors.getB(color);
-        float edgeAlpha = BBSSettings.gizmoOpacity.get();
-        float fillAlpha = 0.25F * edgeAlpha;
-
-        /* Blend, no culling and no depth test are the gizmo pipeline's own state now
-         * ({@link Gizmo#begin}/{@link Gizmo#flush}), so the RenderSystem bracket that used to set
-         * them here is gone rather than lost. */
-        int segments = Math.max(2, (int) (Math.abs(sweepRad) / (float) (2D * Math.PI) * 64F));
-        float step = sweepRad / segments;
-        Vector3f p1 = new Vector3f();
-        Vector3f p2 = new Vector3f();
-
-        BufferBuilder builder = Gizmo.begin();
-
-        for (int i = 0; i < segments; i++)
-        {
-            rimPoint(p1, right, down, startRad + step * i, radius);
-            rimPoint(p2, right, down, startRad + step * (i + 1), radius);
-
-            builder.vertex(mat, 0, 0, 0).color(r, g, b, fillAlpha);
-            builder.vertex(mat, p1.x, p1.y, p1.z).color(r, g, b, fillAlpha);
-            builder.vertex(mat, p2.x, p2.y, p2.z).color(r, g, b, fillAlpha);
-        }
-
-        Gizmo.flush(builder);
-
-        /* Bright radial edges at the grab angle and the leading angle, like the axis pie. */
-        float thickness = 0.005F * scale;
-        builder = Gizmo.begin();
-        edge(builder, mat, right, down, startRad, radius, thickness, r, g, b, edgeAlpha);
-        edge(builder, mat, right, down, startRad + sweepRad, radius, thickness, r, g, b, edgeAlpha);
-        Gizmo.flush(builder);
-    }
-
-    /** Point at screen angle {@code angle} and {@code radius} in the screen right/down
-     *  basis, written into {@code out}. */
-    private static void rimPoint(Vector3f out, Vector3f right, Vector3f down, float angle, float radius)
-    {
-        float c = (float) Math.cos(angle) * radius;
-        float s = (float) Math.sin(angle) * radius;
-
-        out.set(right.x * c + down.x * s, right.y * c + down.y * s, right.z * c + down.z * s);
-    }
-
-    /** One radial boundary line of the view pie: a thin quad from centre to the rim at
-     *  screen {@code angle}, built from the screen right/down basis. */
-    private static void edge(BufferBuilder builder, Matrix4f mat, Vector3f right, Vector3f down, float angle, float radius, float thickness, float r, float g, float b, float edgeAlpha)
-    {
-        Vector3f rim = new Vector3f();
-        Vector3f perp = new Vector3f();
-
-        rimPoint(rim, right, down, angle, radius);
-        rimPoint(perp, right, down, angle + (float) (Math.PI / 2D), thickness);
-
-        builder.vertex(mat, perp.x, perp.y, perp.z).color(r, g, b, edgeAlpha);
-        builder.vertex(mat, -perp.x, -perp.y, -perp.z).color(r, g, b, edgeAlpha);
-        builder.vertex(mat, rim.x - perp.x, rim.y - perp.y, rim.z - perp.z).color(r, g, b, edgeAlpha);
-
-        builder.vertex(mat, perp.x, perp.y, perp.z).color(r, g, b, edgeAlpha);
-        builder.vertex(mat, rim.x - perp.x, rim.y - perp.y, rim.z - perp.z).color(r, g, b, edgeAlpha);
-        builder.vertex(mat, rim.x + perp.x, rim.y + perp.y, rim.z + perp.z).color(r, g, b, edgeAlpha);
     }
 
     /** Sweep pie for one of the three axis rings, drawn in the ring's own plane. */
