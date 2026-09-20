@@ -1,5 +1,12 @@
 package mchorse.bbs_mod.ui.forms.editors.forms;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.function.Consumer;
+import mchorse.bbs_mod.api.client.editor.FormEditorTool;
+import mchorse.bbs_mod.ui.forms.editors.forms.UIModelForm;
+
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -30,6 +37,13 @@ import org.joml.Vector3f;
 
 public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>>
 {
+    private static final List<Consumer<UIForm<?>>> PANEL_EXTENSIONS = new ArrayList<>();
+
+    public static void registerPanelExtension(Consumer<UIForm<?>> factory)
+    {
+        PANEL_EXTENSIONS.add(Objects.requireNonNull(factory));
+    }
+
     public UIFormEditor editor;
 
     public T form;
@@ -48,6 +62,11 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
 
     public UIPropTransform getEditableTransform()
     {
+        if (this.view instanceof FormEditorTool tool && tool.getGizmoTransform() != null)
+        {
+            return tool.getGizmoTransform();
+        }
+
         UIPoseEditor poseEditor = this.getPoseEditor();
 
         if (poseEditor != null)
@@ -162,6 +181,11 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
 
     protected void registerDefaultPanels()
     {
+        for (var factory : PANEL_EXTENSIONS)
+        {
+            factory.accept(this);
+        }
+
         this.registerPanel(new UIMaterialFormPanel(this), UIKeys.FORMS_EDITORS_MATERIAL, Icons.MATERIAL);
 
         UIGeneralFormPanel panel = new UIGeneralFormPanel(this);
@@ -236,7 +260,7 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
      * Toggle a bone in the pose editor's multi-selection without rebuilding the panel,
      * so a viewport Ctrl+click accumulates a selection instead of resetting it. Returns
      * whether this form actually owns the bone and handled the toggle (only model forms
-     * with a pose editor do). See {@link mchorse.bbs_mod.ui.forms.editors.forms.UIModelForm}.
+     * with a pose editor do). See {@link UIModelForm}.
      */
     public boolean toggleBoneSelection(String bone)
     {

@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.film.replays.tracks;
 
-import mchorse.bbs_mod.cubic.IModel;
+import mchorse.bbs_mod.ui.utils.icons.Icon;
+
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
 import mchorse.bbs_mod.film.replays.FormProperties;
@@ -244,7 +245,7 @@ public class TrackCatalog
             }
 
             BaseValueBasic property = FormUtils.getProperty(root, id.toKey());
-            TrackDescriptor track = new TrackDescriptor(id, channel, form, IKey.constant(id.label()),
+            TrackDescriptor track = new TrackDescriptor(id, channel, form, TrackStyle.label(id),
                 TrackStyle.icon(name), TrackStyle.color(name), property);
 
             if (name.startsWith("pose_overlay"))
@@ -487,7 +488,7 @@ public class TrackCatalog
         }
     }
 
-    private static TrackDescriptor prop(ModelForm modelForm, TrackId id, TrackId parent, String title, mchorse.bbs_mod.ui.utils.icons.Icon icon, BaseValueBasic value, FormProperties properties)
+    private static TrackDescriptor prop(ModelForm modelForm, TrackId id, TrackId parent, String title, Icon icon, BaseValueBasic value, FormProperties properties)
     {
         return new TrackDescriptor(id, channel(properties, id), modelForm, IKey.constant(title),
             icon, TrackStyle.color(id.property()), value).under(parent);

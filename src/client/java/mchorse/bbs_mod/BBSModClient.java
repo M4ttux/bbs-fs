@@ -1,5 +1,9 @@
 package mchorse.bbs_mod;
 
+import mchorse.bbs_mod.api.client.events.RegisterFilmToolsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterFormPanelsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterReplayActionsEvent;
+
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.audio.MinecraftSoundCapture;
 import mchorse.bbs_mod.audio.SoundManager;
@@ -655,6 +659,8 @@ public class BBSModClient implements ClientModInitializer
 
         UIFormEditor.setup();
         BBSMod.events.post(new RegisterFormEditorsEvent());
+        BBSMod.events.post(new RegisterFormPanelsEvent());
+        BBSMod.events.post(new RegisterReplayActionsEvent());
 
         UIClip.setup();
         BBSMod.events.post(new RegisterClipPanelsEvent());
@@ -678,6 +684,7 @@ public class BBSModClient implements ClientModInitializer
         BBSMod.events.post(new RegisterFrameOverlaysEvent());
 
         BBSMod.events.post(new RegisterPreviewOverlaysEvent());
+        BBSMod.events.post(new RegisterFilmToolsEvent());
 
         /* Keybinds */
         keyDashboard = this.createKey("dashboard", GLFW.GLFW_KEY_0);

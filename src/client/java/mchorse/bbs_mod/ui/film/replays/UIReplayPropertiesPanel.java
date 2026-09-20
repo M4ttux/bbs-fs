@@ -1,5 +1,11 @@
 package mchorse.bbs_mod.ui.film.replays;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.function.BiFunction;
+import java.util.function.Supplier;
+
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
@@ -20,6 +26,13 @@ import java.util.function.Consumer;
 
 public class UIReplayPropertiesPanel extends UIElement
 {
+    private static final List<BiFunction<UIFilmPanel, Supplier<Replay>, UIElement>> ACTIONS = new ArrayList<>();
+
+    public static void registerAction(BiFunction<UIFilmPanel, Supplier<Replay>, UIElement> factory)
+    {
+        ACTIONS.add(Objects.requireNonNull(factory));
+    }
+
     private final UIFilmPanel filmPanel;
 
     public UIElement properties;
@@ -176,6 +189,13 @@ public class UIReplayPropertiesPanel extends UIElement
             other
         );
         this.properties.relative(this).x(0).y(0).w(1F).h(1F);
+
+        for (var factory : ACTIONS)
+        {
+            UIElement action = factory.apply(this.filmPanel, () -> this.replay);
+
+            if (action != null) this.properties.add(action);
+        }
 
         this.add(this.properties);
         this.setReplay(null);

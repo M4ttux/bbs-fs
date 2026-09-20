@@ -284,3 +284,33 @@ tasks.register("apiCheck") {
 tasks.named("build") {
 	dependsOn tasks.named("apiCheck")
 }
+
+// Public addon contracts spanning common data and client evaluation, without a game window.
+sourceSets {
+    addonApiChecks {
+        compileClasspath += sourceSets.main.output + sourceSets.client.output + sourceSets.client.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.client.output + sourceSets.client.runtimeClasspath
+    }
+}
+tasks.register('addonApiCheckJar', Jar) {
+    dependsOn addonApiChecksClasses
+    from sourceSets.addonApiChecks.output
+    archiveFileName = 'addon-api-check.jar'
+    destinationDirectory = layout.buildDirectory
+}
+loom {
+    runs {
+        addonApiCheck {
+            client()
+            runDir 'build/addonApiCheck'
+            vmArg "-Dfabric.addMods=${layout.buildDirectory.file('addon-api-check.jar').get().asFile.absolutePath}"
+        }
+    }
+}
+tasks.named('runAddonApiCheck') { dependsOn 'addonApiCheckJar' }
+tasks.register('addonApiCheck') {
+    group = 'verification'
+    description = 'Checks addon data/editor/pose contracts under Fabric, exiting before a game window opens.'
+    dependsOn 'runAddonApiCheck'
+}
+tasks.named('check') { dependsOn 'addonApiCheck' }

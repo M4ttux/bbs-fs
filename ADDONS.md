@@ -226,5 +226,102 @@ Honest list of what the API does not cover yet, so nobody hunts for a method tha
   that class. This is what `VideoClip` does.
 - **Track kinds.** The kinds of track a film can animate are an enum. An addon's own kind of track
   (as opposed to its own animated property, which the modifier above covers) has no way in yet.
-- **Adding a tab to someone else's editor panel.** A form's panels are registered on the form's
-  own editor; there is no hook to add one to a form you did not write.
+- **Per-instance runtime attachments.** Additional saved values can use form modifiers; typed
+  runtime fields and construction of direct `new Form()` templates still need addon-owned storage.
+
+## API version 2: editor and evaluated scene extensions
+
+Version 2 is additive: version 1 addons remain supported. An addon using these hooks should
+call `BBSApi.requireVersion(modId, 2)` before registration. All client callbacks run on the
+client thread. They must not retain borrowed matrices/UI contexts for background work.
+
+### Editor controls and display
+
+- `RegisterFormPanelsEvent`: register a consumer of each `UIForm<?>`. Add panels with
+  `registerPanel`; they receive the normal edit lifecycle. This runs before Material/General,
+  while the editor has no assigned form yet. Filter by editor type, not `editor.form`.
+- `RegisterReplayActionsEvent`: create a control in actor properties from the film panel and
+  a supplier of the displayed replay. The supplier follows selection; at multi-selection it
+  refers to the first replay. Resolve it on activation and capture that replay for a dialog.
+- `RegisterTrackStylesEvent.registerLabel(property, IKey)` or the four-argument `register`
+  gives a property a live localized label. It affects display only, never saved `TrackId`s.
+- `TimelineEvents.OVERLAY`: draw over either clip or keyframe timeline. `toX` accepts absolute
+  film ticks, including fractions; BBS accounts for the clip's offset, zoom and scroll.
+- `FormPreviewEvents.OVERLAY`: draw after either plain or pickable form preview. The picking
+  pass has finished, but the preview has not returned to 2D. Restore any changed GL state.
+
+### Transactions and lifecycle
+
+`FilmEditEvents.CHANGED` receives `(film, values, cause)`, once per film per completed editor
+batch, with `EDIT`, `UNDO` or `REDO`. Undo/redo fires after the values are restored. The value
+list is immutable; its elements are live values. Intermediate drag samples, loading and
+playback do not post edits. Filter changes by their paths/owners before invalidating caches.
+
+`Films.reset()` detaches and shuts down every controller, including the recorder, so normal
+`FilmEvents.SHUTDOWN` cleanup also runs on world reset. Duplicate controller references close
+once. Addon-owned resources outside controllers still need their own teardown.
+
+### Evaluated transforms, bones and attachments
+
+`FormPoseEvents` exposes the same external pose stages used by rendering and matrix walks:
+
+- `TRANSFORM`: modify the temporary local `Transform` after its saved animation and overlays.
+  Both stack and matrix application use it. Scale stays whatever the listener leaves there.
+  `FormRenderer.createTransform()` remains the unmodified animation/overlay result;
+  `createEvaluatedTransform(transition)` includes contributions.
+- `PARENT_FRAME`: observe the frame above each form before its own transform, with entity,
+  body-part path and transition. Called for model forms as well as other forms.
+- `MODEL_POSE`: after animation/IK, before built-in chains in `RENDER` and before bone capture
+  in `MATRICES`. The latter has no world base matrix. Modify evaluated bones, not saved keys.
+- `CLAIM_CHAIN`: return true to exclude one chain from the built-in solver. Any claimant wins;
+  evaluate ownership from the form's current settings, which participate in cache invalidation.
+- `PIVOT_OFFSETS`: request offsets in the default pivot-frame walk. Explicit callers of the
+  overload with an `applyStretch` argument keep control of that choice.
+- `ANCHOR`: return a temporary resolved anchor; never modify the saved anchor. Do not return null.
+- `ACTOR_BEFORE`: prepare per-actor state before its anchors and render matrices are resolved.
+
+These hooks may run repeatedly for a single displayed frame. **Do not step a simulation in
+pose callbacks.** A simulation evaluating its animation targets must scope out its own
+contributions (with `try/finally`) while retaining physical ancestors it needs. Ownership of
+that evaluation scope and the simulation cache belongs to the addon. Listeners compose in
+registration order; multiple solvers must agree which bones they own.
+
+### Viewport tools
+
+A form panel can implement `FormEditorTool`: return its selected `UIPropTransform` and its
+origin for LOCAL/PARENT/WORLD space. Returning null relinquishes control. The states editor
+has priority. BBS routes gizmo placement, input and transform hotkeys through the active panel;
+the transform's callbacks provide edit/undo boundaries.
+
+`RegisterFilmToolsEvent` creates a `FilmEditorTool` per film controller. BBS attaches it to
+the UI tree. It can supply an edit target, start a gizmo gesture, consume input, update a HUD
+or draw in the world. Null target/start results keep the built-in tool. Target overrides are
+not queried when editing is blocked. Input is dispatched in registration order; tools must
+honor the controller's current editing state. Clean up active gestures on removal or stop.
+`FilmGizmoEvents.DRAW` supplies identical context for visual and stencil placement; the first
+listener returning true owns the draw. Balance matrix pushes in both paths.
+
+### Structure fragments
+
+`StructureRenderEvents.RENDER` runs after the source structure is loaded, including during
+picking. Return true after drawing a replacement to suppress the original. Use
+`StructureRenderPart` for each fragment: it has an independent renderer/cache, applies a
+local matrix and uses the normal block, shader, transparency and block-entity paths.
+`createData` copies blocks, positions and block entity NBT. Never modify shared source data.
+Recreate parts when source data or biome changes; resource rebakes remain automatic.
+Part rendering does not re-enter `StructureRenderEvents`. Store per-renderer caches with a
+static `RenderAttachment<T>` key. The state lives on the renderer, not in a global map, and
+may safely refer back to its owner. It is not saved/copied. Native resources still require
+explicit scene teardown; attachments do not introduce automatic disposal.
+
+### Migrating addon property names
+
+Register `FormPropertyAliases.register("old_addon_mass", "addon:mass")` on both sides before
+loading documents. Form values, disabled-track names, legacy track maps and structured track
+lists then read the old spelling and write the canonical one. Bone/material names are not
+renamed. If both spellings exist, the canonical one wins, independent of input order.
+Unrecognized value factories remain preserved as raw tracks with the migrated address.
+
+A legacy document must be opened and saved with the updated addon installed once. Afterwards
+namespaced values survive saving without the addon. BBS cannot infer ownership of arbitrary
+old unnamespaced keys when the addon that registers their aliases is absent.

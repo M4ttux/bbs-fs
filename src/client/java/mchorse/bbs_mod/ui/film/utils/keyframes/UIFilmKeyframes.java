@@ -1,12 +1,13 @@
 package mchorse.bbs_mod.ui.film.utils.keyframes;
 
+import mchorse.bbs_mod.api.client.events.TimelineEvents;
+
 import mchorse.bbs_mod.ui.framework.elements.utils.UITimelineCanvas;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.markers.FilmMarkers;
 import mchorse.bbs_mod.ui.film.IUIClipsDelegate;
-import mchorse.bbs_mod.ui.film.UIClips;
 import mchorse.bbs_mod.ui.film.markers.UIMarkersController;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
@@ -148,5 +149,11 @@ public class UIFilmKeyframes extends UIKeyframes
         }
 
         super.renderOverlay(context);
+
+        if (this.editor != null)
+        {
+            TimelineEvents.OVERLAY.invoker().render(this.editor.getFilm(), context, this.graphArea,
+                tick -> this.toGraphX((float) (tick - this.getClipOffset())));
+        }
     }
 }

@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.ui.film;
 
+import mchorse.bbs_mod.api.client.events.TimelineEvents;
+
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.clips.CameraClip;
 import mchorse.bbs_mod.camera.clips.ClipFactoryData;
@@ -1564,6 +1566,12 @@ public class UIClips extends UITimelineCanvas
         }
 
         super.render(context);
+
+        if (this.delegate != null)
+        {
+            TimelineEvents.OVERLAY.invoker().render(this.delegate.getFilm(), context, this.area,
+                tick -> this.toGraphX((float) tick));
+        }
     }
 
     private void handleInput(int mouseX, int mouseY)

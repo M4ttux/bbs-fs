@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.ui.framework.elements.utils;
 
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
+
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.systems.VertexSorter;
 import mchorse.bbs_mod.camera.Camera;
@@ -99,7 +101,7 @@ public abstract class UIModelRenderer extends UIElement
 
     /**
      * The orthonormal axes of the frame the preview is actually drawn in &mdash;
-     * what {@link mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace#GLOBAL}
+     * what {@link TransformSpace#GLOBAL}
      * means for anything rendered here. {@link #transform} is multiplied onto the
      * stack before the model AND before the grid ({@link #renderModel}), so it is
      * that frame, not the camera's, that reads as "the world" to the user: the
@@ -331,6 +333,7 @@ public abstract class UIModelRenderer extends UIElement
         }
 
         this.renderUserModel(context);
+        this.renderUserModelOverlay(context);
 
         DiffuseLighting.disableGuiDepthLighting();
 
@@ -425,6 +428,9 @@ public abstract class UIModelRenderer extends UIElement
      * Draw your model here
      */
     protected abstract void renderUserModel(UIContext context);
+
+    protected void renderUserModelOverlay(UIContext context)
+    {}
 
     /**
      * Render block of grass under the model (which signify where

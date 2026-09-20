@@ -1,7 +1,9 @@
 package mchorse.bbs_mod.film;
 
+import mchorse.bbs_mod.api.client.events.FilmGizmoEvents;
+import mchorse.bbs_mod.api.client.events.FormPoseEvents;
+
 import com.mojang.blaze3d.systems.RenderSystem;
-import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.data.Point;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.renderer.DeathPose;
@@ -52,6 +54,8 @@ public class FilmEntityRenderer
 {
     public static void renderEntity(FilmControllerContext context)
     {
+        FormPoseEvents.ACTOR_BEFORE.invoker().prepare(context);
+
         Map<String, IEntity> entities = context.entities;
         IEntity entity = context.entity;
         Camera camera = context.camera;
@@ -392,6 +396,8 @@ public class FilmEntityRenderer
      */
     private static void renderReplayGizmo(IEntity entity, double cx, double cy, double cz, float transition, TransformSpace space, Matrix4f gizmoView, StencilMap stencilMap, MatrixStack stack)
     {
+        if (FilmGizmoEvents.DRAW.invoker().draw(FilmControllerContext.instance, stencilMap, stack)) return;
+
         stack.push();
         MatrixStackUtils.multiply(stack, FilmMatrices.getMatrixForRenderWithRotation(entity, cx, cy, cz, transition));
 
