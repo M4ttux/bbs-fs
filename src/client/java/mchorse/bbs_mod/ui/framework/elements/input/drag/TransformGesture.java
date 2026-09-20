@@ -905,18 +905,6 @@ public class TransformGesture implements DragContext
         return this.strategy == null ? 0F : this.strategy.accumulatedRotateDeg();
     }
 
-    /** Screen-space start edge of the view sweep pie (radians, Y-down convention). */
-    public float getViewGrabScreenAngle()
-    {
-        return this.strategy == null ? 0F : this.strategy.viewGrabScreenAngle();
-    }
-
-    /** Signed screen-space span of the view sweep, in radians. */
-    public float getViewScreenSweepRad()
-    {
-        return this.strategy == null ? 0F : this.strategy.viewScreenSweepRad();
-    }
-
     /**
      * A short summary of what the active drag has changed so far, for the gizmo's
      * on-screen readout: degrees for a rotation (axis or view ring by swept angle,
