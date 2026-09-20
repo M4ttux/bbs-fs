@@ -79,16 +79,15 @@ public class GizmoPie
         }
 
         Matrix4f mat = stack.peek().getPositionMatrix();
-        Matrix3f basis = mat.get3x3(new Matrix3f());
+        Matrix3f inverse = GizmoJacobian.inverse(mat.get3x3(new Matrix3f()));
 
-        if (Math.abs(basis.determinant()) < 1.0E-8F)
+        if (!inverse.isFinite() || inverse.determinant() == 0F)
         {
             return;
         }
 
         /* Local directions mapping to screen right and screen down. Unit vectors,
          * so a step of {@code radius} along them lands on the ring. */
-        Matrix3f inverse = basis.invert();
         Vector3f right = inverse.transform(new Vector3f(1F, 0F, 0F)).normalize();
         Vector3f down = inverse.transform(new Vector3f(0F, -1F, 0F)).normalize();
 

@@ -381,6 +381,11 @@ public class UIFilmPreview extends UIElement
 
         if (area.isInside(context))
         {
+            if (this.panel.getController().picker.pickTarget(context))
+            {
+                return true;
+            }
+
             if (this.panel.getController().orbitGizmo.mouseClicked(context, this.navBlock))
             {
                 return true;

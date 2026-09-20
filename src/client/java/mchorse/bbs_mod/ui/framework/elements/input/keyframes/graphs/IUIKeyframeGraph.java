@@ -25,6 +25,12 @@ public interface IUIKeyframeGraph
 
     public void resetView();
 
+    public default void updateZoom()
+    {}
+
+    public default void stopZoom()
+    {}
+
     /** The timeline this graph draws, so a graph can ask the editor about the playhead. */
     public UIKeyframes getKeyframes();
 
@@ -32,7 +38,7 @@ public interface IUIKeyframeGraph
      * The tick auto-keyframing writes at, or {@code null} when edits land on the keyframes they
      * were made on. See {@link UIKeyframes#getAutoKeyframeTick()}.
      */
-    public default Integer getAutoKeyframeTick()
+    public default Float getAutoKeyframeTick()
     {
         UIKeyframes keyframes = this.getKeyframes();
 
@@ -46,10 +52,10 @@ public interface IUIKeyframeGraph
      */
     public default <T> Keyframe<T> getEditTarget(Keyframe<T> keyframe)
     {
-        Integer tick = this.getAutoKeyframeTick();
+        Float tick = this.getAutoKeyframeTick();
         UIKeyframeSheet sheet = tick == null ? null : this.getSheet(keyframe);
 
-        if (sheet == null || sheet.header)
+        if (sheet == null)
         {
             return keyframe;
         }
@@ -151,48 +157,21 @@ public interface IUIKeyframeGraph
 
     public UIKeyframeSheet getSheet(int mouseY);
 
-    /**
-     * The row under the cursor that is a <em>track</em> — something holding a value that can be
-     * keyed, pasted into, curve-edited and restyled. A body part's section is a heading, not a track:
-     * it names a part, holds no value, and its channel belongs to no replay, so anything written
-     * into it would be dropped on save without a word.
-     *
-     * <p>Every operation that acts on a track resolves its target through this and not through
-     * {@link #getSheet(int)}, which answers the plainer question of which row the cursor is over —
-     * that one is still what hit-testing and folding need.</p>
-     */
-    public default UIKeyframeSheet getTrackSheet(int mouseY)
-    {
-        UIKeyframeSheet sheet = this.getSheet(mouseY);
-
-        return sheet != null && sheet.header ? null : sheet;
-    }
-
     /** The first row that is a track, for operations that must land somewhere when the cursor is over nothing. */
     public default UIKeyframeSheet getFirstTrackSheet()
     {
-        for (UIKeyframeSheet sheet : this.getSheets())
-        {
-            if (!sheet.header)
-            {
-                return sheet;
-            }
-        }
+        List<UIKeyframeSheet> sheets = this.getSheets();
 
-        return null;
+        return sheets.isEmpty() ? null : sheets.get(0);
     }
 
     public boolean addKeyframe(int mouseX, int mouseY);
 
+    /** Create at exact time without converting the playhead through a screen pixel. */
+    public boolean addKeyframeAt(float tick, int mouseY);
+
     public default Keyframe addKeyframe(UIKeyframeSheet sheet, float tick, Object value)
     {
-        if (sheet.header)
-        {
-            /* A header names a body part; there is no value to key. Its channel belongs to no
-             * replay, so a keyframe placed here would vanish on save without a word. */
-            return null;
-        }
-
         KeyframeSegment segment = sheet.channel.find(tick);
         Keyframe extra = null;
         BaseValueBasic property = sheet.property;
@@ -334,6 +313,18 @@ public interface IUIKeyframeGraph
         }
     }
 
+    public default void setMotionShift(float shift, boolean dirty)
+    {
+        for (UIKeyframeSheet sheet : this.getSheets())
+        {
+            for (Keyframe keyframe : sheet.selection.getSelected())
+            {
+                if (keyframe.supportsMotionShift()) keyframe.setMotionShift(shift, dirty);
+            }
+        }
+        this.getKeyframes().triggerChange();
+    }
+
     public default void setInterpolation(Interpolation interpolation)
     {
         for (UIKeyframeSheet sheet : this.getSheets())
@@ -383,7 +374,7 @@ public interface IUIKeyframeGraph
      */
     public default void applyValue(IKeyframeFactory factory, Object value, Keyframe primary, boolean unmergeable, boolean fromEditor)
     {
-        Integer tick = fromEditor ? this.getAutoKeyframeTick() : null;
+        Float tick = fromEditor ? this.getAutoKeyframeTick() : null;
 
         /* The value the edit is measured against is the one on the keyframe it actually lands on,
          * which auto-keyframing moves to the playhead. Reading it off the selected keyframe would
@@ -392,7 +383,7 @@ public interface IUIKeyframeGraph
 
         for (UIKeyframeSheet sheet : this.getSheets())
         {
-            if (sheet.channel.getFactory() != factory || sheet.header)
+            if (sheet.channel.getFactory() != factory)
             {
                 continue;
             }

@@ -15,6 +15,14 @@ import java.util.Map;
 
 public class KeybindSettings
 {
+    private static final List<KeyCombo> dynamicCombos = new ArrayList<>();
+
+    /** Register individual combos before the settings file is built. */
+    public static void register(KeyCombo combo)
+    {
+        dynamicCombos.add(combo);
+    }
+
     private static final List<Class> classes = new ArrayList<>();
     private static final Map<String, Icon> CATEGORY_ICONS = new HashMap<>();
 
@@ -67,6 +75,9 @@ public class KeybindSettings
         {
             readKeyCombos(combos, clazz);
         }
+
+        for (KeyCombo combo : dynamicCombos)
+            combos.computeIfAbsent(combo.categoryKey, key -> new ArrayList<>()).add(combo);
 
         List<String> keys = new ArrayList<>(combos.keySet());
 

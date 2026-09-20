@@ -1,5 +1,9 @@
 package mchorse.bbs_mod.film;
 
+import java.util.IdentityHashMap;
+import org.slf4j.LoggerFactory;
+
+import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.audio.AudioRenderer;
@@ -473,9 +477,24 @@ public class Films
 
     public void reset()
     {
-        controllers.clear();
-        actors.clear();
+        /* Detach first: shutdown listeners may query or remove controllers. */
+        Set<BaseFilmController> closing = Collections.newSetFromMap(new IdentityHashMap<>());
+        closing.addAll(this.controllers);
+        if (this.recorder != null) closing.add(this.recorder);
+        this.controllers.clear();
+        this.actors.clear();
+        this.recorder = null;
 
-        recorder = null;
+        for (BaseFilmController controller : closing)
+        {
+            try
+            {
+                controller.shutdown();
+            }
+            catch (RuntimeException exception)
+            {
+                LoggerFactory.getLogger(Films.class).error("Failed to close film controller", exception);
+            }
+        }
     }
 }

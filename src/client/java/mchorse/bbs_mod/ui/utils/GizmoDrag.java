@@ -121,11 +121,7 @@ public class GizmoDrag
 
     public GizmoDrag setup(Camera camera, Area viewport, double gx, double gy, double gz)
     {
-        /* The SCENE camera, deliberately — never GizmoLens, though the handles are drawn
-         * through it: the lens's narrow frustum is also a zoom, so solving a drag through
-         * it reads a cursor move as a much smaller world step and the model crawls. Only
-         * the pick stencil goes through the lens ("which handle is under the cursor" is a
-         * question about the picture; "where does it end up" is about the world). */
+        /* Drawing and dragging share the scene camera. */
         this.projection.set(camera.projection);
         this.view.set(camera.view);
         this.cameraOrigin.set(camera.position);
@@ -402,29 +398,58 @@ public class GizmoDrag
         return this.hasFrameAxes;
     }
 
-    /** A matrix's rotation as an orthonormal basis, so residual scale cannot leak into
-     *  an axis direction. A degenerate column falls back to the identity's. */
-    private static Matrix3f basisOf(Matrix4f matrix)
+    /** Shared by placement and dragging: unit, perpendicular axes without inherited
+     *  stretch/shear. Preserve mirrored handedness and reconstruct collapsed axes. */
+    public static Matrix3f basisOf(Matrix4f matrix)
     {
         Matrix3f basis = matrix.get3x3(new Matrix3f());
+        Vector3f x = basis.getColumn(0, new Vector3f());
+        Vector3f y = basis.getColumn(1, new Vector3f());
+        Vector3f z = basis.getColumn(2, new Vector3f());
 
-        for (int i = 0; i < 3; i++)
+        if (x.lengthSquared() < 1.0E-12F)
         {
-            Vector3f column = basis.getColumn(i, new Vector3f());
+            y.cross(z, x);
 
-            if (column.lengthSquared() < 1.0E-8F)
+            if (x.lengthSquared() < 1.0E-12F)
             {
-                column.set(i == 0 ? 1F : 0F, i == 1 ? 1F : 0F, i == 2 ? 1F : 0F);
-            }
-            else
-            {
-                column.normalize();
-            }
+                Vector3f remaining = y.lengthSquared() >= 1.0E-12F ? y : z;
 
-            basis.setColumn(i, column);
+                if (remaining.lengthSquared() < 1.0E-12F)
+                {
+                    return basis.identity();
+                }
+
+                x.set(Math.abs(remaining.x) < Math.abs(remaining.y) ? 1F : 0F,
+                    Math.abs(remaining.x) < Math.abs(remaining.y) ? 0F : 1F, 0F);
+                x.fma(-x.dot(remaining) / remaining.lengthSquared(), remaining);
+            }
         }
 
-        return basis;
+        x.normalize();
+        y.fma(-x.dot(y), x);
+
+        if (y.lengthSquared() < 1.0E-12F)
+        {
+            z.cross(x, y);
+
+            if (y.lengthSquared() < 1.0E-12F)
+            {
+                y.set(Math.abs(x.y) < 0.9F ? 0F : 1F, Math.abs(x.y) < 0.9F ? 1F : 0F, 0F);
+                y.fma(-x.dot(y), x);
+            }
+        }
+
+        y.normalize();
+
+        Vector3f perpendicular = x.cross(y, new Vector3f()).normalize();
+
+        if (perpendicular.dot(z) < 0F)
+        {
+            perpendicular.negate();
+        }
+
+        return basis.setColumn(0, x).setColumn(1, y).setColumn(2, perpendicular);
     }
 
     /** See {@link #additiveRotationBase}; {@code null} clears it to zero. */

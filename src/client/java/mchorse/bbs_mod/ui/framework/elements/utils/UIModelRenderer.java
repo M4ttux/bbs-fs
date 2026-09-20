@@ -5,6 +5,7 @@ import mchorse.bbs_mod.graphics.InverseView;
 import mchorse.bbs_mod.graphics.ModelPreviewRenderer;
 import mchorse.bbs_mod.client.BBSRendering;
 import com.mojang.logging.LogUtils;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.camera.Camera;
 import org.slf4j.Logger;
 
@@ -141,7 +142,7 @@ public abstract class UIModelRenderer extends UIElement
 
     /**
      * The orthonormal axes of the frame the preview is actually drawn in &mdash;
-     * what {@link mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace#GLOBAL}
+     * what {@link TransformSpace#GLOBAL}
      * means for anything rendered here. {@link #transform} is multiplied onto the
      * stack before the model AND before the grid ({@link #renderModel}), so it is
      * that frame, not the camera's, that reads as "the world" to the user: the
@@ -392,6 +393,7 @@ public abstract class UIModelRenderer extends UIElement
                 }
 
                 this.renderUserModel(context);
+                this.renderUserModelOverlay(context);
             }
             catch (Exception e)
             {
@@ -639,6 +641,9 @@ public abstract class UIModelRenderer extends UIElement
      * Draw your model here
      */
     protected abstract void renderUserModel(UIContext context);
+
+    protected void renderUserModelOverlay(UIContext context)
+    {}
 
     /**
      * Render block of grass under the model (which signify where

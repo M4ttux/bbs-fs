@@ -19,8 +19,7 @@ public interface GizmoViewport
      *  this frame, so origin/radius project into this viewport's pixels.
      *  It must be the very projection this viewport had on
      *  {@link com.mojang.blaze3d.systems.RenderSystem} while the gizmo was
-     *  drawn: {@link GizmoLens} is rebuilt from it, and a lens built from a
-     *  different camera would put the hover disc off the drawn handles. */
+     *  drawn, or the hover disc would be offset from the handles. */
     Matrix4f getGizmoProjection();
 
     Area getGizmoArea();

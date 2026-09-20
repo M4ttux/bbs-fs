@@ -25,9 +25,7 @@ public enum TransformSpace
      *  left/right; hosts with no replay keep plain world axes. */
     GLOBAL(true, Icons.SPACE_GLOBAL, UIKeys.TRANSFORMS_SPACE_GLOBAL),
 
-    /** The camera's right/up/forward. The handles are additionally drawn facing the
-     *  eye ({@code Gizmo.applyViewShear}) so an off-centre gizmo reads flat; the edit
-     *  frame itself is the plain camera basis. */
+    /** The camera's right/up/forward, shared by drawing and editing. */
     VIEW(true, Icons.SPACE_VIEW, UIKeys.TRANSFORMS_SPACE_VIEW),
 
     /** The frame the bone's channels compose in — its parent bone's rendered frame

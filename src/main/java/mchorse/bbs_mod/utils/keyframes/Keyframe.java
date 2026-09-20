@@ -28,6 +28,8 @@ public class Keyframe <T> extends BaseValue
      * between two keyframes, if not 0
      */
     private float duration;
+    /** Displacement of the transition's midpoint from 0.5, in normalized time. */
+    private float motionShift;
     private final Interpolation interp = new Interpolation("interp", Interpolations.MAP);
 
     private final IKeyframeFactory<T> factory;
@@ -69,6 +71,7 @@ public class Keyframe <T> extends BaseValue
         int hash = Float.floatToIntBits(this.tick);
 
         hash = 31 * hash + Float.floatToIntBits(this.duration);
+        hash = 31 * hash + Float.floatToIntBits(this.motionShift);
         hash = 31 * hash + Float.floatToIntBits(this.lx);
         hash = 31 * hash + Float.floatToIntBits(this.ly);
         hash = 31 * hash + Float.floatToIntBits(this.rx);
@@ -119,6 +122,40 @@ public class Keyframe <T> extends BaseValue
         return this.value;
     }
 
+    public float getMotionShift()
+    {
+        return this.motionShift;
+    }
+
+    public void setMotionShift(float shift)
+    {
+        this.setMotionShift(shift, true);
+    }
+
+    public void setMotionShift(float shift, boolean dirty)
+    {
+        float value = Float.isFinite(shift) ? Math.max(-0.49F, Math.min(0.49F, shift)) : 0F;
+        if (value == this.motionShift) return;
+        if (dirty) this.preNotify();
+        this.motionShift = value;
+        if (dirty) this.postNotify();
+    }
+
+    public boolean supportsMotionShift()
+    {
+        /* Model animation keys have no factory: CubicModelAnimator evaluates
+         * their numeric Molang expressions directly. */
+        return (this.factory == null || !this.factory.isStepped()) && !this.interp.has(Interpolations.CONST);
+    }
+
+    /** Smooth monotonic time warp: endpoints stay fixed and f(0.5 + shift) = 0.5. */
+    public float remapMotion(float progress)
+    {
+        if (this.motionShift == 0F || progress <= 0F || progress >= 1F || !this.supportsMotionShift()) return progress;
+        double midpoint = 0.5D + this.motionShift;
+        return (float) (progress * (1D - midpoint) / (midpoint + (1D - 2D * midpoint) * progress));
+    }
+
     public double getY()
     {
         return this.factory.getY(this.value);
@@ -164,6 +201,7 @@ public class Keyframe <T> extends BaseValue
     {
         this.tick = keyframe.tick;
         this.duration = keyframe.duration;
+        this.motionShift = keyframe.motionShift;
         this.value = this.factory.copy(keyframe.value);
         this.interp.copy(keyframe.interp);
         this.style.copy(keyframe.style);
@@ -191,6 +229,7 @@ public class Keyframe <T> extends BaseValue
                 && this.rx == kf.rx
                 && this.ry == kf.ry
                 && this.duration == kf.duration
+                && this.motionShift == kf.motionShift
                 && Objects.equals(this.interp, kf.interp);
         }
 
@@ -206,6 +245,7 @@ public class Keyframe <T> extends BaseValue
         data.put("value", this.factory.toData(this.value));
 
         if (this.duration != 0F) data.putFloat("duration", this.duration);
+        if (this.motionShift != 0F) data.putFloat("motion_shift", this.motionShift);
         if (this.interp.getInterp() != Interpolations.LINEAR) data.put("interp", this.interp.toData());
         if (this.lx != 5F) data.putFloat("lx", this.lx);
         if (this.ly != 0F) data.putFloat("ly", this.ly);
@@ -226,6 +266,8 @@ public class Keyframe <T> extends BaseValue
 
         MapType map = data.asMap();
 
+        this.setMotionShift(map.getFloat("motion_shift"), false);
+
         this.style.fromData(map);
 
         if (map.has("tick")) this.tick = map.getFloat("tick");
@@ -243,6 +285,7 @@ public class Keyframe <T> extends BaseValue
         this.getInterpolation().copy(a.getInterpolation());
         this.setStyle(a.getStyle());
         this.setDuration(a.getDuration());
+        this.setMotionShift(a.getMotionShift());
 
         this.lx = a.lx;
         this.ly = a.ly;

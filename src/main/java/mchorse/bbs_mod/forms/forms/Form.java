@@ -1,5 +1,9 @@
 package mchorse.bbs_mod.forms.forms;
 
+import java.util.LinkedHashSet;
+import java.util.Set;
+import mchorse.bbs_mod.api.FormPropertyAliases;
+
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.film.replays.tracks.TrackId;
@@ -16,11 +20,14 @@ import mchorse.bbs_mod.forms.states.AnimationStates;
 import mchorse.bbs_mod.forms.states.StatePlayer;
 import mchorse.bbs_mod.forms.values.ValueAnchor;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
+import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
+import mchorse.bbs_mod.settings.values.base.BaseValueGroup;
 import mchorse.bbs_mod.settings.values.core.StableIds;
 import mchorse.bbs_mod.settings.values.core.ValueColor;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.settings.values.core.ValueTransform;
+import mchorse.bbs_mod.settings.values.core.ValuePose;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
@@ -28,6 +35,7 @@ import mchorse.bbs_mod.settings.values.ui.ValueStringKeys;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.pose.Transform;
+import mchorse.bbs_mod.utils.pose.Pose;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributes;
 
@@ -72,6 +80,7 @@ public abstract class Form extends ValueGroup
     public final ValueBoolean additiveColor = new ValueBoolean("additive_color", false);
 
     public final List<ValueTransform> additionalTransforms = new ArrayList<>();
+    public final List<ValuePose> additionalOverlays = new ArrayList<>();
 
     /* Hitbox properties */
     public final ValueBoolean hitbox = new ValueBoolean("hitbox", false);
@@ -106,6 +115,7 @@ public abstract class Form extends ValueGroup
 
     public int getPoseVersion()
     {
+        this.syncOverlayTracks();
         return this.poseVersion;
     }
 
@@ -150,13 +160,7 @@ public abstract class Form extends ValueGroup
         this.add(this.transform);
         this.add(this.transformOverlay);
 
-        for (int i = 0; i < BBSSettings.recordingPoseTransformOverlays.get(); i++)
-        {
-            ValueTransform valueTransform = new ValueTransform("transform_overlay" + i, new Transform());
-
-            this.additionalTransforms.add(valueTransform);
-            this.add(valueTransform);
-        }
+        this.syncOverlayTracks();
 
         this.add(this.uiScale);
         this.add(this.anchor);
@@ -189,6 +193,59 @@ public abstract class Form extends ValueGroup
 
         this.add(this.parts);
         this.add(this.states);
+    }
+
+    /** Apply the global overlay counts to existing forms as well as newly created ones. */
+    public final void syncOverlayTracks()
+    {
+        int transforms = BBSSettings.recordingTransformOverlays == null ? 0 : BBSSettings.recordingTransformOverlays.get();
+        int poses = this instanceof IPosedForm && super.get("pose") != null && BBSSettings.recordingPoseOverlays != null
+            ? BBSSettings.recordingPoseOverlays.get() : 0;
+        boolean changed = this.additionalTransforms.size() != transforms || this.additionalOverlays.size() != poses;
+
+        while (this.additionalTransforms.size() > transforms) this.remove(this.additionalTransforms.remove(this.additionalTransforms.size() - 1));
+        while (this.additionalOverlays.size() > poses) this.remove(this.additionalOverlays.remove(this.additionalOverlays.size() - 1));
+        while (this.additionalTransforms.size() < transforms)
+        {
+            ValueTransform value = new ValueTransform("transform_overlay" + this.additionalTransforms.size(), new Transform());
+            this.additionalTransforms.add(value);
+            this.add(value);
+        }
+        while (this.additionalOverlays.size() < poses)
+        {
+            ValuePose value = new ValuePose("pose_overlay" + this.additionalOverlays.size(), new Pose());
+            this.additionalOverlays.add(value);
+            this.add(value);
+        }
+        if (changed) this.bumpPoseVersion();
+    }
+
+    @Override
+    public List<BaseValue> getAll()
+    {
+        this.syncOverlayTracks();
+        return super.getAll();
+    }
+
+    @Override
+    public BaseValue get(String key)
+    {
+        this.syncOverlayTracks();
+        return super.get(key);
+    }
+
+    @Override
+    public BaseValueBasic getBasic(String key)
+    {
+        this.syncOverlayTracks();
+        return super.getBasic(key);
+    }
+
+    @Override
+    public void copy(BaseValueGroup group)
+    {
+        this.syncOverlayTracks();
+        super.copy(group);
     }
 
     public Object getRenderer()
@@ -431,7 +488,7 @@ public abstract class Form extends ValueGroup
      * Empty for a root form, whose tracks stand for the replay itself and need no prefix.
      *
      * <p>This is the label side of a track's identity; the address side is
-     * {@link mchorse.bbs_mod.forms.FormUtils#getPath}. They must not be confused: the address is
+     * {@link FormUtils#getPath}. They must not be confused: the address is
      * built from random stable ids and is unreadable by design.</p>
      */
     public String getTrackLabel()
@@ -487,8 +544,15 @@ public abstract class Form extends ValueGroup
     /* Data comparison and (de)serialization */
 
     @Override
+    protected String resolveReadKey(String key)
+    {
+        return FormPropertyAliases.resolve(key);
+    }
+
+    @Override
     public void fromData(BaseType data)
     {
+        this.syncOverlayTracks();
         if (data instanceof MapType map)
         {
             /* Compatibility with older forms */
@@ -505,6 +569,14 @@ public abstract class Form extends ValueGroup
         }
 
         super.fromData(data);
+
+        Set<String> migratedTracks = new LinkedHashSet<>();
+        for (String track : this.disabledTracks.get())
+        {
+            migratedTracks.add(FormPropertyAliases.resolve(track));
+        }
+        this.disabledTracks.get().clear();
+        this.disabledTracks.get().addAll(migratedTracks);
 
         if (data instanceof MapType map)
         {
@@ -540,6 +612,7 @@ public abstract class Form extends ValueGroup
     @Override
     public BaseType toData()
     {
+        this.syncOverlayTracks();
         BaseType data = super.toData();
 
         if (data instanceof MapType map)

@@ -103,17 +103,28 @@ public class Batcher2D
     /* 1.21.1 collected solid quads into one dedicated buffer and drew it once at endBatch(). The
      * 1.21.6+ two-phase GUI already records and composites every draw itself, so the batch scope is
      * kept only as the API its call sites still use, and does nothing of its own. */
+    private boolean batching;
+
     public void beginBatch()
-    {}
+    {
+        this.batching = true;
+    }
 
     /** Close the scope opened by {@link #beginBatch()}. */
     public void endBatch()
-    {}
+    {
+        this.batching = false;
+    }
 
     public Batcher2D(DrawContext context)
     {
         this.context = context;
         this.font = getDefaultTextRenderer();
+    }
+
+    public boolean isBatching()
+    {
+        return this.batching;
     }
 
     public DrawContext getContext()

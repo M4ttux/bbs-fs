@@ -15,7 +15,8 @@ public class FormRenderRecoveryTest
 {
     public static void main(String[] args)
     {
-        BBSSettings.recordingPoseTransformOverlays = new ValueInt("pose_transform_overlays", 0);
+        BBSSettings.recordingPoseOverlays = new ValueInt("pose_overlays", 0);
+        BBSSettings.recordingTransformOverlays = new ValueInt("transform_overlays", 0);
 
         for (boolean world : new boolean[] {false, true})
         {

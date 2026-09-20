@@ -15,6 +15,7 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Collections;
 import java.util.Date;
@@ -124,6 +125,33 @@ public abstract class BaseManager <T extends ValueGroup> extends FolderManager<T
         }
 
         return true;
+    }
+
+    /** Saved versions stay hidden from the ordinary film list. */
+    public List<String> getBackupKeys(String id)
+    {
+        if (!this.backUps)
+        {
+            return List.of();
+        }
+
+        File original = this.getFile(id);
+        String name = original.getName().substring(0, original.getName().length() - this.getExtension().length());
+        File folder = new File(original.getParentFile(), "_" + name);
+        File[] files = folder.listFiles((file) -> file.isFile()
+            && file.getName().startsWith(name + ".") && this.isData(file));
+
+        if (files == null)
+        {
+            return List.of();
+        }
+
+        String prefix = id.substring(0, id.length() - name.length()) + "_" + name + "/";
+
+        return Arrays.stream(files)
+            .map((file) -> prefix + file.getName().substring(0, file.getName().length() - this.getExtension().length()))
+            .sorted(Comparator.reverseOrder())
+            .toList();
     }
 
     @Override

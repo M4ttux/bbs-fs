@@ -40,6 +40,9 @@ public class FilmControllerContext
     /** The film camera's world&rarr;camera rotation, used to reorient the gizmo. */
     public Matrix4f gizmoView;
 
+    /** Final display height in UI pixels, even when the scene uses a larger framebuffer. */
+    public float gizmoViewportHeight;
+
     public String bone2;
 
     /** The preview axes' frame; always LOCAL today — the preview shows the bone's own axes. */
@@ -58,6 +61,7 @@ public class FilmControllerContext
         this.color = Colors.WHITE;
         this.gizmoTarget = FilmTarget.NONE;
         this.gizmoView = null;
+        this.gizmoViewportHeight = 0F;
         this.bone2 = null;
         this.space2 = TransformSpace.LOCAL;
         this.nameTag = "";
@@ -141,6 +145,13 @@ public class FilmControllerContext
     public FilmControllerContext gizmoView(Matrix4f view)
     {
         this.gizmoView = view;
+
+        return this;
+    }
+
+    public FilmControllerContext gizmoViewportHeight(float height)
+    {
+        this.gizmoViewportHeight = height;
 
         return this;
     }

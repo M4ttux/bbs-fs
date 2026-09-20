@@ -1,5 +1,10 @@
 package mchorse.bbs_mod.ui.film.controller;
 
+import java.util.ArrayList;
+import java.util.Objects;
+import java.util.function.Function;
+import mchorse.bbs_mod.api.client.editor.FilmEditorTool;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -72,6 +77,14 @@ import net.minecraft.world.World;
 
 public class UIFilmController extends UIElement implements GizmoViewport
 {
+    private static final List<Function<UIFilmController, FilmEditorTool>> TOOL_FACTORIES = new ArrayList<>();
+    private final List<FilmEditorTool> addonTools = new ArrayList<>();
+
+    public static void registerTool(Function<UIFilmController, FilmEditorTool> factory)
+    {
+        TOOL_FACTORIES.add(Objects.requireNonNull(factory));
+    }
+
     public static final int CAMERA_MODE_CAMERA = 0;
     public static final int CAMERA_MODE_FREE = 1;
     public static final int CAMERA_MODE_ORBIT = 2;
@@ -197,6 +210,13 @@ public class UIFilmController extends UIElement implements GizmoViewport
         }).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_PREV_REPLAY, () -> this.switchReplay(-1)).active(hasTwoOrMoreReplays).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_NEXT_REPLAY, () -> this.switchReplay(1)).active(hasTwoOrMoreReplays).category(category);
+
+        for (var factory : TOOL_FACTORIES)
+        {
+            var tool = Objects.requireNonNull(factory.apply(this));
+            this.addonTools.add(tool);
+            this.add(tool);
+        }
 
         this.noCulling();
     }
@@ -535,7 +555,14 @@ public class UIFilmController extends UIElement implements GizmoViewport
     @Override
     protected boolean subMouseClicked(UIContext context)
     {
+        for (var tool : this.addonTools) if (tool.click(context)) return true;
+
         if (this.canControl())
+        {
+            return true;
+        }
+
+        if (this.picker.pickTarget(context))
         {
             return true;
         }
@@ -589,7 +616,16 @@ public class UIFilmController extends UIElement implements GizmoViewport
     @Override
     public boolean startGizmo(UIContext context, int stencilIndex)
     {
-        float gizmoTransition = this.isPlaying() ? context.getTransition() : 0F;
+        if (!this.getEditTarget().isNone())
+        {
+            for (var tool : this.addonTools)
+            {
+                Boolean started = tool.startGizmo(context, stencilIndex);
+                if (started != null) return started;
+            }
+        }
+
+        float gizmoTransition = this.panel.getRunner().getTransition(context.getTransition());
 
         return UIReplaysEditorUtils.startFilmGizmo(this.panel, context, stencilIndex, gizmoTransition);
     }
@@ -612,12 +648,15 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public void stopGizmoInteraction()
     {
+        for (var tool : this.addonTools) tool.stopTool();
         this.gizmo.stop();
     }
 
     @Override
     protected boolean subMouseReleased(UIContext context)
     {
+        for (var tool : this.addonTools) if (tool.release(context)) return true;
+
         if (this.canControl())
         {
             return true;
@@ -643,6 +682,15 @@ public class UIFilmController extends UIElement implements GizmoViewport
     @Override
     protected boolean subKeyPressed(UIContext context)
     {
+        for (var tool : this.addonTools) if (tool.key(context)) return true;
+
+        if (this.picker.isPickingTarget() && context.isPressed(GLFW.GLFW_KEY_ESCAPE))
+        {
+            this.picker.cancelTargetPick();
+
+            return true;
+        }
+
         if (this.canControl())
         {
             if (this.isControlling() && context.isPressed(GLFW.GLFW_KEY_ESCAPE))
@@ -878,6 +926,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public void renderHUD(UIContext context, PreviewHud hud, Area navBlock)
     {
+        for (var tool : this.addonTools) tool.updateTool(context);
         this.hud.render(context, hud, navBlock);
     }
 
@@ -925,6 +974,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         this.mouse.trackCursor(this.canControl(), ClientNetwork.isIsBBSModOnServer());
 
         /* TODO(1.21.11 render): RenderSystem.disableDepthTest() was removed by the GPU-pipeline rewrite; this state is now encoded by the RenderLayer/RenderPipeline. */
+        for (var tool : this.addonTools) tool.renderTool(context);
     }
 
     private void renderOrbitCenterMarker(WorldRenderContext context)
@@ -972,12 +1022,6 @@ public class UIFilmController extends UIElement implements GizmoViewport
         return keyframeEditor != null ? keyframeEditor.getBone() : null;
     }
 
-    /** The film camera's world&rarr;camera rotation, for reorienting the gizmo into a space. */
-    public Matrix4f getGizmoView()
-    {
-        return this.panel.getCamera().view;
-    }
-
     /** Whether the selected keyframe is the form's anchor track, so its transform gets a gizmo. */
     public boolean isAnchorGizmo()
     {
@@ -1008,6 +1052,18 @@ public class UIFilmController extends UIElement implements GizmoViewport
      * stays picked. Chosen, not visible: see {@link UIFilmPanel#isReplayEditorSelected}.
      */
     public FilmTarget getEditTarget()
+    {
+        FilmTarget original = this.getDefaultEditTarget();
+        if (original.isNone()) return original;
+        for (var tool : this.addonTools)
+        {
+            FilmTarget target = tool.target(original);
+            if (target != null) return target;
+        }
+        return original;
+    }
+
+    private FilmTarget getDefaultEditTarget()
     {
         if (this.isRecording() || this.isCovered())
         {
@@ -1046,7 +1102,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
      * ({@link UIFormPalette}) is not a dashboard panel of its own — it is added as a full-size
      * CHILD of the film panel's container — so the film stays the dashboard's current panel and
      * keeps running its world pass underneath. Left ungated it goes on placing and drawing its
-     * gizmo behind the form editor, and since {@link mchorse.bbs_mod.ui.utils.Gizmo} is a
+     * gizmo behind the form editor, and since {@link Gizmo} is a
      * singleton the two then take turns over one captured placement: the film's bone shows up in
      * the middle of the form editor's scene.
      *
@@ -1069,7 +1125,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
      */
     boolean canShowGizmo()
     {
-        return UIBaseMenu.shouldRenderAxes() && !this.getEditTarget().isNone();
+        return !this.picker.isPickingTarget() && UIBaseMenu.shouldRenderAxes() && !this.getEditTarget().isNone();
     }
 
 }

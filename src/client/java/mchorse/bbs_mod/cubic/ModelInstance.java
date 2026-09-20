@@ -53,6 +53,7 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -178,6 +179,12 @@ public class ModelInstance implements IModelInstance
     public boolean isEditable()
     {
         return this.modelFile != null;
+    }
+
+    @Override
+    public java.util.Map<String, String> getProceduralBones()
+    {
+        return this.config.proceduralBones.get();
     }
 
     @Override
@@ -358,10 +365,12 @@ public class ModelInstance implements IModelInstance
     }
 
     /**
-     * Release GPU resources held for this model. Nothing holds any today — cubic geometry is rebuilt into a
-     * BufferBuilder per draw and BOBJ frees its own — but the model lifecycle calls this on reload, so the
-     * hook stays for whatever the render path retains next.
+     * Cubic geometry is generated on each draw in 1.21.11; edits need no GPU rebake.
      */
+    public void rebakeGroups(Collection<ModelGroup> groups)
+    {}
+
+    /** Release model resources. */
     public void delete()
     {}
 

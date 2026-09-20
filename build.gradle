@@ -134,6 +134,19 @@ tasks.named("check") {
 	dependsOn tasks.named("formRenderRecoveryTest"), tasks.named("migrationTest")
 }
 
+tasks.register('anchorInterpolationTest', JavaExec) {
+	group = 'verification'
+	description = 'Checks anchor keyframes and resolved transitions without starting Minecraft.'
+	dependsOn tasks.named('testClasses'), tasks.named('clientClasses')
+	classpath = sourceSets.test.runtimeClasspath + sourceSets.client.runtimeClasspath
+	mainClass = 'mchorse.bbs_mod.utils.keyframes.AnchorInterpolationTest'
+	args 'client'
+}
+
+tasks.named('check') {
+	dependsOn tasks.named('migrationTest'), tasks.named('formRenderRecoveryTest'), tasks.named('anchorInterpolationTest')
+}
+
 java {
 	// Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
 	// if it is present.
@@ -299,3 +312,33 @@ tasks.register("apiCheck") {
 tasks.named("build") {
 	dependsOn tasks.named("apiCheck")
 }
+
+// Public addon contracts spanning common data and client evaluation, without a game window.
+sourceSets {
+    addonApiChecks {
+        compileClasspath += sourceSets.main.output + sourceSets.client.output + sourceSets.client.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.client.output + sourceSets.client.runtimeClasspath
+    }
+}
+tasks.register('addonApiCheckJar', Jar) {
+    dependsOn addonApiChecksClasses
+    from sourceSets.addonApiChecks.output
+    archiveFileName = 'addon-api-check.jar'
+    destinationDirectory = layout.buildDirectory
+}
+loom {
+    runs {
+        addonApiCheck {
+            client()
+            runDir 'build/addonApiCheck'
+            vmArg "-Dfabric.addMods=${layout.buildDirectory.file('addon-api-check.jar').get().asFile.absolutePath}"
+        }
+    }
+}
+tasks.named('runAddonApiCheck') { dependsOn 'addonApiCheckJar' }
+tasks.register('addonApiCheck') {
+    group = 'verification'
+    description = 'Checks addon data/editor/pose contracts under Fabric, exiting before a game window opens.'
+    dependsOn 'runAddonApiCheck'
+}
+tasks.named('check') { dependsOn 'addonApiCheck' }

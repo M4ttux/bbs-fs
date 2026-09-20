@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.cubic.weld;
 
+import mchorse.bbs_mod.cubic.data.model.CubeFace;
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelCube;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;

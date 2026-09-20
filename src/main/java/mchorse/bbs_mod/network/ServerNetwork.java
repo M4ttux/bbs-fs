@@ -416,7 +416,7 @@ public class ServerNetwork
                 String id = data.getString("id");
                 Film film = films.load(id);
 
-                sendManagerData(player, callbackId, op, film.toData());
+                sendManagerData(player, callbackId, op, film == null ? new ByteType(false) : film.toData());
             }
             else if (op == RepositoryOperation.SAVE)
             {
@@ -435,6 +435,10 @@ public class ServerNetwork
                 ListType list = DataStorageUtils.stringListToData(films.getKeys());
 
                 sendManagerData(player, callbackId, op, list);
+            }
+            else if (op == RepositoryOperation.BACKUPS)
+            {
+                sendManagerData(player, callbackId, op, DataStorageUtils.stringListToData(films.getBackupKeys(data.getString("id"))));
             }
             else if (op == RepositoryOperation.ADD_FOLDER)
             {

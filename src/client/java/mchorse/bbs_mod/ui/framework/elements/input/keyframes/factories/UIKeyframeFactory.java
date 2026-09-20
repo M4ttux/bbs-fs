@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories;
 
+import mchorse.bbs_mod.BBSSettings;
+
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -44,6 +46,8 @@ public abstract class UIKeyframeFactory <T> extends UIElement
     public UIScrollView scroll;
     public UITrackpad tick;
     public UITrackpad duration;
+    public UITrackpad motionShift;
+    private boolean draggingMotionShift;
     public UIIcon interp;
 
     protected Keyframe<T> keyframe;
@@ -161,7 +165,22 @@ public abstract class UIKeyframeFactory <T> extends UIElement
         this.interp.tooltip(new InterpolationTooltip(0F, 0.5F, () -> this.keyframe.getInterpolation()));
         this.interp.keys().register(Keys.KEYFRAMES_INTERP, this.interp::clickItself).category(UIKeys.KEYFRAMES_KEYS_CATEGORY);
 
-        this.scroll.add(UI.row(UIConstants.MARGIN, 0, 0, this.interp, this.tick, this.duration));
+        this.motionShift = new UITrackpad(v -> this.editor.getGraph().setMotionShift(v.floatValue() / 100F, !this.draggingMotionShift));
+        this.motionShift.limit(-49, 49).tooltip(UIKeys.KEYFRAMES_MOTION_SHIFT);
+        this.motionShift.getEvents().register(UITrackpadDragStartEvent.class, e ->
+        {
+            this.draggingMotionShift = true;
+            this.editor.cacheKeyframes();
+        });
+        this.motionShift.getEvents().register(UITrackpadDragEndEvent.class, e ->
+        {
+            this.draggingMotionShift = false;
+            this.editor.submitKeyframes();
+            this.editor.getGraph().pickSelected();
+        });
+        this.motionShift.setValue(keyframe.getMotionShift() * 100F);
+        this.motionShift.setEnabled(keyframe.supportsMotionShift());
+        this.scroll.add(UI.row(UIConstants.MARGIN, 0, 0, this.interp, this.tick, this.duration, this.motionShift));
 
         this.add(this.scroll);
 
@@ -203,7 +222,7 @@ public abstract class UIKeyframeFactory <T> extends UIElement
     protected T getDisplayValue()
     {
         IUIKeyframeGraph graph = this.editor.getGraph();
-        Integer tick = graph.getAutoKeyframeTick();
+        Float tick = graph.getAutoKeyframeTick();
         UIKeyframeSheet sheet = tick == null ? null : graph.getSheet(this.keyframe);
 
         if (sheet == null || sheet.channel.isEmpty())
@@ -218,7 +237,8 @@ public abstract class UIKeyframeFactory <T> extends UIElement
 
     public void setTick(double tick)
     {
-        double time = TimeUtils.fromTime(tick);
+        double time = BBSSettings.editorSnapToTicks.get() ? TimeUtils.fromTime(tick)
+            : (BBSSettings.editorSeconds.get() ? tick * 20D : tick);
 
         this.editor.getGraph().setTick((float) time, false);
     }
@@ -236,6 +256,8 @@ public abstract class UIKeyframeFactory <T> extends UIElement
     public void update()
     {
         this.tick.setValue(TimeUtils.toTime(this.keyframe.getTick()));
+        this.motionShift.setValue(this.keyframe.getMotionShift() * 100F);
+        this.motionShift.setEnabled(this.keyframe.supportsMotionShift());
     }
 
     public static interface IUIKeyframeFactoryFactory <T>

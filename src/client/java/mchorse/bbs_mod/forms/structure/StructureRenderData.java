@@ -41,6 +41,15 @@ public class StructureRenderData
         this.blockEntities = Collections.unmodifiableMap(blockEntities);
     }
 
+    public static StructureRenderData create(String id, Vec3i size, Map<BlockPos, BlockState> blocks, Map<BlockPos, NbtCompound> entities)
+    {
+        Map<BlockPos, BlockState> blockCopy = new LinkedHashMap<>();
+        Map<BlockPos, NbtCompound> entityCopy = new LinkedHashMap<>();
+        blocks.forEach((pos, state) -> blockCopy.put(pos.toImmutable(), state));
+        entities.forEach((pos, nbt) -> entityCopy.put(pos.toImmutable(), nbt.copy()));
+        return new StructureRenderData(id, new Vec3i(size.getX(), size.getY(), size.getZ()), blockCopy, entityCopy);
+    }
+
     public Map<BlockPos, BlockState> getBlocks()
     {
         return this.blocks;

@@ -1,6 +1,10 @@
 package mchorse.bbs_mod.ui.film.replays;
 
 import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
+import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.l10n.L10n;
+import mchorse.bbs_mod.settings.values.numeric.ValueInt;
+import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.film.BaseFilmController;
 import mchorse.bbs_mod.film.FilmMatrices;
@@ -70,6 +74,30 @@ import java.util.function.Supplier;
 public class UIReplaysEditorUtils
 {
     private static final int BONE_TRACK_HUE_COUNT = 12;
+
+    /** Overlay counts are global; both timeline editors use the same creation action. */
+    public static void addOverlayTrackAction(ContextMenuManager menu, UIKeyframeSheet sheet, Consumer<TrackId> refresh)
+    {
+        if (sheet == null) return;
+        TrackId track = TrackId.parse(sheet.id);
+        Form owner = UIReplaysEditor.getSheetForm(sheet);
+        if (track == null || track.kind() != TrackKind.PROPERTY || owner == null) return;
+
+        String name = track.subject();
+        boolean pose = name.equals("pose") || name.startsWith("pose_overlay");
+        boolean transform = name.equals("transform") || name.startsWith("transform_overlay");
+        if ((!pose && !transform) || (pose && !(owner instanceof IPosedForm))) return;
+
+        ValueInt count = pose ? BBSSettings.recordingPoseOverlays : BBSSettings.recordingTransformOverlays;
+        if (count.get() >= count.getMax()) return;
+        menu.action(Icons.ADD, L10n.lang(pose ? "bbs.ui.keyframes.context.add_pose_track" : "bbs.ui.keyframes.context.add_transform_track"), () ->
+        {
+            if (count.get() >= count.getMax()) return;
+            count.set(count.get() + 1);
+            owner.syncOverlayTracks();
+            refresh.accept(TrackId.property(track.formPath(), pose ? "pose" : "transform"));
+        });
+    }
 
     /**
      * Key the pose at the tick, following what the timeline is showing: a pose track with its limbs
@@ -175,36 +203,15 @@ public class UIReplaysEditorUtils
         }
     }
 
-    /**
-     * Make the tree of rows agree with the list of them after a tab or filter took rows out:
-     * a departed row is still among its parent's children and still points back at it, so the
-     * timeline would fold rows that are not there and count keyframes it is not showing.
-     *
-     * <p>Three consequences settle together (each can cause the next, hence the loop): the parent
-     * forgets it; a header left empty leaves too, one level at a time; and a row whose parent left
-     * is CUT LOOSE, not dropped — pointing at an absent parent would fold it away with no arrow
-     * left to unfold it.
-     */
+    /** Remove links to filtered rows while keeping their surviving children accessible. */
     public static void pruneTree(List<UIKeyframeSheet> sheets)
     {
-        boolean removed = true;
-
-        while (removed)
-        {
-            Set<UIKeyframeSheet> present = new HashSet<>(sheets);
-
-            for (UIKeyframeSheet sheet : sheets)
-            {
-                sheet.children.removeIf((child) -> !present.contains(child));
-            }
-
-            removed = sheets.removeIf((sheet) -> sheet.header && sheet.children.isEmpty());
-        }
-
         Set<UIKeyframeSheet> present = new HashSet<>(sheets);
 
         for (UIKeyframeSheet sheet : sheets)
         {
+            sheet.children.removeIf(child -> !present.contains(child));
+
             if (sheet.parent != null && !present.contains(sheet.parent))
             {
                 sheet.parent = null;
@@ -226,11 +233,11 @@ public class UIReplaysEditorUtils
             return;
         }
 
-        Integer tick = editor.getAutoKeyframeTick();
+        Float tick = editor.getAutoKeyframeTick();
 
         for (UIKeyframeSheet sheet : editor.getGraph().getSheets())
         {
-            if (sheet.channel.getFactory() != keyframe.getFactory() || sheet.header)
+            if (sheet.channel.getFactory() != keyframe.getFactory())
             {
                 continue;
             }
@@ -306,7 +313,7 @@ public class UIReplaysEditorUtils
             replayTransform.syncFromReplay(
                 panel.replayEditor.getReplay(),
                 panel.getController().getCurrentEntity(),
-                panel.getCursor()
+                panel.getKeyframeCursor(transition)
             );
 
             return replayTransform;
@@ -358,7 +365,7 @@ public class UIReplaysEditorUtils
         replayTransform.syncFromReplay(
             panel.replayEditor.getReplay(),
             panel.getController().getCurrentEntity(),
-            panel.getCursor()
+            panel.getKeyframeCursor(transition)
         );
         replayTransform.hotkeyDrag(() -> buildFilmGizmoDrag(
             panel,
@@ -654,7 +661,7 @@ public class UIReplaysEditorUtils
 
         if (form != null)
         {
-            replay.properties.applyProperties(form, panel.getCursor() + (panel.getRunner().isRunning() ? transition : 0F));
+            replay.properties.applyProperties(form, replay.getTick(panel.getCursor()) + panel.getRunner().getTransition(transition));
         }
     }
 
@@ -667,7 +674,31 @@ public class UIReplaysEditorUtils
 
     public static void pickForm(UIKeyframeEditor keyframeEditor, ICursor cursor, Form form, String bone, boolean insert)
     {
-        if (form == null || keyframeEditor == null || bone.isEmpty())
+        if (form == null || keyframeEditor == null)
+        {
+            return;
+        }
+
+        if (!(form instanceof IPosedForm))
+        {
+            UIKeyframeSheet sheet = getPreferredPropertySheet(keyframeEditor.view.getGraph(), FormUtils.getPath(form), "transform");
+
+            if (sheet != null)
+            {
+                if (insert)
+                {
+                    insertIntoPropertySheet(keyframeEditor, "", sheet);
+                }
+                else
+                {
+                    pickProperty(keyframeEditor, cursor, "", sheet, false);
+                }
+            }
+
+            return;
+        }
+
+        if (bone == null || bone.isEmpty())
         {
             return;
         }
@@ -701,7 +732,7 @@ public class UIReplaysEditorUtils
             }
             if (isPoseSheet(currentSheet, path))
             {
-                int tick = cursor.getCursor();
+                float tick = keyframeEditor.view.getTick();
                 Keyframe closest = getClosestKeyframe(currentSheet, tick);
                 if (closest != null)
                 {
@@ -709,7 +740,7 @@ public class UIReplaysEditorUtils
                     {
                         forceSelectInSheet(graph, currentSheet, closest);
                     }
-                    cursor.setCursor((int) closest.getTick());
+                    cursor.setCursor(closest.getTick());
                 }
                 updatePoseEditorBoneSelection(keyframeEditor, bone);
                 return;
@@ -730,7 +761,7 @@ public class UIReplaysEditorUtils
              * the keyframe already at the cursor, or add a fresh one. */
             if (isPoseSheet(sheet, path))
             {
-                insertIntoPoseSheet(keyframeEditor, cursor, bone, sheet);
+                insertIntoPropertySheet(keyframeEditor, bone, sheet);
                 return;
             }
 
@@ -783,7 +814,7 @@ public class UIReplaysEditorUtils
              * doing nothing unless a pose keyframe happens to be selected already. */
             if (sheet.channel.isEmpty())
             {
-                UIKeyframeSheet poseSheet = getPreferredPoseSheet(graph, formPath);
+                UIKeyframeSheet poseSheet = getPreferredPropertySheet(graph, formPath, "pose");
 
                 if (poseSheet != null)
                 {
@@ -794,14 +825,14 @@ public class UIReplaysEditorUtils
             return sheet;
         }
 
-        return getPreferredPoseSheet(graph, formPath);
+        return getPreferredPropertySheet(graph, formPath, "pose");
     }
 
-    private static UIKeyframeSheet getPoseSheet(IUIKeyframeGraph graph, String formPath)
+    private static UIKeyframeSheet getPropertySheet(IUIKeyframeGraph graph, String formPath, String property)
     {
         for (UIKeyframeSheet sheet : graph.getSheets())
         {
-            if (isPoseSheet(sheet, formPath))
+            if (isPropertySheet(sheet, formPath, property))
             {
                 return sheet;
             }
@@ -810,27 +841,27 @@ public class UIReplaysEditorUtils
         return null;
     }
 
-    private static UIKeyframeSheet getPreferredPoseSheet(IUIKeyframeGraph graph, String formPath)
+    private static UIKeyframeSheet getPreferredPropertySheet(IUIKeyframeGraph graph, String formPath, String property)
     {
-        /* Prefer the pose track the user is actually working in - the currently selected pose keyframe, then
+        /* Prefer the property track the user is actually working in - the currently selected keyframe, then
          * the last selected sheet (remembered across clicks) - so picks and inserts stay on that track (e.g.
-         * an overlay) instead of snapping back to the form's top pose track. */
+         * an overlay) instead of snapping back to the form's base track. */
         Keyframe selected = graph.getSelected();
         UIKeyframeSheet current = selected != null ? graph.getSheet(selected) : null;
 
-        if (isPoseSheet(current, formPath))
+        if (isPropertySheet(current, formPath, property))
         {
             return current;
         }
 
         UIKeyframeSheet last = graph.getLastSheet();
 
-        if (isPoseSheet(last, formPath))
+        if (isPropertySheet(last, formPath, property))
         {
             return last;
         }
 
-        return getPoseSheet(graph, formPath);
+        return getPropertySheet(graph, formPath, property);
     }
 
     private static void pickProperty(UIKeyframeEditor keyframeEditor, ICursor cursor, String bone, String key, boolean insert)
@@ -846,7 +877,7 @@ public class UIReplaysEditorUtils
     private static void pickProperty(UIKeyframeEditor keyframeEditor, ICursor filmPanel, String bone, UIKeyframeSheet sheet, boolean insert)
     {
         IUIKeyframeGraph graph = keyframeEditor.view.getGraph();
-        int tick = filmPanel.getCursor();
+        float tick = keyframeEditor.view.getTick();
 
         if (insert)
         {
@@ -867,7 +898,7 @@ public class UIReplaysEditorUtils
                 forceSelectInSheet(graph, sheet, closest);
             }
             updatePoseEditorBoneSelection(keyframeEditor, boneForEditor);
-            filmPanel.setCursor((int) closest.getTick());
+            filmPanel.setCursor(closest.getTick());
         }
         else
         {
@@ -875,20 +906,20 @@ public class UIReplaysEditorUtils
         }
     }
 
-    private static Keyframe getClosestKeyframe(UIKeyframeSheet sheet, int tick)
+    private static Keyframe getClosestKeyframe(UIKeyframeSheet sheet, float tick)
     {
         KeyframeSegment segment = sheet.channel.find(tick);
 
         return segment != null ? segment.getClosest() : null;
     }
 
-    private static Keyframe getKeyframeAt(UIKeyframeSheet sheet, int tick)
+    private static Keyframe getKeyframeAt(UIKeyframeSheet sheet, float tick)
     {
         for (Object o : sheet.channel.getKeyframes())
         {
             Keyframe keyframe = (Keyframe) o;
 
-            if ((int) keyframe.getTick() == tick)
+            if (keyframe.getTick() == tick)
             {
                 return keyframe;
             }
@@ -898,27 +929,26 @@ public class UIReplaysEditorUtils
     }
 
     /**
-     * Insert fallback onto the form's pose track, used when a bone's per-limb
-     * track is empty/absent: select the keyframe already sitting at the cursor
-     * (so the gesture never duplicates it), otherwise add a fresh one. Either
-     * way the bone is highlighted in the pose editor.
+     * Insert into a pose or transform track: select the keyframe already sitting at the cursor
+     * (so the gesture never duplicates it), otherwise add a fresh one. For pose tracks,
+     * the bone is also highlighted in the pose editor.
      */
-    private static void insertIntoPoseSheet(UIKeyframeEditor keyframeEditor, ICursor cursor, String bone, UIKeyframeSheet poseSheet)
+    private static void insertIntoPropertySheet(UIKeyframeEditor keyframeEditor, String bone, UIKeyframeSheet sheet)
     {
         IUIKeyframeGraph graph = keyframeEditor.view.getGraph();
-        int tick = cursor.getCursor();
-        Keyframe existing = getKeyframeAt(poseSheet, tick);
+        float tick = keyframeEditor.view.getTick();
+        Keyframe existing = getKeyframeAt(sheet, tick);
 
         if (existing != null)
         {
-            if (poseSheet.selection.getSelected().size() <= 1)
+            if (sheet.selection.getSelected().size() <= 1)
             {
-                forceSelectInSheet(graph, poseSheet, existing);
+                forceSelectInSheet(graph, sheet, existing);
             }
         }
         else
         {
-            Keyframe keyframe = graph.addKeyframe(poseSheet, tick, null);
+            Keyframe keyframe = graph.addKeyframe(sheet, tick, null);
             graph.selectKeyframe(keyframe);
         }
 
@@ -927,6 +957,11 @@ public class UIReplaysEditorUtils
 
     private static boolean isPoseSheet(UIKeyframeSheet sheet, String formPath)
     {
+        return isPropertySheet(sheet, formPath, "pose");
+    }
+
+    private static boolean isPropertySheet(UIKeyframeSheet sheet, String formPath, String property)
+    {
         if (sheet == null || sheet.id == null)
         {
             return false;
@@ -934,10 +969,8 @@ public class UIReplaysEditorUtils
 
         String prefix = formPath.isEmpty() ? "" : formPath + FormUtils.PATH_SEPARATOR;
 
-        /* The main pose track is matched exactly so per-limb bone tracks ("pose.bones.<bone>") are excluded,
-         * while every overlay track - the default "pose_overlay" and the numbered ones ("pose_overlay0",
-         * "pose_overlay1", ...) - is matched by prefix, consistent with FormUtils.isPoseProperty. */
-        return sheet.id.equals(prefix + "pose") || sheet.id.startsWith(prefix + "pose_overlay");
+        /* Match the base property exactly to exclude per-bone tracks, plus all its overlays. */
+        return sheet.id.equals(prefix + property) || sheet.id.startsWith(prefix + property + "_overlay");
     }
 
     private static void forceSelectInSheet(IUIKeyframeGraph graph, UIKeyframeSheet sheet, Keyframe keyframe)
@@ -961,7 +994,7 @@ public class UIReplaysEditorUtils
     public static void animationToPoseKeyframes(
         UIKeyframeEditor keyframeEditor, UIKeyframeSheet sheet,
         ModelForm modelForm, IEntity entity,
-        int tick, String animationKey, boolean onlyKeyframes, int length, int step
+        float tick, String animationKey, boolean onlyKeyframes, int length, int step
     ) {
         ModelInstance model = ModelFormRenderer.getModel(modelForm);
         Animation animation = model.animations.get(animationKey);
@@ -1013,7 +1046,7 @@ public class UIReplaysEditorUtils
         return ticks;
     }
 
-    private static void fillAnimationPose(UIKeyframeSheet sheet, float i, ModelInstance model, IEntity entity, Animation animation, int current)
+    private static void fillAnimationPose(UIKeyframeSheet sheet, float i, ModelInstance model, IEntity entity, Animation animation, float current)
     {
         model.model.resetPose();
         model.model.apply(entity, animation, i, 1F, 0F, false);
@@ -1024,20 +1057,22 @@ public class UIReplaysEditorUtils
     }
 
     @SuppressWarnings("unchecked")
-    public static void posesToLimbTracks(Replay replay, UIKeyframeSheet poseSheet, IPosedForm posedForm)
+    public static boolean posesToLimbTracks(FormProperties properties, UIKeyframeSheet poseSheet)
     {
-        if (replay == null || poseSheet == null || posedForm == null)
+        if (properties == null || poseSheet == null || poseSheet.getPosedForm() == null)
         {
-            return;
+            return false;
         }
 
-        String formPath = poseSheet.id.equals("pose") ? "" : poseSheet.id.substring(0, poseSheet.id.length() - (FormUtils.PATH_SEPARATOR + "pose").length());
-        Form form = formPath.isEmpty() ? replay.form.get() : FormUtils.getForm(replay.form.get(), formPath);
+        TrackId track = TrackId.parse(poseSheet.id);
+        if (track == null) return false;
+        String formPath = track.formPath();
+        Form form = UIReplaysEditor.getSheetForm(poseSheet);
         IBoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(form);
 
         if (!(form instanceof IPosedForm) || hierarchy == null)
         {
-            return;
+            return false;
         }
 
         ModelInstance model = form instanceof ModelForm targetModelForm ? ModelFormRenderer.getModel(targetModelForm) : null;
@@ -1047,42 +1082,55 @@ public class UIReplaysEditorUtils
 
         List<Keyframe<Pose>> selectedKeyframes = (List<Keyframe<Pose>>) (List<?>) poseSheet.selection.getSelected();
 
-        if (selectedKeyframes.isEmpty())
+        if (selectedKeyframes.isEmpty() || bones.isEmpty() || selectedKeyframes.stream().anyMatch(keyframe -> keyframe.getValue() == null))
         {
-            return;
+            return false;
         }
 
-        for (Keyframe<Pose> keyframe : selectedKeyframes)
+        /* Keep rest keys for animated bones, but do not create tracks for untouched bones. */
+        bones.removeIf(bone -> selectedKeyframes.stream().noneMatch(keyframe ->
         {
-            Pose pose = keyframe.getValue();
+            PoseTransform transform = keyframe.getValue().get(bone);
 
-            if (pose == null)
+            return transform != null && !transform.isDefault();
+        }));
+
+        if (bones.isEmpty())
+        {
+            return false;
+        }
+
+        /* Capture the whole track collection before creating channels, so undo also removes them. */
+        BaseValue.edit(properties, target ->
+        {
+            for (Keyframe<Pose> keyframe : selectedKeyframes)
             {
-                continue;
-            }
+                Pose pose = keyframe.getValue();
+                float tick = keyframe.getTick();
 
-            float tick = keyframe.getTick();
-
-            for (String bone : bones)
-            {
-                KeyframeChannel<PoseTransform> limbChannel = (KeyframeChannel<PoseTransform>) replay.properties.getOrCreate(TrackId.bone(formPath, bone));
-
-                if (limbChannel == null)
+                for (String bone : bones)
                 {
-                    continue;
+                    KeyframeChannel<PoseTransform> limbChannel = (KeyframeChannel<PoseTransform>) target.getOrCreate(TrackId.bone(formPath, bone));
+
+                    if (limbChannel == null)
+                    {
+                        continue;
+                    }
+
+                    /* Include rest keys so the bone can return to its original pose. */
+                    PoseTransform transform = pose.get(bone);
+                    PoseTransform copy = transform == null ? new PoseTransform() : (PoseTransform) transform.copy();
+                    int index = limbChannel.insert(tick, copy);
+                    Keyframe<PoseTransform> limbKf = limbChannel.get(index);
+
+                    limbKf.copyOverExtra(keyframe);
                 }
-
-                /* Every bone of the model, not just the posed ones: a bone the pose is silent
-                 * about still gets a rest keyframe on its track, but reading must not grow the
-                 * pose being laid out. */
-                PoseTransform transform = pose.get(bone);
-                PoseTransform copy = transform == null ? new PoseTransform() : (PoseTransform) transform.copy();
-                int index = limbChannel.insert(tick, copy);
-                Keyframe<PoseTransform> limbKf = limbChannel.get(index);
-
-                limbKf.copyOverExtra(keyframe);
             }
-        }
+
+            poseSheet.selection.removeSelected();
+        });
+
+        return true;
     }
 
     public static void clearIKTracks(Replay replay, ModelForm modelForm)

@@ -38,6 +38,7 @@ import java.util.Map;
  */
 public class ModelConfig extends ValueGroup
 {
+    public final ValueStringMap proceduralBones = new ValueStringMap("procedural_bones");
     public final ValueBoolean procedural = new ValueBoolean("procedural", false);
     public final ValueBoolean culling = new ValueBoolean("culling", true);
     public final ValueBoolean onCpu = new ValueBoolean("on_cpu", false);
@@ -81,6 +82,7 @@ public class ModelConfig extends ValueGroup
         super(id);
 
         this.add(this.procedural);
+        this.add(this.proceduralBones);
         this.add(this.culling);
         this.add(this.onCpu);
         this.add(this.poseGroup);
@@ -109,6 +111,11 @@ public class ModelConfig extends ValueGroup
     @Override
     public void fromData(BaseType data)
     {
+        if (data.isMap() && !data.asMap().has("procedural_bones"))
+        {
+            this.proceduralBones.fromData(new MapType());
+        }
+
         super.fromData(data);
 
         this.rebuild();
@@ -118,6 +125,7 @@ public class ModelConfig extends ValueGroup
     protected boolean canPersist(BaseValue value)
     {
         /* Optional blocks stay absent from the file when empty, matching how they were authored. */
+        if (value == this.proceduralBones) return !this.proceduralBones.get().isEmpty();
         if (value == this.lookAt) return this.lookAt.isActive();
         if (value == this.fpMain) return this.fpMain.isActive();
         if (value == this.fpOffhand) return this.fpOffhand.isActive();
@@ -260,6 +268,15 @@ public class ModelConfig extends ValueGroup
     private static void renameBone(MapType data, String from, String to)
     {
         renameString(data, "anchor", from, to);
+        MapType procedural = map(data, "procedural_bones");
+
+        if (procedural != null)
+        {
+            for (String role : procedural.keys())
+            {
+                renameString(procedural, role, from, to);
+            }
+        }
         renameStrings(data, "disabledBones", from, to);
         renameString(map(data, "look_at"), "head", from, to);
         renameKey(map(map(data, "sneaking_pose"), "pose"), from, to);

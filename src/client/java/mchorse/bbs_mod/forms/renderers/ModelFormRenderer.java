@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.forms.renderers;
 
+import mchorse.bbs_mod.api.client.events.FormPoseEvents;
+
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
@@ -185,6 +187,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
     public Pose getPose()
     {
+        this.form.syncOverlayTracks();
         BBSProfiler.count(BBSProfiler.Section.POSE_COPY);
 
         Pose pose = this.form.pose.get().copy();
@@ -642,6 +645,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
     private void applyPhysics(IEntity target, ModelInstance model, float transition, Matrix4f baseTransform)
     {
+        FormPoseEvents.MODEL_POSE.invoker().apply(this.form, target, model, transition, baseTransform, FormPoseEvents.Pass.RENDER);
         model.form = this.form;
         ModelPhysicsRuntime.apply(target, model, transition, baseTransform);
     }
@@ -1087,6 +1091,8 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     @Override
     public void collectMatrices(IEntity entity, MatrixStack stack, MatrixCache matrices, String prefix, float transition)
     {
+        FormPoseEvents.PARENT_FRAME.invoker().capture(this.form, entity, stack.peek().getPositionMatrix(), prefix, transition);
+
         ModelInstance model = this.getModel();
         Matrix4f mm = new Matrix4f();
         Matrix4f oo = new Matrix4f();
@@ -1115,6 +1121,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
              * keyed into the pose are already baked in and reached). */
             model.form = this.form;
             ModelIKRuntime.apply(model, null, null);
+            FormPoseEvents.MODEL_POSE.invoker().apply(this.form, entity, model, transition, null, FormPoseEvents.Pass.MATRICES);
 
             stack.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.PI));
             this.captureMatrices(model);

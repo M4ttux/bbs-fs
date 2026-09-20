@@ -10,7 +10,8 @@ import net.minecraft.client.gl.UniformValue;
 import net.minecraft.client.render.ProjectionMatrix2;
 import net.minecraft.client.util.memory.ObjectAllocator;
 import net.minecraft.util.Identifier;
-import org.joml.Vector2f;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 
 import java.util.List;
 import java.util.Map;
@@ -18,43 +19,42 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Blurs what is on screen under an overlay panel, on top of the dimming — the way the game's
- * own menus do it from 1.21 on. Two passes of a box blur over the main framebuffer, with the
- * overlay landing sharp on top.
- *
- * <p>The GUI in 1.21.11 is deferred: {@code Batcher2D} only records into the
- * {@link net.minecraft.client.gui.render.state.GuiRenderState}, and nothing reaches the
- * framebuffer until {@code GuiRenderer.render()} composites it after {@code Screen.render}
- * returns. Blurring the framebuffer at the moment an overlay paints would therefore blur the
- * bare world and leave every panel drawn so far sharp on top of it. So this class works the
- * way vanilla's own {@code DrawContext.applyBlur()} does — as a marker: {@link #apply} opens a
- * fresh root layer and records the blur there, and {@code GuiRenderer.renderPreparedDraws}
- * composites the layers before the marker, runs the blur (its call to
- * {@code GameRenderer.renderBlur} is redirected into {@link #render}), then draws the rest.
- * Everything recorded before the call ends up under the glass, the caller's own dim and
- * chrome on top.</p>
- *
- * <p>The effect is built in code rather than read from a json, so the radius is a live value
- * from the settings. 1.21.1 could load a bare json and add the passes by hand afterwards; in
- * 1.21.11 a {@link PostEffectProcessor} is parsed whole from a {@link PostEffectPipeline} and
- * carries its uniform VALUES with it, so a json would have to name one fixed radius. Assembling
- * the pipeline here keeps the setting, at the cost of rebuilding when it changes — which is
- * exactly as often as the user drags the slider.</p>
- *
- * <p>Once per frame, and this time without exception: the render state holds a single blur
- * layer, and {@code GuiRenderState.applyBlur} throws on a second one. A panel that blurred the
- * world under itself and an overlay that comes up over that panel share one pass.</p>
+ * Dual Kawase blur from bbs-refreshed-addon, using the deferred GUI blur marker on 1.21.11.
+ * The topmost caller owns the single blur layer; the post pipeline runs after earlier GUI layers.
+ * See assets/bbs/licenses/bbs-refreshed-addon.txt for the MIT license.
  */
 public class InterfaceBlur
 {
-    /** Screen-sized scratch target: the horizontal pass writes it, the vertical pass reads it back. */
-    private static final Identifier SWAP = Identifier.of(BBSMod.MOD_ID, "swap");
-
-    /** Vanilla's screen-quad vertex shader; there is nothing mod-specific about a full-screen pass. */
     private static final Identifier SCREEN_QUAD = Identifier.of("minecraft", "core/screenquad");
+    private static final Identifier DOWN = Identifier.of(BBSMod.MOD_ID, "post/kawase_down");
+    private static final Identifier UP = Identifier.of(BBSMod.MOD_ID, "post/kawase_up");
 
-    /** Vanilla's box blur, minus the alpha averaging — see the shader for why. */
-    private static final Identifier BOX_BLUR = Identifier.of(BBSMod.MOD_ID, "post/box_blur_opaque");
+    private static final int MAX_LEVELS = 5;
+    /** A level smaller than this on either side is not worth a pass (and would smear the edges). */
+    private static final int MIN_SIZE = 16;
+
+    /** Offsets the {@link #SIGMA} table was sampled at. */
+    private static final float[] OFFSETS = {0.5F, 1.0F, 1.5F, 2.0F, 2.5F, 3.0F};
+    /** Offsets past this start to show the tap pattern; a stronger blur takes one more level instead. */
+    private static final float MAX_CLEAN_OFFSET = 1.5F;
+    private static final float MIN_OFFSET = 0.25F;
+
+    /**
+     * Blur strength per level count (rows, 1..5) and offset (columns, {@link #OFFSETS}): the standard deviation
+     * along one axis of the whole chain's impulse response, in full-resolution pixels. Simulated with bilinear
+     * sampling and averaged over two impulse phases.
+     */
+    private static final float[][] SIGMA = {
+        {0.96F, 1.44F, 2.01F, 2.61F, 3.14F, 3.71F},
+        {2.14F, 3.23F, 4.50F, 5.85F, 7.04F, 8.35F},
+        {4.39F, 6.61F, 9.33F, 11.98F, 14.34F, 17.02F},
+        {8.83F, 13.31F, 18.95F, 24.10F, 28.75F, 34.08F},
+        {17.68F, 26.65F, 38.17F, 48.27F, 57.48F, 68.07F},
+    };
+
+    private static int levels;
+    private static int width;
+    private static int height;
 
     private static PostEffectProcessor processor;
 
@@ -137,7 +137,8 @@ public class InterfaceBlur
         MinecraftClient mc = MinecraftClient.getInstance();
         float radius = BBSSettings.interfaceBlurRadius.get();
 
-        if (processor == null || radius != builtRadius)
+        if (processor == null || radius != builtRadius
+            || width != mc.getFramebuffer().textureWidth || height != mc.getFramebuffer().textureHeight)
         {
             if (!rebuild(mc, radius))
             {
@@ -163,6 +164,18 @@ public class InterfaceBlur
              * their screen quad exactly like every vanilla post effect does. */
             projection = new ProjectionMatrix2("bbs_interface_blur", 0.1F, 1000F, false);
 
+            width = mc.getFramebuffer().textureWidth;
+            height = mc.getFramebuffer().textureHeight;
+            levels = 0;
+            int w = width, h = height;
+            while (levels < MAX_LEVELS && w / 2 >= MIN_SIZE && h / 2 >= MIN_SIZE)
+            {
+                w /= 2;
+                h /= 2;
+                levels++;
+            }
+            if (levels == 0) return false;
+
             processor = PostEffectProcessor.parseEffect(pipeline(radius), mc.getTextureManager(),
                 Set.of(PostEffectProcessor.MAIN), Identifier.of(BBSMod.MOD_ID, "interface_blur"), projection);
 
@@ -181,33 +194,87 @@ public class InterfaceBlur
         }
     }
 
-    /** Horizontal into the swap, vertical back into the main target — a separable box blur. */
-    private static PostEffectPipeline pipeline(float radius)
+    /** The fewest levels that reach {@code target} without pushing the offset past {@link #MAX_CLEAN_OFFSET}. */
+    private static int pickLevels(float target)
     {
-        return new PostEffectPipeline(
-            Map.of(SWAP, new PostEffectPipeline.Targets(Optional.empty(), Optional.empty(), false, 0)),
-            List.of(
-                pass(PostEffectProcessor.MAIN, SWAP, 1F, 0F, radius),
-                pass(SWAP, PostEffectProcessor.MAIN, 0F, 1F, radius)
-            )
-        );
+        for (int n = 1; n < levels; n++)
+        {
+            if (sigma(n, MAX_CLEAN_OFFSET) >= target)
+            {
+                return n;
+            }
+        }
+
+        return levels;
     }
 
-    /**
-     * One blur pass. The uniform list is written into the {@code BlurConfig} std140 block in the
-     * order given, so it has to match the shader's declaration — BlurDir then Radius. Bilinear
-     * sampling is on because the shader halves its sample count by stepping between pixels.
-     */
-    private static PostEffectPipeline.Pass pass(Identifier in, Identifier out, float dirX, float dirY, float radius)
+    /** Invert the (piecewise linear) sigma row of {@code n} levels; extrapolates past either end of the table. */
+    private static float pickOffset(int n, float target)
     {
-        return new PostEffectPipeline.Pass(SCREEN_QUAD, BOX_BLUR,
-            List.of(new PostEffectPipeline.TargetSampler("In", in, false, true)),
-            out,
-            Map.of("BlurConfig", List.of(
-                new UniformValue.Vec2fValue(new Vector2f(dirX, dirY)),
-                new UniformValue.FloatValue(radius)
-            ))
-        );
+        float[] row = SIGMA[n - 1];
+        int last = OFFSETS.length - 1;
+        int i = 0;
+
+        while (i < last - 1 && row[i + 1] < target)
+        {
+            i++;
+        }
+
+        float t = (target - row[i]) / (row[i + 1] - row[i]);
+        float offset = OFFSETS[i] + t * (OFFSETS[i + 1] - OFFSETS[i]);
+
+        return Math.max(MIN_OFFSET, Math.min(OFFSETS[last], offset));
+    }
+
+    private static float sigma(int n, float offset)
+    {
+        float[] row = SIGMA[n - 1];
+
+        for (int i = 0; i < OFFSETS.length - 1; i++)
+        {
+            if (offset <= OFFSETS[i + 1])
+            {
+                float t = (offset - OFFSETS[i]) / (OFFSETS[i + 1] - OFFSETS[i]);
+
+                return row[i] + t * (row[i + 1] - row[i]);
+            }
+        }
+
+        return row[row.length - 1];
+    }
+
+    private static PostEffectPipeline pipeline(float radius)
+    {
+        float target = (float) Math.sqrt(radius * (radius + 1) / 3D);
+        int n = pickLevels(target);
+        float offset = pickOffset(n, target);
+        Map<Identifier, PostEffectPipeline.Targets> targets = new LinkedHashMap<>();
+        List<PostEffectPipeline.Pass> passes = new ArrayList<>();
+        List<Identifier> chain = new ArrayList<>();
+        chain.add(PostEffectProcessor.MAIN);
+        int w = width, h = height;
+
+        for (int i = 1; i <= n; i++)
+        {
+            w /= 2;
+            h /= 2;
+            Identifier id = Identifier.of(BBSMod.MOD_ID, "kawase_" + i);
+            targets.put(id, new PostEffectPipeline.Targets(Optional.of(w), Optional.of(h), false, 0));
+            chain.add(id);
+            passes.add(pass(chain.get(i - 1), id, DOWN, offset));
+        }
+        for (int i = n; i > 0; i--)
+        {
+            passes.add(pass(chain.get(i), chain.get(i - 1), UP, offset));
+        }
+        return new PostEffectPipeline(targets, passes);
+    }
+
+    private static PostEffectPipeline.Pass pass(Identifier in, Identifier out, Identifier shader, float offset)
+    {
+        return new PostEffectPipeline.Pass(SCREEN_QUAD, shader,
+            List.of(new PostEffectPipeline.TargetSampler("In", in, false, true)), out,
+            Map.of("BlurConfig", List.of(new UniformValue.FloatValue(offset))));
     }
 
     private static void close()
