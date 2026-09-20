@@ -1087,6 +1087,19 @@ public class UIReplaysEditorUtils
             return false;
         }
 
+        /* Keep rest keys for animated bones, but do not create tracks for untouched bones. */
+        bones.removeIf(bone -> selectedKeyframes.stream().noneMatch(keyframe ->
+        {
+            PoseTransform transform = keyframe.getValue().get(bone);
+
+            return transform != null && !transform.isDefault();
+        }));
+
+        if (bones.isEmpty())
+        {
+            return false;
+        }
+
         /* Capture the whole track collection before creating channels, so undo also removes them. */
         BaseValue.edit(properties, target ->
         {
@@ -1104,7 +1117,7 @@ public class UIReplaysEditorUtils
                         continue;
                     }
 
-                    /* Every bone, including those left at rest in the source pose. */
+                    /* Include rest keys so the bone can return to its original pose. */
                     PoseTransform transform = pose.get(bone);
                     PoseTransform copy = transform == null ? new PoseTransform() : (PoseTransform) transform.copy();
                     int index = limbChannel.insert(tick, copy);
