@@ -1,17 +1,21 @@
 package mchorse.bbs_mod.cubic.ik;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.systems.ProjectionType;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.DepthTestFunction;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.render.picker.BBSPickerRenderer;
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
 import mchorse.bbs_mod.cubic.render.DebugOverlay;
 import mchorse.bbs_mod.cubic.render.ModelPivotFrames;
+import mchorse.bbs_mod.forms.FormRenderCapture;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.utils.FormBone;
@@ -33,6 +37,8 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -105,6 +111,12 @@ public final class ModelIKDebug
     private static RenderLayer linesLayer;
     private static RenderLayer stencilLayer;
 
+    private record WorldDraw(FormRenderCapture.Captured geometry, RenderLayer layer, Matrix4f modelView,
+                             GpuBufferSlice projection, ProjectionType projectionType)
+    {}
+
+    private static final Deque<WorldDraw> worldDraws = new ArrayDeque<>();
+
     private ModelIKDebug()
     {
     }
@@ -167,9 +179,70 @@ public final class ModelIKDebug
 
         if (built != null)
         {
-            /* TODO(1.21.11 render): verify at runtime. RenderLayer.draw uploads + draws with the
-             * layer pipeline; previously this was BufferRenderer.drawWithGlobalProgram. */
-            layer.draw(built);
+            if (BBSRendering.isIrisWorldForms() && !FormRenderCapture.isActive())
+            {
+                if (BBSRendering.isIrisShadowPass())
+                {
+                    built.close();
+                    return;
+                }
+
+                /* Iris composites over the main target at the end of the world pass. Keep the
+                 * solved geometry and its camera until then; UI/offscreen draws stay immediate. */
+                try (built)
+                {
+                    worldDraws.addLast(new WorldDraw(FormRenderCapture.copy(built), layer,
+                        new Matrix4f(RenderSystem.getModelViewMatrix()),
+                        RenderSystem.getProjectionMatrixBuffer(), RenderSystem.getProjectionType()));
+                }
+            }
+            else
+            {
+                layer.draw(built);
+            }
+        }
+    }
+
+    /** Release any geometry left by an interrupted world frame. */
+    public static void clearWorldDraws()
+    {
+        worldDraws.clear();
+    }
+
+    /** Runs after Iris's final composite, before film capture and screen overlays. */
+    public static void flushWorldDraws()
+    {
+        if (worldDraws.isEmpty())
+        {
+            return;
+        }
+
+        GpuBufferSlice projection = RenderSystem.getProjectionMatrixBuffer();
+        ProjectionType projectionType = RenderSystem.getProjectionType();
+        var modelView = RenderSystem.getModelViewStack();
+
+        modelView.pushMatrix();
+
+        try
+        {
+            while (!worldDraws.isEmpty())
+            {
+                WorldDraw draw = worldDraws.removeFirst();
+
+                modelView.set(draw.modelView());
+                RenderSystem.setProjectionMatrix(draw.projection(), draw.projectionType());
+                FormRenderCapture.Captured geometry = draw.geometry();
+                BufferBuilder builder = Tessellator.getInstance().begin(geometry.params().mode(), geometry.params().format());
+
+                FormRenderCapture.emit(geometry, geometry.params().mode(), builder);
+                draw.layer().draw(builder.end());
+            }
+        }
+        finally
+        {
+            modelView.popMatrix();
+            RenderSystem.setProjectionMatrix(projection, projectionType);
+            clearWorldDraws();
         }
     }
 

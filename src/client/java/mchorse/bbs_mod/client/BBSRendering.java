@@ -33,6 +33,7 @@ import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.cubic.model.ModelSetupQueue;
+import mchorse.bbs_mod.cubic.ik.ModelIKDebug;
 import mchorse.bbs_mod.forms.renderers.utils.RenderFrame;
 import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.utils.iris.IrisUtils;
@@ -503,6 +504,8 @@ public class BBSRendering
 
     public static void onWorldRenderBegin()
     {
+        ModelIKDebug.clearWorldDraws();
+
         /* NOTE(ortho lifetime): the ortho flag must NOT be reset here. On 1.21.1 the orbit camera armed
          * it from Camera#update, which ran INSIDE renderWorld — after this HEAD hook — so a HEAD reset
          * was safe. On 1.21.11 Camera#update moved to GameRenderer.render's updateCamera, BEFORE
@@ -553,6 +556,8 @@ public class BBSRendering
 
     public static void onWorldRenderEnd()
     {
+        ModelIKDebug.flushWorldDraws();
+
         if (orthoDistance > 0F)
         {
             /* Give back the culling disabled for this ortho frame (see setOrthoDistance);
