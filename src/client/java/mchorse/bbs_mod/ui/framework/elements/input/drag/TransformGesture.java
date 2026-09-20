@@ -927,7 +927,7 @@ public class TransformGesture implements DragContext
 
     public int getDebugLineStencilIndex()
     {
-        if (!this.editing || this.isScreenTranslate())
+        if (!this.editing || this.isScreenTranslate() || this.isScaleAll())
         {
             return -1;
         }
