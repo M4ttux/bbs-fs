@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.ui.forms.editors;
 
+import mchorse.bbs_mod.api.client.editor.FormEditorTool;
+
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.cubic.ModelInstance;
@@ -516,8 +518,22 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
         return false;
     }
 
+    private FormEditorTool getPanelTool()
+    {
+        return !this.statesEditor.isVisible() && this.editor != null
+            && this.editor.view instanceof FormEditorTool tool
+            && tool.getGizmoTransform() != null ? tool : null;
+    }
+
     public boolean startGizmo(UIContext context, int stencilIndex)
     {
+        var tool = this.getPanelTool();
+        if (tool != null)
+        {
+            UIPropTransform transform = tool.getGizmoTransform();
+            return Gizmo.INSTANCE.start(stencilIndex, context.mouseX, context.mouseY, transform, this.buildHotkeyDrag(transform));
+        }
+
         if (this.statesEditor.isVisible())
         {
             return this.statesKeyframes.startGizmo(context, stencilIndex);
@@ -1232,6 +1248,13 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
 
     public Matrix4f getOrigin(float transition)
     {
+        var tool = this.getPanelTool();
+        if (tool != null)
+        {
+            Matrix4f matrix = tool.getGizmoOrigin(transition, tool.getGizmoTransform().getSpace());
+            if (matrix != null) return matrix;
+        }
+
         if (this.statesEditor.isVisible())
         {
             return this.statesKeyframes.getOrigin(transition);
@@ -1249,6 +1272,9 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
      *  editing panel (mirrors {@link #getOrigin(float)}'s dispatch). */
     public TransformSpace getGizmoSpace()
     {
+        var tool = this.getPanelTool();
+        if (tool != null) return tool.getGizmoTransform().getSpace();
+
         if (this.statesEditor.isVisible())
         {
             return this.statesKeyframes.getGizmoSpace();
@@ -1270,6 +1296,13 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
      */
     public Matrix4f getOriginMatrix(float transition)
     {
+        var tool = this.getPanelTool();
+        if (tool != null)
+        {
+            Matrix4f matrix = tool.getGizmoOrigin(transition, TransformSpace.LOCAL);
+            if (matrix != null) return matrix;
+        }
+
         if (this.statesEditor.isVisible())
         {
             return this.statesKeyframes.getOriginMatrix(transition);
@@ -1287,6 +1320,13 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
      *  the pair is what the drag snapshot carries as its two bone frames. */
     public Matrix4f getParentOriginMatrix(float transition)
     {
+        var tool = this.getPanelTool();
+        if (tool != null)
+        {
+            Matrix4f matrix = tool.getGizmoOrigin(transition, TransformSpace.PARENT);
+            if (matrix != null) return matrix;
+        }
+
         if (this.statesEditor.isVisible())
         {
             return this.statesKeyframes.getParentOriginMatrix(transition);
@@ -1312,7 +1352,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
 
     /**
      * Re-applies the active animation state to the previewed form at {@code tick}. Gizmo sampling
-     * (see {@link mchorse.bbs_mod.ui.utils.GizmoDrag#computeRotateAxes}) perturbs a keyframe
+     * (see {@link GizmoDrag#computeRotateAxes}) perturbs a keyframe
      * transform, which only reaches the bone matrices once the state is re-applied &mdash; the same
      * pose {@link #preFormRender} performs each frame for rendering.
      */

@@ -1,5 +1,9 @@
 package mchorse.bbs_mod.forms.forms;
 
+import java.util.LinkedHashSet;
+import java.util.Set;
+import mchorse.bbs_mod.api.FormPropertyAliases;
+
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.film.replays.tracks.TrackId;
@@ -484,7 +488,7 @@ public abstract class Form extends ValueGroup
      * Empty for a root form, whose tracks stand for the replay itself and need no prefix.
      *
      * <p>This is the label side of a track's identity; the address side is
-     * {@link mchorse.bbs_mod.forms.FormUtils#getPath}. They must not be confused: the address is
+     * {@link FormUtils#getPath}. They must not be confused: the address is
      * built from random stable ids and is unreadable by design.</p>
      */
     public String getTrackLabel()
@@ -540,6 +544,12 @@ public abstract class Form extends ValueGroup
     /* Data comparison and (de)serialization */
 
     @Override
+    protected String resolveReadKey(String key)
+    {
+        return FormPropertyAliases.resolve(key);
+    }
+
+    @Override
     public void fromData(BaseType data)
     {
         this.syncOverlayTracks();
@@ -559,6 +569,14 @@ public abstract class Form extends ValueGroup
         }
 
         super.fromData(data);
+
+        Set<String> migratedTracks = new LinkedHashSet<>();
+        for (String track : this.disabledTracks.get())
+        {
+            migratedTracks.add(FormPropertyAliases.resolve(track));
+        }
+        this.disabledTracks.get().clear();
+        this.disabledTracks.get().addAll(migratedTracks);
 
         if (data instanceof MapType map)
         {

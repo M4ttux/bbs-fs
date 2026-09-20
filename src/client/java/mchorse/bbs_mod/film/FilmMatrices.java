@@ -1,5 +1,8 @@
 package mchorse.bbs_mod.film;
 
+import mchorse.bbs_mod.api.client.events.FormPoseEvents;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
+
 import java.util.Map;
 import java.util.Objects;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -55,6 +58,8 @@ public class FilmMatrices
      */
     public static Pair<Matrix4f, Float> getTotalMatrix(Map<String, IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i, boolean fullMatrix, FormFrameCache frame)
     {
+        value = FormPoseEvents.ANCHOR.invoker().resolve(value);
+
         /* Stupid recursion stop, I don't think anyone would need more than that */
         if (i > 5)
         {
@@ -166,7 +171,7 @@ public class FilmMatrices
 
     /**
      * The replay's own world orientation &mdash; the frame
-     * {@link mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace#GLOBAL}
+     * {@link TransformSpace#GLOBAL}
      * aligns the gizmo to in the film viewport. It is exactly the rotation
      * {@link #getMatrixForRenderWithRotation} puts the whole actor under
      * ({@code bodyYaw} about the world Y), and nothing else: not the pose, not

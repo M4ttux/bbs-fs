@@ -16,9 +16,11 @@ public final class BBSApi
      * The version of the addon API.
      *
      * <p>It is bumped whenever a contract in {@code mchorse.bbs_mod.api} changes in a way that an
-     * addon compiled against the previous one cannot survive. Additions alone don't bump it.</p>
+     * addon compiled against the previous one cannot survive, or a new feature set must be
+     * distinguishable by addons. Version 2 adds editor, pose and structure extension points;
+     * addons requiring version 1 remain compatible.</p>
      */
-    public static final int VERSION = 1;
+    public static final int VERSION = 2;
 
     private BBSApi()
     {}

@@ -1,5 +1,8 @@
 package mchorse.bbs_mod.film.replays.tracks;
 
+import java.util.Objects;
+import mchorse.bbs_mod.l10n.keys.IKey;
+
 import mchorse.bbs_mod.forms.entities.EntityState;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
@@ -22,6 +25,19 @@ public class TrackStyle
 {
     private static final Map<String, Integer> COLORS = new HashMap<>();
     private static final Map<String, Icon> ICONS = new HashMap<>();
+    private static final Map<String, IKey> LABELS = new HashMap<>();
+
+    public static void registerLabel(String property, IKey label)
+    {
+        LABELS.put(property, Objects.requireNonNull(label));
+    }
+
+    /** Labels never change serialized addresses. IKey remains live across language reloads. */
+    public static IKey label(TrackId id)
+    {
+        return id.kind() == TrackKind.PROPERTY && LABELS.containsKey(id.subject())
+            ? LABELS.get(id.subject()) : IKey.constant(id.label());
+    }
 
     /**
      * The model track swaps out the whole thing being animated, so it doesn't belong to any of the

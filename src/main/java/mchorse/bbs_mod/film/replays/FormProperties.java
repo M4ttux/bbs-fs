@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.film.replays;
 
+import mchorse.bbs_mod.api.FormPropertyAliases;
+
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
@@ -20,7 +22,6 @@ import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.factories.IKeyframeFactory;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 
-import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 import mchorse.bbs_mod.utils.pose.Transform;
 
@@ -401,7 +402,9 @@ public class FormProperties extends ValueGroup
                 continue;
             }
 
-            TrackId track = new TrackId(kind, data.getString("form"), data.getString("subject"), data.getString("prop"));
+            TrackId original = new TrackId(kind, data.getString("form"), data.getString("subject"), data.getString("prop"));
+            TrackId track = FormPropertyAliases.resolve(original);
+            if (!track.equals(original) && hasCanonicalTrack(list, track)) continue;
             KeyframeChannel channel = new KeyframeChannel(track.toKey(), null);
 
             channel.fromData(data.getMap("channel"));
@@ -411,13 +414,27 @@ public class FormProperties extends ValueGroup
              * half-alive channel. */
             if (channel.getFactory() == null)
             {
-                this.foreignTracks.add((MapType) data.copy());
+                MapType foreign = (MapType) data.copy();
+                if (!track.equals(original)) foreign.putString("subject", track.subject());
+                this.foreignTracks.add(foreign);
 
                 continue;
             }
 
             this.put(track, channel);
         }
+    }
+
+    private static boolean hasCanonicalTrack(ListType list, TrackId track)
+    {
+        for (int i = 0; i < list.size(); i++)
+        {
+            if (!list.get(i).isMap()) continue;
+            MapType data = list.get(i).asMap();
+            if (track.kind().key.equals(data.getString("kind")) && track.formPath().equals(data.getString("form"))
+                && track.subject().equals(data.getString("subject")) && track.property().equals(data.getString("prop"))) return true;
+        }
+        return false;
     }
 
     /** The saved shape of one track, for a channel that could not be turned into one. */
@@ -462,21 +479,23 @@ public class FormProperties extends ValueGroup
                 continue;
             }
 
-            TrackId track = TrackId.parse(key);
+            TrackId original = TrackId.parse(key);
+            TrackId track = FormPropertyAliases.resolve(original);
+            if (track != null && !track.equals(original) && map.has(track.toKey())) continue;
 
             if (track == null)
             {
                 continue;
             }
 
-            KeyframeChannel channel = new KeyframeChannel(key, null);
+            KeyframeChannel channel = new KeyframeChannel(track.toKey(), null);
 
             channel.fromData(mapType);
 
             /* Patch 1.1.1 changes to lighting property */
             if (key.endsWith("lighting") && channel.getFactory() == KeyframeFactories.BOOLEAN)
             {
-                KeyframeChannel newChannel = new KeyframeChannel(key, KeyframeFactories.FLOAT);
+                KeyframeChannel newChannel = new KeyframeChannel(track.toKey(), KeyframeFactories.FLOAT);
 
                 for (Object keyframe : channel.getKeyframes())
                 {
@@ -492,7 +511,7 @@ public class FormProperties extends ValueGroup
             /* Convert transform to pose_transform for bone tracks */
             if (channel.getFactory() == KeyframeFactories.TRANSFORM && track.is(TrackKind.BONE))
             {
-                KeyframeChannel newChannel = new KeyframeChannel(key, KeyframeFactories.POSE_TRANSFORM);
+                KeyframeChannel newChannel = new KeyframeChannel(track.toKey(), KeyframeFactories.POSE_TRANSFORM);
 
                 for (Object o : channel.getKeyframes())
                 {

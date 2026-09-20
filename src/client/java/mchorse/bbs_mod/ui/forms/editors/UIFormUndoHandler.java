@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.forms.editors;
 
+import mchorse.bbs_mod.api.client.events.FilmEditEvents;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.settings.values.IValueListener;
@@ -109,6 +110,10 @@ public class UIFormUndoHandler
      */
     private void handleUndos(IUndo<ValueGroup> undo, boolean redo)
     {
+        List<BaseValue> applied = new ArrayList<>();
+        collectAppliedValues(undo, applied);
+        FilmEditEvents.notifyChanges(applied, redo ? FilmEditEvents.Cause.REDO : FilmEditEvents.Cause.UNDO);
+
         IUndo<ValueGroup> anotherUndo = undo;
 
         if (anotherUndo instanceof CompoundUndo)
@@ -121,6 +126,18 @@ public class UIFormUndoHandler
             ValueChangeUndo change = (ValueChangeUndo) anotherUndo;
 
             this.uiElement.getRoot().applyAllUndoData(change.getUIData(redo));
+        }
+    }
+
+    private static void collectAppliedValues(IUndo<ValueGroup> undo, List<BaseValue> values)
+    {
+        if (undo instanceof CompoundUndo<ValueGroup> compound)
+        {
+            for (IUndo<ValueGroup> child : compound.getUndos()) collectAppliedValues(child, values);
+        }
+        else if (undo instanceof ValueChangeUndo change && change.getAppliedValue() != null)
+        {
+            values.add(change.getAppliedValue());
         }
     }
 
@@ -214,6 +231,7 @@ public class UIFormUndoHandler
         reduceUndoRedundancy(this.cachedValues);
 
         List<ValueChangeUndo> changeUndos = new ArrayList<>();
+        List<BaseValue> changedValues = new ArrayList<>();
 
         for (Map.Entry<BaseValue, BaseType> entry : this.cachedValues.entrySet())
         {
@@ -235,6 +253,7 @@ public class UIFormUndoHandler
             changeUndos.add(undo);
 
             this.handleValue(value);
+            changedValues.add(value);
         }
 
         if (changeUndos.size() == 1)
@@ -257,6 +276,8 @@ public class UIFormUndoHandler
 
             this.undoManager.markLastUndoNoMerging();
         }
+
+        FilmEditEvents.notifyChanges(changedValues, FilmEditEvents.Cause.EDIT);
     }
 
     protected void handleValue(BaseValue value)

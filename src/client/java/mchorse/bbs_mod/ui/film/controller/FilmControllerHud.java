@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.ui.film.controller;
 
+import mchorse.bbs_mod.api.client.editor.TrackCategory;
+
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.film.FilmTarget;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -228,7 +230,7 @@ public class FilmControllerHud
 
         if (target.is(FilmTarget.Kind.ROOT))
         {
-            return UIReplaysEditor.ReplayCategory.REPLAY.label.get();
+            return TrackCategory.REPLAY.label.get();
         }
 
         if (target.isNone())

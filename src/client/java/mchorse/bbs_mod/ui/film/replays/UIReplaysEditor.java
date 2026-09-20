@@ -1,5 +1,8 @@
 package mchorse.bbs_mod.ui.film.replays;
 
+import mchorse.bbs_mod.api.client.editor.TrackCategory;
+import mchorse.bbs_mod.api.client.editor.TrackCategories;
+
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.audio.SoundBuffer;
@@ -18,7 +21,6 @@ import mchorse.bbs_mod.film.replays.tracks.TrackCatalog;
 import mchorse.bbs_mod.film.replays.tracks.TrackDescriptor;
 import mchorse.bbs_mod.film.replays.tracks.TrackId;
 import mchorse.bbs_mod.film.replays.tracks.TrackStyle;
-import mchorse.bbs_mod.film.replays.tracks.TrackKind;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -31,7 +33,6 @@ import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.L10n;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.resources.Link;
-import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.UIClipsPanel;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
@@ -66,7 +67,6 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.RayTracing;
-import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -80,7 +80,6 @@ import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -109,8 +108,8 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
     };
 
     public UITimelineCategoryBar iconBar;
-    public Map<ReplayCategory, UIIcon> tabButtons = new HashMap<>();
-    private ReplayCategory category = ReplayCategory.REPLAY;
+    public Map<TrackCategory, UIIcon> tabButtons = new HashMap<>();
+    private TrackCategory category = TrackCategory.REPLAY;
 
     /* Keyframes */
     public UIKeyframeEditor keyframeEditor;
@@ -154,27 +153,6 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
     private final Map<String, String> selectedPartsByReplay = new HashMap<>();
     private String selectedPart = "";
 
-    public enum ReplayCategory
-    {
-        REPLAY(Icons.PLAYER, L10n.lang("bbs.ui.film.replays.category.replay"), L10n.lang("bbs.ui.film.replays.category.replay.tooltip")),
-        FORM(Icons.BLOCK, L10n.lang("bbs.ui.film.replays.category.form"), L10n.lang("bbs.ui.film.replays.category.form.tooltip")),
-        POSE(Icons.POSE, L10n.lang("bbs.ui.film.replays.category.pose"), L10n.lang("bbs.ui.film.replays.category.pose.tooltip")),
-        IK(Icons.IK, L10n.lang("bbs.ui.film.replays.category.ik"), L10n.lang("bbs.ui.film.replays.category.ik.tooltip")),
-        PHYSICS(Icons.PHYSICS, L10n.lang("bbs.ui.film.replays.category.physics"), L10n.lang("bbs.ui.film.replays.category.physics.tooltip"));
-
-        public final Icon icon;
-        public final IKey label;
-        public final IKey tooltip;
-
-        private ReplayCategory(Icon icon, IKey label, IKey tooltip)
-        {
-            this.icon = icon;
-            this.label = label;
-            this.tooltip = tooltip;
-        }
-    }
-
-
     public static Icon getIcon(String key)
     {
         return TrackStyle.icon(key);
@@ -203,7 +181,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
     }
 
     /** Single home of the category rule: tabs only filter now, so collectors always gather and this decides where a sheet lands. */
-    public static ReplayCategory categoryOf(UIKeyframeSheet sheet)
+    public static TrackCategory categoryOf(UIKeyframeSheet sheet)
     {
         return categoryOf(sheet.id, sheet.property != null || sheet.form != null);
     }
@@ -212,41 +190,14 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
      * @param owned whether the track belongs to a form at all — a replay's own curated channels
      *              (position, hotbar, sticks) do not, and they are the Replay tab
      */
-    public static ReplayCategory categoryOf(TrackId track, boolean owned)
+    public static TrackCategory categoryOf(TrackId track, boolean owned)
     {
-        return categoryOf(track == null ? null : track.toKey(), owned);
+        return TrackCategories.categoryOf(track, owned);
     }
 
-    private static ReplayCategory categoryOf(String id, boolean owned)
+    private static TrackCategory categoryOf(String id, boolean owned)
     {
-        TrackKind kind = TrackId.kindOf(id);
-
-        if (kind != null)
-        {
-            switch (kind)
-            {
-                case IK_CONTROLS, IK_TARGET, POLE_TARGET:
-                    return ReplayCategory.IK;
-                case PHYSICS_CONTROLS, PHYSICS_TARGET, WIND_CONTROLS:
-                    return ReplayCategory.PHYSICS;
-                case BONE, BONE_CONSTRAINT:
-                    return ReplayCategory.POSE;
-                case MATERIAL_TEXTURE, MATERIAL_PROP:
-                    return ReplayCategory.FORM;
-                default:
-                    break;
-            }
-        }
-
-        /* What is left is a plain property track — a curated replay channel (which belongs to no form)
-         * or one of the form's own properties. */
-        if (!owned)
-        {
-            return ReplayCategory.REPLAY;
-        }
-
-
-        return FormUtils.isPoseProperty(StringUtils.fileName(id)) ? ReplayCategory.POSE : ReplayCategory.FORM;
+        return TrackCategories.categoryOf(id == null ? null : TrackId.parse(id), owned);
     }
 
     public static void renderRuler(UIContext context, UIKeyframes keyframes, UIClipsPanel clipsPanel, Clips camera, int clipOffset)
@@ -367,7 +318,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
 
         this.iconBar.add(this.allToggle);
 
-        for (ReplayCategory category : ReplayCategory.values())
+        for (TrackCategory category : TrackCategories.values())
         {
             UIIcon button = new UIIcon(category.icon, b -> this.setCategory(category));
 
@@ -390,16 +341,8 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
          * narrowing before the animator has seen what there is hides tracks they came for. */
         this.setAllTracks();
 
-        this.keys().register(Keys.REPLAYS_TAB_1, () -> this.setCategoryByPosition(0))
-            .category(UIKeys.FILM_REPLAY_TITLE);
-        this.keys().register(Keys.REPLAYS_TAB_2, () -> this.setCategoryByPosition(1))
-            .category(UIKeys.FILM_REPLAY_TITLE);
-        this.keys().register(Keys.REPLAYS_TAB_3, () -> this.setCategoryByPosition(2))
-            .category(UIKeys.FILM_REPLAY_TITLE);
-        this.keys().register(Keys.REPLAYS_TAB_4, () -> this.setCategoryByPosition(3))
-            .category(UIKeys.FILM_REPLAY_TITLE);
-        this.keys().register(Keys.REPLAYS_TAB_5, () -> this.setCategoryByPosition(4))
-            .category(UIKeys.FILM_REPLAY_TITLE);
+        TrackCategories.registerShortcuts(this.keys(), () -> TrackCategories.values().stream()
+            .filter(category -> this.tabButtons.get(category).getParent() != null).toList(), this::setCategory);
 
         this.add(this.iconBar, this.sectionsToggle, this.actionsToggle, this.replayTransform);
         this.partHeader.relative(this).x(CATEGORY_BAR_WIDTH).y(0).w(120).h(TimelineRulerRenderer.RULER_BLOCK_HEIGHT);
@@ -426,7 +369,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
         }
     }
 
-    private void setCategory(ReplayCategory c)
+    private void setCategory(TrackCategory c)
     {
         this.actionsMode = false;
         this.allMode = false;
@@ -444,9 +387,9 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
      */
     public void showReplayTracks()
     {
-        if (this.actionsMode || (!this.allMode && this.category != ReplayCategory.REPLAY))
+        if (this.actionsMode || (!this.allMode && this.category != TrackCategory.REPLAY))
         {
-            this.setCategory(ReplayCategory.REPLAY);
+            this.setCategory(TrackCategory.REPLAY);
         }
     }
 
@@ -458,43 +401,16 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
         this.updateChannelsList();
     }
 
-    /**
-     * Select the category sitting at the given visual position in the tab bar. The IK and physics tabs are only
-     * present when the replay has IK / physics, so a fixed key-to-category mapping would point past the gap; the
-     * number keys instead follow the tabs as the user sees them, top to bottom.
-     */
-    private void setCategoryByPosition(int index)
-    {
-        List<ReplayCategory> present = new ArrayList<>();
-
-        for (ReplayCategory category : ReplayCategory.values())
-        {
-            UIIcon button = this.tabButtons.get(category);
-
-            if (button != null && button.getParent() != null)
-            {
-                present.add(category);
-            }
-        }
-
-        present.sort(Comparator.comparingInt((c) -> this.tabButtons.get(c).area.y));
-
-        if (index >= 0 && index < present.size())
-        {
-            this.setCategory(present.get(index));
-        }
-    }
-
-    public ReplayCategory getCategory()
+    public TrackCategory getCategory()
     {
         return this.category;
     }
 
     public void pickReplayCategory()
     {
-        if (this.category != ReplayCategory.REPLAY)
+        if (this.category != TrackCategory.REPLAY)
         {
-            this.setCategory(ReplayCategory.REPLAY);
+            this.setCategory(TrackCategory.REPLAY);
         }
     }
 
@@ -647,14 +563,27 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
         this.selectedPartsByReplay.put(this.replay.getId(), this.selectedPart);
         List<TrackDescriptor> catalog = TrackCatalog.forPart(this.replay.form.get(), this.replay.properties, this.selectedPart);
 
-        this.updateTab(ReplayCategory.IK, catalog);
-        this.updateTab(ReplayCategory.PHYSICS, catalog);
-
         List<UIKeyframeSheet> sheets = new ArrayList<>();
 
         /* Replay channels remain accessible alongside any selected part's own properties. */
         this.collectCuratedSheets(sheets);
         UIReplaysEditorUtils.buildSheets(catalog, sheets);
+
+        for (TrackCategory category : TrackCategories.values())
+        {
+            if (category != TrackCategory.REPLAY && category != TrackCategory.FORM && category != TrackCategory.POSE)
+                this.updateTab(category, sheets);
+        }
+        /* Reattach in registry order, including tabs which became visible again. */
+        for (TrackCategory category : TrackCategories.values())
+        {
+            UIIcon button = this.tabButtons.get(category);
+            if (button.getParent() != null)
+            {
+                button.removeFromParent();
+                this.iconBar.add(button);
+            }
+        }
 
         this.keys.clear();
 
@@ -906,11 +835,11 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
 
     /**
      * Show a category's tab only while the replay actually has tracks of that kind, and bounce the
-     * active category back to Model when it does not. Asked of the catalog, so "does this replay have
+     * active category back to Model when it does not. Asked of the collected sheets, so "does this replay have
      * IK" is the same question as "which tracks land in the IK tab" — it used to be a separate walk
      * of the form tree per category, with its own idea of the answer.
      */
-    private void updateTab(ReplayCategory category, List<TrackDescriptor> catalog)
+    private void updateTab(TrackCategory category, List<UIKeyframeSheet> sheets)
     {
         UIIcon button = this.tabButtons.get(category);
 
@@ -921,9 +850,9 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
 
         boolean has = false;
 
-        for (TrackDescriptor track : catalog)
+        for (UIKeyframeSheet sheet : sheets)
         {
-            if (categoryOf(track.id(), track.owner() != null) == category)
+            if (categoryOf(sheet) == category)
             {
                 has = true;
 
@@ -949,7 +878,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
 
         if (!has && this.category == category)
         {
-            this.category = ReplayCategory.FORM;
+            this.category = TrackCategory.FORM;
         }
     }
 
@@ -1083,7 +1012,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
 
     /**
      * Picking a model bone in the viewport is a pose edit, but the pose/bone tracks
-     * only exist in the {@link ReplayCategory#POSE} category. So when another category
+     * only exist in the {@link TrackCategory#POSE} category. So when another category
      * is open, jump to Pose first (and out of actions mode) before delegating to the
      * shared pick logic — otherwise the click finds no pose sheet in the current graph
      * and silently does nothing, forcing a manual tab switch.
@@ -1110,9 +1039,9 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
             {
                 this.setActionsMode(false);
             }
-            else if (this.category != ReplayCategory.POSE || this.actionsMode)
+            else if (this.category != TrackCategory.POSE || this.actionsMode)
             {
-                this.setCategory(ReplayCategory.POSE);
+                this.setCategory(TrackCategory.POSE);
             }
         }
 
