@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.ui.film.controller;
 
+import mchorse.bbs_mod.api.client.editor.TrackCategory;
+
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.forms.entities.IEntity;
@@ -48,9 +50,9 @@ public class FilmKeyframeInsertion
             return;
         }
 
-        UIReplaysEditor.ReplayCategory category = this.controller.panel.replayEditor.getCategory();
+        TrackCategory category = this.controller.panel.replayEditor.getCategory();
 
-        if (category == UIReplaysEditor.ReplayCategory.POSE)
+        if (category == TrackCategory.POSE)
         {
             UIReplaysEditorUtils.insertPoseKeyframesAtTick(replay, this.controller.getTick(), this.controller.panel.replayEditor.getExpandedPoseTabIds());
             return;
@@ -59,7 +61,7 @@ public class FilmKeyframeInsertion
         /* Only the Replay tab keys the player's own channels; every other tab (Form, IK,
          * Physics...) has no take on "insert frame" and must not silently write position and
          * rotation keys the animator never asked for. */
-        if (category != UIReplaysEditor.ReplayCategory.REPLAY)
+        if (category != TrackCategory.REPLAY)
         {
             return;
         }

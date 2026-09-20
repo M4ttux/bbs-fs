@@ -1,5 +1,8 @@
 package mchorse.bbs_mod;
 
+import mchorse.bbs_mod.api.client.editor.TrackCategories;
+import mchorse.bbs_mod.api.client.events.RegisterTrackCategoriesEvent;
+
 import mchorse.bbs_mod.api.client.events.RegisterFilmToolsEvent;
 import mchorse.bbs_mod.api.client.events.RegisterFormPanelsEvent;
 import mchorse.bbs_mod.api.client.events.RegisterReplayActionsEvent;
@@ -563,6 +566,9 @@ public class BBSModClient implements ClientModInitializer
         PlayerSkins.init(new File(parentFile, "skin_cache"));
 
         provider.register(new PlayerSkinSourcePack());
+
+        BBSMod.events.post(new RegisterTrackCategoriesEvent());
+        TrackCategories.finishRegistration();
 
         KeybindSettings.registerClasses();
 

@@ -62,7 +62,68 @@ public final class AddonApiCheck implements net.fabricmc.loader.api.entrypoint.P
         edits();
         transforms();
         lifecycle();
+        categories();
         System.out.println("AddonApiCheck: " + checks + " checks passed");
+    }
+
+    private static void categories() throws Exception
+    {
+        for (String name : List.of("factoryCameraClips", "factoryActionClips"))
+        {
+            var factory = BBSMod.class.getDeclaredField(name);
+            factory.setAccessible(true);
+            factory.set(null, new mchorse.bbs_mod.utils.factory.MapFactory<>());
+        }
+        var language = mchorse.bbs_mod.BBSModClient.class.getDeclaredField("l10n");
+        language.setAccessible(true);
+        language.set(null, new mchorse.bbs_mod.l10n.L10n());
+        var event = new mchorse.bbs_mod.api.client.events.RegisterTrackCategoriesEvent();
+        var custom = new mchorse.bbs_mod.api.client.editor.TrackCategory("check:custom",
+            mchorse.bbs_mod.ui.utils.icons.Icons.PHYSICS, IKey.constant("Custom"), IKey.constant("Custom tracks"));
+        event.register(custom, (track, owned) -> owned && track.subject().startsWith("sample:"));
+        require(mchorse.bbs_mod.api.client.editor.TrackCategories.categoryOf(TrackId.property("2/1", KEY), true) == custom,
+            "addon category includes nested form property");
+        require(mchorse.bbs_mod.ui.film.replays.UIReplaysEditor.categoryOf(TrackId.property("2/1", KEY), true) == custom,
+            "editor uses category registry");
+        require(mchorse.bbs_mod.api.client.editor.TrackCategories.categoryOf(TrackId.property("", "x"), false)
+            == mchorse.bbs_mod.api.client.editor.TrackCategory.REPLAY, "recording category fallback");
+        require(mchorse.bbs_mod.api.client.editor.TrackCategories.categoryOf(TrackId.bone("", "arm"), true)
+            == mchorse.bbs_mod.api.client.editor.TrackCategory.POSE, "pose category fallback");
+        boolean duplicate = false;
+        try { event.register(custom, (track, owned) -> true); }
+        catch (IllegalArgumentException expected) { duplicate = true; }
+        require(duplicate, "duplicate category rejected");
+        for (int i = 0; i < 5; i++)
+            event.register(new mchorse.bbs_mod.api.client.editor.TrackCategory("check:extra_" + i,
+                custom.icon, custom.label, custom.tooltip), (track, owned) -> false);
+        mchorse.bbs_mod.api.client.editor.TrackCategories.finishRegistration();
+        var manager = new mchorse.bbs_mod.ui.utils.keys.KeybindManager();
+        var visible = new ArrayList<>(List.of(mchorse.bbs_mod.api.client.editor.TrackCategory.FORM, custom));
+        var selected = new ArrayList<mchorse.bbs_mod.api.client.editor.TrackCategory>();
+        mchorse.bbs_mod.api.client.editor.TrackCategories.registerShortcuts(manager, () -> visible, selected::add);
+        require(manager.keybinds.size() == 11, "shortcut slots grow with categories");
+        manager.keybinds.get(1).callback.run();
+        require(selected.get(selected.size() - 1) == custom, "second shortcut selects second visible category");
+        visible.remove(0);
+        manager.keybinds.get(0).callback.run();
+        require(selected.get(selected.size() - 1) == custom && !manager.keybinds.get(1).isActive(), "hidden categories leave no shortcut gap");
+        var comboField = mchorse.bbs_mod.ui.utils.keys.Keybind.class.getDeclaredField("combo");
+        comboField.setAccessible(true);
+        require(comboField.get(manager.keybinds.get(0)) == mchorse.bbs_mod.ui.Keys.REPLAYS_TAB_1,
+            "existing configurable shortcut object preserved");
+        require(((mchorse.bbs_mod.ui.utils.keys.KeyCombo) comboField.get(manager.keybinds.get(8))).getMainKey()
+            == org.lwjgl.glfw.GLFW.GLFW_KEY_9, "ninth shortcut defaults to 9");
+        require(((mchorse.bbs_mod.ui.utils.keys.KeyCombo) comboField.get(manager.keybinds.get(9))).getMainKey()
+            == org.lwjgl.glfw.GLFW.GLFW_KEY_0, "tenth shortcut defaults to 0");
+        require(((mchorse.bbs_mod.ui.utils.keys.KeyCombo) comboField.get(manager.keybinds.get(10))).keys.isEmpty(),
+            "later shortcuts stay configurable without colliding defaults");
+        boolean late = false;
+        try { event.register(custom, (track, owned) -> true); }
+        catch (IllegalStateException expected) { late = true; }
+        require(late, "late category registration rejected");
+        var bar = new mchorse.bbs_mod.ui.framework.elements.utils.UITimelineCategoryBar(40);
+        for (int i = 0; i < 12; i++) bar.add(new mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon(custom.icon, button -> {}));
+        require(bar.getWidthForHeight(100) == 80, "many category buttons fit above actions");
     }
 
     private static void values()

@@ -17,9 +17,9 @@ import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.forms.states.AnimationState;
 import mchorse.bbs_mod.l10n.L10n;
 import mchorse.bbs_mod.ui.UIKeys;
-import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
-import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor.ReplayCategory;
+import mchorse.bbs_mod.api.client.editor.TrackCategory;
+import mchorse.bbs_mod.api.client.editor.TrackCategories;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditorUtils;
 import mchorse.bbs_mod.ui.film.replays.overlays.UIAnimationToPoseOverlayPanel;
 import mchorse.bbs_mod.ui.film.replays.overlays.UIKeyframeSheetFilterOverlayPanel;
@@ -90,7 +90,9 @@ public class UIAnimationStateEditor extends UIElement
             return this.area.isInside(context);
         }
     };
-    private ReplayCategory category = ReplayCategory.FORM;
+    private final Map<TrackCategory, UIIcon> categoryButtons = new java.util.LinkedHashMap<>();
+    private final List<TrackCategory> visibleCategories = new ArrayList<>();
+    private TrackCategory category = TrackCategory.FORM;
     private boolean allMode = true;
     private final UISection bodyPartsSection = new UISection(L10n.lang("bbs.ui.film.replays.body_parts"));
     private Form root;
@@ -125,16 +127,16 @@ public class UIAnimationStateEditor extends UIElement
         all.highlight(() -> this.allMode, Direction.LEFT);
         this.categoryBar.add(all);
 
-        for (ReplayCategory category : List.of(ReplayCategory.FORM, ReplayCategory.POSE))
+        for (TrackCategory category : TrackCategories.values())
         {
+            if (category == TrackCategory.REPLAY) continue;
             UIIcon button = new UIIcon(category.icon, b -> this.setCategory(category));
             button.tooltip(category.tooltip, Direction.RIGHT);
             button.highlight(() -> !this.allMode && this.category == category, Direction.LEFT);
-            this.categoryBar.add(button);
+            this.categoryButtons.put(category, button);
         }
 
-        this.keys().register(Keys.REPLAYS_TAB_1, () -> this.setCategory(ReplayCategory.FORM)).category(UIKeys.FILM_REPLAY_TITLE);
-        this.keys().register(Keys.REPLAYS_TAB_2, () -> this.setCategory(ReplayCategory.POSE)).category(UIKeys.FILM_REPLAY_TITLE);
+        TrackCategories.registerShortcuts(this.keys(), () -> this.visibleCategories, this::setCategory);
 
         this.partHeader.relative(this.timelineArea).x(CATEGORY_BAR_WIDTH).w(120).h(TimelineRulerRenderer.RULER_BLOCK_HEIGHT);
         this.partHeader.add(new UIRenderable(context -> this.partHeader.area.render(context.batcher, BBSSettings.baseSurface())));
@@ -194,7 +196,7 @@ public class UIAnimationStateEditor extends UIElement
         return this.state;
     }
 
-    private void setCategory(ReplayCategory category)
+    private void setCategory(TrackCategory category)
     {
         this.allMode = category == null;
         if (category != null) this.category = category;
@@ -260,6 +262,20 @@ public class UIAnimationStateEditor extends UIElement
                 catalog.add(track);
             }
         }
+
+        this.visibleCategories.clear();
+        for (var entry : this.categoryButtons.entrySet())
+        {
+            entry.getValue().removeFromParent();
+            TrackCategory candidate = entry.getKey();
+            if (candidate == TrackCategory.FORM || candidate == TrackCategory.POSE || catalog.stream()
+                .anyMatch(track -> TrackCategories.categoryOf(track.id(), track.owner() != null) == candidate))
+            {
+                this.visibleCategories.add(candidate);
+                this.categoryBar.add(entry.getValue());
+            }
+        }
+        if (!this.visibleCategories.contains(this.category)) this.category = TrackCategory.FORM;
 
         UIReplaysEditorUtils.buildSheets(catalog, sheets);
 
@@ -517,10 +533,10 @@ public class UIAnimationStateEditor extends UIElement
     private void pickFormBone(Form form, String bone, boolean insert)
     {
         this.selectForm(form);
-        if (!this.allMode && this.category != ReplayCategory.POSE && form != null
+        if (!this.allMode && this.category != TrackCategory.POSE && form != null
             && (!(form instanceof IPosedForm) || (bone != null && !bone.isEmpty())))
         {
-            this.setCategory(ReplayCategory.POSE);
+            this.setCategory(TrackCategory.POSE);
         }
         UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.editor, form, bone, insert);
     }

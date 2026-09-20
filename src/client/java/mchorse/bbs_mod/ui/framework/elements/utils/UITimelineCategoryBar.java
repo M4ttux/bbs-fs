@@ -7,7 +7,7 @@ import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 
 import java.util.List;
 
-/** A timeline's category buttons, wrapping into two columns when height is limited. */
+/** A timeline's category buttons, wrapping into columns when height is limited. */
 public class UITimelineCategoryBar extends UIElement
 {
     public static final int BUTTON_SIZE = 20;
@@ -25,7 +25,12 @@ public class UITimelineCategoryBar extends UIElement
     {
         int required = this.getChildren(UIIcon.class).size() * BUTTON_SIZE + SEPARATOR_HEIGHT + this.bottomSpace;
 
-        return height < required ? BUTTON_SIZE * 2 : BUTTON_SIZE;
+        if (height >= required) return BUTTON_SIZE;
+
+        int rows = Math.max(1, (height - this.bottomSpace) / BUTTON_SIZE);
+        int columns = Math.max(2, (this.getChildren(UIIcon.class).size() + rows - 1) / rows);
+
+        return BUTTON_SIZE * columns;
     }
 
     @Override

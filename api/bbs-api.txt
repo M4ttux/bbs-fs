@@ -1,3 +1,14 @@
+class mchorse.bbs_mod.api.client.editor.TrackCategories$1 {
+}
+
+final class mchorse.bbs_mod.api.client.editor.TrackCategories$Entry extends java.lang.Record {
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public java.util.function.BiPredicate<mchorse.bbs_mod.film.replays.tracks.TrackId, java.lang.Boolean> matches();
+    public mchorse.bbs_mod.api.client.editor.TrackCategory category();
+}
+
 final class mchorse.bbs_mod.api.client.render.StructureRenderPart$PartRenderer extends mchorse.bbs_mod.forms.renderers.StructureFormRenderer {
 }
 
@@ -116,6 +127,7 @@ public class mchorse.bbs_mod.api.client.events.RegisterImportersEvent {
 public class mchorse.bbs_mod.api.client.events.RegisterKeybindsEvent {
     public mchorse.bbs_mod.api.client.events.RegisterKeybindsEvent();
     public void register(java.lang.Class);
+    public void register(mchorse.bbs_mod.ui.utils.keys.KeyCombo);
     public void registerCategoryIcon(java.lang.String, mchorse.bbs_mod.ui.utils.icons.Icon);
 }
 
@@ -143,6 +155,11 @@ public class mchorse.bbs_mod.api.client.events.RegisterPreviewOverlaysEvent {
 public class mchorse.bbs_mod.api.client.events.RegisterReplayActionsEvent {
     public mchorse.bbs_mod.api.client.events.RegisterReplayActionsEvent();
     public void register(java.util.function.BiFunction<mchorse.bbs_mod.ui.film.UIFilmPanel, java.util.function.Supplier<mchorse.bbs_mod.film.replays.Replay>, mchorse.bbs_mod.ui.framework.elements.UIElement>);
+}
+
+public class mchorse.bbs_mod.api.client.events.RegisterTrackCategoriesEvent {
+    public mchorse.bbs_mod.api.client.events.RegisterTrackCategoriesEvent();
+    public void register(mchorse.bbs_mod.api.client.editor.TrackCategory, java.util.function.BiPredicate<mchorse.bbs_mod.film.replays.tracks.TrackId, java.lang.Boolean>);
 }
 
 public class mchorse.bbs_mod.api.client.events.RegisterTrackStylesEvent {
@@ -210,6 +227,27 @@ public final class mchorse.bbs_mod.api.FormPropertyAliases {
 public final class mchorse.bbs_mod.api.client.compat.ClientVanillaAccess {
     public static net.minecraft.client.gl.Framebuffer getFramebuffer(net.minecraft.client.MinecraftClient);
     public static void setFramebuffer(net.minecraft.client.MinecraftClient, net.minecraft.client.gl.Framebuffer);
+}
+
+public final class mchorse.bbs_mod.api.client.editor.TrackCategories {
+    public static java.util.List<mchorse.bbs_mod.api.client.editor.TrackCategory> values();
+    public static mchorse.bbs_mod.api.client.editor.TrackCategory categoryOf(mchorse.bbs_mod.film.replays.tracks.TrackId, boolean);
+    public static void finishRegistration();
+    public static void register(mchorse.bbs_mod.api.client.editor.TrackCategory, java.util.function.BiPredicate<mchorse.bbs_mod.film.replays.tracks.TrackId, java.lang.Boolean>);
+    public static void registerShortcuts(mchorse.bbs_mod.ui.utils.keys.KeybindManager, java.util.function.Supplier<java.util.List<mchorse.bbs_mod.api.client.editor.TrackCategory>>, java.util.function.Consumer<mchorse.bbs_mod.api.client.editor.TrackCategory>);
+}
+
+public final class mchorse.bbs_mod.api.client.editor.TrackCategory {
+    public final java.lang.String id;
+    public final mchorse.bbs_mod.l10n.keys.IKey label;
+    public final mchorse.bbs_mod.l10n.keys.IKey tooltip;
+    public final mchorse.bbs_mod.ui.utils.icons.Icon icon;
+    public mchorse.bbs_mod.api.client.editor.TrackCategory(java.lang.String, mchorse.bbs_mod.ui.utils.icons.Icon, mchorse.bbs_mod.l10n.keys.IKey, mchorse.bbs_mod.l10n.keys.IKey);
+    public static final mchorse.bbs_mod.api.client.editor.TrackCategory FORM;
+    public static final mchorse.bbs_mod.api.client.editor.TrackCategory IK;
+    public static final mchorse.bbs_mod.api.client.editor.TrackCategory PHYSICS;
+    public static final mchorse.bbs_mod.api.client.editor.TrackCategory POSE;
+    public static final mchorse.bbs_mod.api.client.editor.TrackCategory REPLAY;
 }
 
 public final class mchorse.bbs_mod.api.client.events.FilmEditEvents {

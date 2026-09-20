@@ -325,3 +325,35 @@ Unrecognized value factories remain preserved as raw tracks with the migrated ad
 A legacy document must be opened and saved with the updated addon installed once. Afterwards
 namespaced values survive saving without the addon. BBS cannot infer ownership of arbitrary
 old unnamespaced keys when the addon that registers their aliases is absent.
+
+### Track categories and numeric shortcuts
+
+Subscribe to `RegisterTrackCategoriesEvent` in your `bbs-client-addon` entry point:
+
+```java
+@Subscribe
+public void onTrackCategories(RegisterTrackCategoriesEvent event)
+{
+    event.register(new TrackCategory("myaddon:effects", Icons.PARTICLE,
+        IKey.constant("Effects"), IKey.constant("Effect tracks")),
+        (track, owned) -> owned && track.kind() == TrackKind.PROPERTY
+            && track.subject().startsWith("myaddon:"));
+}
+```
+
+`TrackCategory` and `TrackCategories` are in `api.client.editor`. IDs must be namespaced
+and unique. Rules receive a `TrackId` (including the owning form path) and whether the
+track belongs to a form. Addon rules run before built-in classification; first match wins.
+Registration order is the button order after built-in categories. Register during this
+startup event, before keybind settings load; late registration is rejected.
+
+Both film and animation-state editors use the registry. Addon buttons appear only when
+the selected part has matching tracks; animation states still exclude solver tracks.
+All Tracks includes them too. Empty active categories fall back to Form.
+
+Shortcuts target **visible positions**, excluding All Tracks: `1` through `9`, then `0`.
+BBS creates as many configurable shortcut slots as registered categories; slots past ten
+start unbound. They live in the existing replay-editor keybind settings and preserve old
+`tab_1` through `tab_5` overrides. No addon key handler is needed. Hiding/reappearing tabs
+preserves registry order, including wrapped rows. `RegisterKeybindsEvent.register(KeyCombo)`
+also supports individual dynamically created combos for other addon actions.
