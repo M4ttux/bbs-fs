@@ -1,6 +1,11 @@
 package mchorse.bbs_mod.forms.renderers;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import mchorse.bbs_mod.api.client.events.FormPoseEvents;
+import mchorse.bbs_mod.api.client.render.RenderAttachment;
+import java.util.IdentityHashMap;
+import java.util.Map;
+
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.cubic.IBoneHierarchy;
 import mchorse.bbs_mod.forms.FormUtilsClient;
@@ -35,6 +40,26 @@ import java.util.function.Supplier;
 public abstract class FormRenderer <T extends Form>
 {
     protected T form;
+    private Map<RenderAttachment<?>, Object> attachments;
+
+    @SuppressWarnings("unchecked")
+    public <V> V getAttachment(RenderAttachment<V> key)
+    {
+        return this.attachments == null ? null : (V) this.attachments.get(key);
+    }
+
+    public <V> void setAttachment(RenderAttachment<V> key, V value)
+    {
+        if (value == null)
+        {
+            if (this.attachments != null) this.attachments.remove(key);
+        }
+        else
+        {
+            if (this.attachments == null) this.attachments = new IdentityHashMap<>();
+            this.attachments.put(key, value);
+        }
+    }
 
     public FormRenderer(T form)
     {
@@ -175,7 +200,7 @@ public abstract class FormRenderer <T extends Form>
 
     protected void applyTransforms(MatrixStack stack, boolean origin, float transition)
     {
-        Transform transform = this.createTransform();
+        Transform transform = this.createEvaluatedTransform(transition);
 
         if (origin)
         {
@@ -189,7 +214,7 @@ public abstract class FormRenderer <T extends Form>
 
     protected void applyTransforms(Matrix4f matrix, float transition)
     {
-        matrix.mul(this.createTransform().createMatrix());
+        matrix.mul(this.createEvaluatedTransform(transition).createMatrix());
     }
 
     /**
@@ -198,8 +223,17 @@ public abstract class FormRenderer <T extends Form>
      * frame - what the camera follows has to be what the eye sees, not just where the replay
      * stands.
      */
+    /** Saved animation plus overlays and external pose contributions. */
+    public Transform createEvaluatedTransform(float transition)
+    {
+        Transform transform = this.createTransform();
+        FormPoseEvents.TRANSFORM.invoker().apply(this.form, transform, transition);
+        return transform;
+    }
+
     public Transform createTransform()
     {
+        this.form.syncOverlayTracks();
         Transform transform = new Transform();
 
         transform.copy(this.form.transform.get());
@@ -326,6 +360,8 @@ public abstract class FormRenderer <T extends Form>
 
     public void collectMatrices(IEntity entity, MatrixStack stack, MatrixCache matrices, String prefix, float transition)
     {
+        FormPoseEvents.PARENT_FRAME.invoker().capture(this.form, entity, stack.peek().getPositionMatrix(), prefix, transition);
+
         Matrix4f mm = new Matrix4f();
         Matrix4f oo = new Matrix4f();
 

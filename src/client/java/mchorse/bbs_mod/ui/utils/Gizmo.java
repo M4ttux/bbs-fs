@@ -133,13 +133,6 @@ public class Gizmo
     private final Matrix4f bakedRotationMatrix = new Matrix4f();
     private DragStrategy bakedGesture;
 
-    /** The frame the handles were last placed in ({@link #reorientForSpace}), or
-     *  {@code null} when the placement was left untouched. Only the draw passes
-     *  read it, to flatten {@link TransformSpace#VIEW} onto the eye ray
-     *  ({@link #applyViewShear}); the drag math takes its frames from
-     *  {@link GizmoDrag} as before. */
-    private TransformSpace lastSpace;
-
     /** The camera view {@link #reorientForSpace} was handed last — the same one the
      *  stack it reoriented already carries. Kept so the constraint guide can be put back
      *  onto the drag's own frame ({@link #orientGuide}); unset without a scene camera,
@@ -173,14 +166,8 @@ public class Gizmo
      *  overlay, the same look bones/handles get from the pick stencil). */
     private boolean sphereHovered;
 
-    /** Per-frame on-screen size compensation, {@code menu.height / viewportArea.h}.
-     *  {@link #getDistanceScale} otherwise keeps the gizmo a constant fraction
-     *  of its viewport, so it shrinks in a small preview (the film) versus a
-     *  full-screen editor (forms); this factor makes it a constant fraction of the
-     *  window instead, i.e. the same on-screen size in every editor. Each viewport
-     *  sets it via {@link #setViewportScale} before BOTH its visual and stencil
-     *  pass so the drawn gizmo and its pick hitbox scale together. */
-    private float viewportScale = 1F;
+    /** Height in UI pixels of the final viewport, shared by drawing and picking. */
+    private float viewportHeight;
 
     /** What the edited target can actually accept this frame ({@link HandleMask}).
      *  Captured together with the render matrix, because both draw passes run
@@ -277,9 +264,9 @@ public class Gizmo
      * viewport, with the same value for both, so the drawn gizmo and its pick
      * hitbox stay the same constant on-screen size across editors.
      */
-    public void setViewportScale(float viewportScale)
+    public void setViewportHeight(float viewportHeight)
     {
-        this.viewportScale = viewportScale > 0F && Float.isFinite(viewportScale) ? viewportScale : 1F;
+        this.viewportHeight = viewportHeight;
     }
 
     public boolean isSphereInteractive()
@@ -302,30 +289,10 @@ public class Gizmo
         return this.currentGesture != null && this.currentGesture.isEditing() && this.currentGesture.isSphereRotate();
     }
 
-    /** World-space radius of the rotate sphere as the CAMERA sizes it ({@code 0} until
-     *  rendered) — what a camera-space ray has to hit to grab the ball the user sees.
-     *  {@link GizmoLens} shrinks the drawn sphere by its own zoom on top of this; only
-     *  the screen helpers, which project through the lens, put that back. */
+    /** World-space radius shared by the drawn sphere and camera-space dragging. */
     public float getSphereWorldRadius()
     {
         return this.hasLastRenderMatrix ? this.lastSphereLocalRadius : 0F;
-    }
-
-    /**
-     * Clip-space chain the gizmo is really drawn with, so what the screen helpers
-     * measure is what the user sees: the gizmo's own lens ({@link GizmoLens}) when
-     * it is on this frame, and the camera's plain projection when it is not — the
-     * inactive lens is the identity swap, so this is one path, not two.
-     *
-     * <p>The origin projects onto the same pixel either way (the lens is built to
-     * put it there), so the hover centre is unchanged; the sphere's radius is not,
-     * which is exactly why the pick disc has to be measured through the lens too.
-     */
-    private Matrix4f lensMvp(Matrix4f cameraProjection, GizmoLens lens)
-    {
-        lens.set(cameraProjection, this.lastRenderMatrix);
-
-        return new Matrix4f(lens.projection).mul(lens.viewDelta).mul(this.lastRenderMatrix);
     }
 
     /**
@@ -347,7 +314,7 @@ public class Gizmo
             return false;
         }
 
-        Matrix4f mvp = this.lensMvp(projection, new GizmoLens());
+        Matrix4f mvp = new Matrix4f(projection).mul(this.lastRenderMatrix);
         Vector4f clip = mvp.transform(new Vector4f(0F, 0F, 0F, 1F));
 
         if (clip.w <= 0F)
@@ -392,11 +359,8 @@ public class Gizmo
             return 0F;
         }
 
-        GizmoLens lens = new GizmoLens();
-        Matrix4f mvp = this.lensMvp(projection, lens);
-        /* The stored radius is the camera-sized one; the drawn sphere is that shrunk
-         * by the lens, so put the shrink back before projecting through it. */
-        float r = this.lastSphereLocalRadius * lens.scale;
+        Matrix4f mvp = new Matrix4f(projection).mul(this.lastRenderMatrix);
+        float r = this.lastSphereLocalRadius;
         float[] xs = {r, 0F, 0F};
         float[] ys = {0F, r, 0F};
         float[] zs = {0F, 0F, r};
@@ -534,16 +498,9 @@ public class Gizmo
                 Math.round(area.h * scaleY)
             );
 
-            /* The sphere matrix was captured with the lens already applied to it, so the
-             * mask has to be projected through the lens as well or it lands somewhere
-             * else entirely. An inactive lens hands the camera projection straight back. */
-            GizmoLens lens = new GizmoLens();
-
-            lens.set(projection, this.lastRenderMatrix);
-
             RenderSystem.disableDepthTest();
             RenderSystem.setShaderColor(STENCIL_TRACKBALL / 255F, 0F, 0F, 1F);
-            this.rings.drawSphere(this.lastSphereMatrix, lens.projection);
+            this.rings.drawSphere(this.lastSphereMatrix, projection);
             RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
             RenderSystem.enableDepthTest();
 
@@ -701,7 +658,7 @@ public class Gizmo
         this.mask = mask == null ? HandleMask.ALL : mask;
 
         stack.push();
-        MatrixStackUtils.scaleBack(stack);
+        this.removePlacementScale(stack);
         this.captureRenderMatrix(stack);
         this.drawGizmo(stack);
         stack.pop();
@@ -729,7 +686,7 @@ public class Gizmo
         this.mask = mask == null ? HandleMask.ALL : mask;
 
         stack.push();
-        MatrixStackUtils.scaleBack(stack);
+        this.removePlacementScale(stack);
         this.captureRenderMatrix(stack);
         stack.pop();
     }
@@ -764,7 +721,7 @@ public class Gizmo
             return;
         }
 
-        this.setViewportScale(context.menu.height / (float) area.h);
+        this.setViewportHeight(area.h);
 
         context.batcher.flush();
 
@@ -797,36 +754,14 @@ public class Gizmo
     {
         this.applyBakedRotation(stack);
 
-        /* Read before the lens goes in: the distance scale takes the SCENE's angle
-         * (that is what it compensates), and the lens then rescales by the ratio of
-         * the two, which keeps the on-screen size put in both settings modes. */
-        float cameraScale = this.getDistanceScale(stack);
-
-        /* The lens rewrites this entry's model-view in place; keep the camera's
-         * copy underneath it for the constraint guide, which is drawn without it. */
-        stack.push();
-
-        GizmoLens lens = new GizmoLens();
-        LensSwap swap = this.applyLens(stack, lens);
-        float distanceScale = cameraScale * lens.scale;
+        float distanceScale = this.getDistanceScale(stack);
 
         stack.push();
-        this.applyViewShear(stack, lens);
         stack.scale(distanceScale, distanceScale, distanceScale);
 
         if (BBSSettings.gizmos.get())
         {
-            /* Cache the sphere's world radius (in {@link #lastRenderMatrix}'s
-             * coordinate frame) so {@link #computeScreenRadius} can report the real
-             * on-screen pixel size for hover/pick distance checks.
-             *
-             * Stored WITHOUT the lens's shrink, i.e. the radius the sphere would have
-             * had under the camera. The trackball drag intersects it with a camera ray
-             * ({@code ArcballDrag}), which would otherwise grab a ball a fifth of the
-             * drawn one at a wide FOV; the screen helpers put the lens back on when
-             * they project it. */
-            this.lastSphereLocalRadius = 0.22F * BBSSettings.axesScale.get() * cameraScale;
-
+            this.lastSphereLocalRadius = 0.22F * BBSSettings.axesScale.get() * distanceScale;
             this.lastSphereMatrix.set(modelView(stack));
             this.hasLastSphereMatrix = true;
             this.drawOccludedGizmo(stack);
@@ -837,129 +772,7 @@ public class Gizmo
         }
 
         stack.pop();
-
-        this.restoreLens(swap);
-        stack.pop();
-
-        /* Deliberately outside the shear AND outside the lens: the constraint guide is
-         * a world-space line showing the axis the drag actually slides along, and that
-         * axis comes from {@link GizmoDrag#frameBasis} — the unsheared camera frame the
-         * drag itself solves in. The lens is exact only at the gizmo's origin; a line
-         * 10000 blocks long runs off to a different vanishing point through it, and
-         * since the lens is rebuilt from the gizmo's position every frame, the guide
-         * swung as the drag moved the gizmo. Drawn by the camera it is pinned to the
-         * axis the model really slides along. */
         this.drawInfiniteLine(stack);
-    }
-
-    /**
-     * Swap the gizmo's own lens in for the scene camera's, for the duration of one
-     * draw pass: the projection on {@link RenderSystem} and the pass's own copy of
-     * the gizmo's model-view, which the view swing is prepended to.
-     *
-     * <p>Both draw passes take it, so the pick stencil keeps matching the visual
-     * pixel for pixel; {@link #lastRenderMatrix} is left alone, so the gizmo's world
-     * axes and the pick projections still describe the plain camera frame and the
-     * drag rebuilds the same lens for itself from them ({@link GizmoDrag#setup}).
-     *
-     * @return what was displaced, to hand back to {@link #restoreLens}, or
-     *         {@code null} when the lens came out inactive and nothing was swapped.
-     */
-    private LensSwap applyLens(MatrixStack stack, GizmoLens lens)
-    {
-        LensSwap swap = new LensSwap(new Matrix4f(RenderSystem.getProjectionMatrix()), RenderSystem.getVertexSorting());
-
-        if (!lens.set(swap.projection(), stack.peek().getPositionMatrix()))
-        {
-            return null;
-        }
-
-        RenderSystem.setProjectionMatrix(lens.projection, VertexSorter.BY_Z);
-
-        Matrix4f position = stack.peek().getPositionMatrix();
-
-        position.set(new Matrix4f(lens.viewDelta).mul(position));
-
-        Matrix3f normal = stack.peek().getNormalMatrix();
-
-        normal.set(lens.viewDelta.get3x3(new Matrix3f()).mul(normal));
-
-        return swap;
-    }
-
-    /**
-     * Undo {@link #applyLens}'s projection swap; {@code null} means it never happened.
-     * The world pass draws the gizmo mid-scene, so the sorting the projection was set
-     * with goes back too — a lens must not leave the frame it borrowed sorting
-     * translucency differently than it found it.
-     */
-    private void restoreLens(LensSwap swap)
-    {
-        if (swap != null)
-        {
-            RenderSystem.setProjectionMatrix(swap.projection(), swap.sorting());
-        }
-    }
-
-    /** The {@link RenderSystem} projection state one draw pass borrowed for its lens. */
-    private record LensSwap(Matrix4f projection, VertexSorter sorting)
-    {}
-
-    /**
-     * Flatten the handles' third axis onto the eye ray while they are drawn in
-     * {@link TransformSpace#VIEW}, so a screen-space tool reads as one wherever it
-     * sits in the frame.
-     *
-     * <p>VIEW places the handles on the camera's own axes
-     * ({@link GizmoDrag#stackBasisForSpace}), which makes them PARALLEL to the screen
-     * but not FACING it: under perspective a gizmo away from the centre is seen a
-     * little from the side. Measured at a 70&deg; FOV, the Z bar — a dot dead centre —
-     * grows to about three quarters of a handle's length by the corner of the frame,
-     * and the billboarded view ring goes a quarter oval and drifts off the origin,
-     * while the axis rings beside it stay perfect circles. That mismatch is the whole
-     * "not quite straight on" look.
-     *
-     * <p>Replacing the third column with the unit ray from the gizmo back to the eye
-     * cancels exactly that, and nothing else: the Z bar collapses to a point at every
-     * screen position, everything drawn in the screen plane (the rings, the billboard,
-     * the plane quads) projects perfectly circular and concentric, and the X/Y bars
-     * keep the exact horizontal/vertical they already had, since their columns are not
-     * touched. At the centre the eye ray IS the camera's Z, so the frame is the
-     * identity again and nothing jumps as the gizmo crosses the middle. The column
-     * stays unit length, so {@link MatrixStackUtils#scaleBack} is unaffected, and the
-     * determinant stays positive (~0.82 at the corner), so depth order and winding hold.
-     *
-     * <p>Only the DRAWING frame is sheared, and both draw passes take it, so the pick
-     * stencil keeps matching the visual pixel for pixel. {@link #lastRenderMatrix} is
-     * captured before this runs, so the gizmo's world axes, the drag frames and the
-     * pick projections all keep the orthonormal camera basis they had.
-     *
-     * <p>This is the fallback for a gizmo drawn through the camera's own lens. With
-     * {@link GizmoLens} active the camera is swung onto the gizmo instead, which makes
-     * the eye ray the frame's own third axis — the shear would have nothing left to
-     * correct, and {@link #reorientForSpace} has already handed the frame the swing's
-     * inverse so the handles come out exactly square to the screen.
-     */
-    private void applyViewShear(MatrixStack stack, GizmoLens lens)
-    {
-        if (this.lastSpace != TransformSpace.VIEW || lens.active)
-        {
-            return;
-        }
-
-        Matrix4f matrix = stack.peek().getPositionMatrix();
-        Vector3f toCamera = matrix.getTranslation(new Vector3f()).negate();
-
-        if (toCamera.lengthSquared() < 1.0E-8F)
-        {
-            return;
-        }
-
-        toCamera.normalize();
-
-        matrix.m20(toCamera.x);
-        matrix.m21(toCamera.y);
-        matrix.m22(toCamera.z);
     }
 
     /**
@@ -1011,11 +824,7 @@ public class Gizmo
 
     private float getDistanceScale(MatrixStack stack)
     {
-        Vector3f cameraRelative = stack.peek().getPositionMatrix().getTranslation(new Vector3f());
-        Matrix4f proj = com.mojang.blaze3d.systems.RenderSystem.getProjectionMatrix();
-        float fov = proj.m33() == 0 ? (float) (2.0 * Math.atan(1.0 / proj.m11())) : BBSSettings.getFov();
-
-        return BBSSettings.getGizmoDistanceScale(cameraRelative.length(), fov) * this.viewportScale;
+        return GizmoSize.getScale(modelView(stack), RenderSystem.getProjectionMatrix(), this.viewportHeight);
     }
 
     /** The constraint guide: a world-space line along the dragged axis, drawn by the
@@ -1206,7 +1015,7 @@ public class Gizmo
         this.mask = mask == null ? HandleMask.ALL : mask;
 
         stack.push();
-        MatrixStackUtils.scaleBack(stack);
+        this.removePlacementScale(stack);
         this.captureRenderMatrix(stack);
         this.drawStencilAxes(stack);
         stack.pop();
@@ -1223,20 +1032,11 @@ public class Gizmo
         this.applyBakedRotation(stack);
 
         float distanceScale = this.getDistanceScale(stack);
-        /* Same lens as the visual pass, or the hitboxes would sit on the handles as
-         * the camera sees them and picking would drift with the distance from centre. */
-        GizmoLens lens = new GizmoLens();
-        LensSwap swap = this.applyLens(stack, lens);
-
-        distanceScale *= lens.scale;
 
         stack.push();
-        this.applyViewShear(stack, lens);
         stack.scale(distanceScale, distanceScale, distanceScale);
         this.drawStencilHandles(stack);
         stack.pop();
-
-        this.restoreLens(swap);
     }
 
     /**
@@ -1260,7 +1060,7 @@ public class Gizmo
             return;
         }
 
-        this.setViewportScale(context.menu.height / (float) area.h);
+        this.setViewportHeight(area.h);
 
         MatrixStackUtils.cacheMatrices();
         RenderSystem.setProjectionMatrix(projection, VertexSorter.BY_Z);
@@ -1280,6 +1080,17 @@ public class Gizmo
 
         UIUtils.restoreViewport(previousViewport);
         MatrixStackUtils.restoreMatrices();
+    }
+
+    /** Keep object stretch/shear out of both the visible handles and their pick geometry. */
+    private void removePlacementScale(MatrixStack stack)
+    {
+        Matrix4f matrix = stack.peek().getPositionMatrix();
+        Vector3f translation = matrix.getTranslation(new Vector3f());
+        Matrix3f basis = GizmoDrag.basisOf(matrix);
+
+        matrix.set(new Matrix4f(basis).setTranslation(translation));
+        stack.peek().getNormalMatrix().set(basis);
     }
 
     private void captureRenderMatrix(MatrixStack stack)
@@ -1335,10 +1146,7 @@ public class Gizmo
      */
     public void reorientForSpace(MatrixStack stack, TransformSpace space, Matrix4f cameraView, Matrix3f globalAxes)
     {
-        /* Remembered for the draw passes ({@link #applyViewShear}). Without a camera
-         * nothing is reoriented, so the handles keep their placement frame and the
-         * remembered space must not claim otherwise. */
-        this.lastSpace = cameraView == null ? null : space;
+        /* Use the same camera frame for the handles and the drag guide. */
         this.hasLastCameraView = cameraView != null;
 
         if (cameraView != null)
@@ -1354,22 +1162,6 @@ public class Gizmo
         Matrix4f matrix = stack.peek().getPositionMatrix();
         Vector3f translation = matrix.getTranslation(new Vector3f());
         Matrix3f basis = GizmoDrag.stackBasisForSpace(space, cameraView, globalAxes);
-
-        /* VIEW means "square to the screen", and with the lens on, the screen is the
-         * lens's, not the camera's: pre-cancel its view swing here so the draw passes
-         * multiply it back out and the handles land exactly axis-aligned on screen.
-         * The lens's own predicate decides, so the frame and the draw agree on whether
-         * this frame has a lens — and the swing is read off the placement's translation,
-         * which is the gizmo's view-space position, the same value the lens builds from. */
-        if (space == TransformSpace.VIEW && GizmoLens.canFrame(RenderSystem.getProjectionMatrix(), translation))
-        {
-            Matrix4f delta = new Matrix4f();
-
-            if (GizmoLens.viewDelta(translation, delta))
-            {
-                basis = delta.get3x3(new Matrix3f()).transpose().mul(basis);
-            }
-        }
 
         Matrix3f ambient = new Matrix4f(RenderSystem.getModelViewMatrix()).get3x3(new Matrix3f());
 

@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.forms.renderers;
 
+import mchorse.bbs_mod.api.client.events.StructureRenderEvents;
+
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.client.BBSRendering;
@@ -71,6 +73,15 @@ public class StructureFormRenderer extends FormRenderer<StructureForm>
     private World structureWorld;
 
     private final Vector3f offset = new Vector3f();
+    private Vector3f partOffset;
+
+    protected StructureFormRenderer(StructureForm form, StructureRenderData data, String biome, Vector3f offset)
+    {
+        super(form);
+        this.data = Objects.requireNonNull(data);
+        this.world = new StructureRenderWorld(data, biome);
+        this.partOffset = new Vector3f(offset);
+    }
 
     public StructureFormRenderer(StructureForm form)
     {
@@ -80,6 +91,8 @@ public class StructureFormRenderer extends FormRenderer<StructureForm>
     /** Reload structure/biome when the form properties change, or the manager dropped its cache. */
     private void ensureData()
     {
+        if (this.partOffset != null) return;
+
         int generation = StructureManager.getGeneration();
         String structure = this.form.structure.get();
         String biome = this.form.biome.get();
@@ -119,6 +132,8 @@ public class StructureFormRenderer extends FormRenderer<StructureForm>
      */
     private Vector3f getOffset()
     {
+        if (this.partOffset != null) return this.partOffset;
+
         Vec3i size = this.data.size;
         Vector3f origin = this.form.origin.get();
 
@@ -405,6 +420,12 @@ public class StructureFormRenderer extends FormRenderer<StructureForm>
     protected void render3D(FormRenderingContext context)
     {
         this.ensureData();
+
+        if (this.partOffset == null && this.data != null
+            && StructureRenderEvents.RENDER.invoker().render(this, this.form, this.data, context))
+        {
+            return;
+        }
 
         if (this.world == null)
         {

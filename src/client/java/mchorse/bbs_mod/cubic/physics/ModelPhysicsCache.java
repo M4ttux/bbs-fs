@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.cubic.physics;
 
+import mchorse.bbs_mod.api.client.events.FormPoseEvents;
+
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.utils.FormBone;
@@ -154,7 +156,8 @@ final class ModelPhysicsCache
 
         for (BaseValue value : form.bones.getAll())
         {
-            if (!(value instanceof FormBone bone) || !bone.hasPhysicsChain())
+            if (!(value instanceof FormBone bone) || !bone.hasPhysicsChain()
+                || FormPoseEvents.CLAIM_CHAIN.invoker().claims(form, model, bone))
             {
                 continue;
             }

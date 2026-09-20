@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.settings.SettingsBuilder;
 import mchorse.bbs_mod.settings.values.core.ValueLink;
@@ -114,6 +115,7 @@ public class BBSSettings {
 	public static ValueFloat scrollingSensitivity;
 	public static ValueFloat scrollingSensitivityHorizontal;
 	public static ValueBoolean scrollingSmoothness;
+	public static ValueFloat scrollingSmoothnessIntensity;
 	public static ValueBoolean scrollingDisableSmoothnessInEditors;
 
 	public static ValueBoolean multiskinMultiThreaded;
@@ -180,6 +182,7 @@ public class BBSSettings {
 	public static ValueBoolean editorClipPreview;
 	public static ValueBoolean editorRewind;
 	public static ValueBoolean editorStopPlaybackOnScrub;
+	public static ValueBoolean editorSnapToTicks;
 	public static ValueBoolean editorRestartOnSeek;
 	public static ValueBoolean editorHorizontalClipEditor;
 	public static ValueBoolean editorMinutesBackup;
@@ -200,7 +203,8 @@ public class BBSSettings {
 	public static ValueFloat recordingCountdown;
 	public static ValueBoolean recordingSwipeDamage;
 	public static ValueBoolean recordingOverlays;
-	public static ValueInt recordingPoseTransformOverlays;
+	public static ValueInt recordingPoseOverlays;
+	public static ValueInt recordingTransformOverlays;
 	public static ValueBoolean recordingCameraPreview;
 	public static ValueBoolean recordingTeleport;
 
@@ -439,6 +443,12 @@ public class BBSSettings {
 		return duration == null ? 100 : duration.get();
 	}
 
+	/** Shared strength for smooth scrolling and timeline zoom; zero selects immediate movement. */
+	public static float getScrollSmoothingIntensity()
+	{
+		return scrollingSmoothness.get() ? scrollingSmoothnessIntensity.get() : 0F;
+	}
+
 	public static float getFov()
 	{
 		return BBSSettings.fov == null ? MathUtils.toRad(70) : MathUtils.toRad(BBSSettings.fov.get());
@@ -461,18 +471,6 @@ public class BBSSettings {
 		float scale = (distance / 5F) * (tanFov / 0.4663F);
 
 		return Math.max(scale, 0.0001F);
-	}
-
-	/**
-	 * The same for the gizmo, which is the one overlay that may turn it off: a gizmo that
-	 * shrinks with distance reads as part of the scene rather than as a tool over it, and
-	 * some people prefer it that way.
-	 */
-	public static float getGizmoDistanceScale(float distance, float fov)
-	{
-		boolean keep = gizmoKeepScreenSize == null || gizmoKeepScreenSize.get();
-
-		return keep ? getScreenSizeScale(distance, fov) : 1F;
 	}
 
 	public static boolean isHorizontalClipEditorEffective()
@@ -573,6 +571,23 @@ public class BBSSettings {
 		migrated |= migrateLegacyValue(root, "shader_curves", "enabled", "misc", "shader_curves");
 		migrated |= migrateLegacyValue(root, "multiskin", "multithreaded", "misc", "multiskin_multithreaded");
 		migrated |= migrateLegacyValue(root, "entity_selectors", "whitelist", "misc", "entity_selectors_whitelist");
+		migrated |= migrateLegacyValue(root, "recording", "pose_transform_overlays", "recording", "pose_overlays");
+		migrated |= migrateLegacyValue(root, "recording", "pose_transform_overlays", "recording", "transform_overlays");
+
+		/* Sections now keep the replay list compact. Reveal their channels once;
+		 * later manual filtering must survive reloads. */
+		MapType appearance = root.getMap("appearance");
+
+		if (!appearance.getBool("replay_sections_filter_migrated"))
+		{
+			HashSet<String> revealed = new HashSet<>(ReplayKeyframes.CURATED_CHANNELS);
+			revealed.addAll(Arrays.asList("leaning", "roll", "fall"));
+			revealed.removeAll(Arrays.asList("yaw", "vX", "vY", "vZ"));
+			appearance.getList("disabled_sheets").elements.removeIf(value -> value.isString() && revealed.contains(value.asString()));
+			appearance.putBool("replay_sections_filter_migrated", true);
+			root.put("appearance", appearance);
+			migrated = true;
+		}
 
 		return migrated;
 	}
@@ -627,20 +642,8 @@ public class BBSSettings {
 
 	public static void register(SettingsBuilder builder)
 	{
-		/* Channels the timeline keeps folded away until they are asked for: the
-		 * inventory past the held slot, the armour, the states the entity is put
-		 * into, the velocity readout, and the gamepad axes nothing binds by default. */
-		HashSet<String> defaultFilters = new HashSet<>(Arrays.asList(
-			"item_slot_1", "item_slot_2", "item_slot_3", "item_slot_4",
-			"item_slot_5", "item_slot_6", "item_slot_7", "item_slot_8",
-			"selected_slot",
-			"item_head", "item_chest", "item_legs", "item_feet",
-			"swimming", "riding", "flying", "gliding",
-			"grounded", "leaning", "yaw", "roll",
-			"vX", "vY", "vZ",
-			"stick_rx", "stick_ry", "trigger_l", "trigger_r",
-			"extra1_x", "extra1_y", "extra2_x", "extra2_y"
-		));
+		/* Replay sections replace the old hidden-by-default groups. */
+		HashSet<String> defaultFilters = new HashSet<>(Arrays.asList("yaw", "vX", "vY", "vZ"));
 
 		/* Interface */
 		builder.category("appearance", Icons.LAYOUT);
@@ -679,6 +682,7 @@ public class BBSSettings {
 		builder.register(favoriteColors);
 		builder.register(recentColors);
 		builder.register(disabledSheets);
+		builder.getBoolean("replay_sections_filter_migrated", true).invisible();
 		trackStyles = new ValueTrackStyles("track_styles");
 		builder.register(trackStyles);
 		disabledMorphFormCategories = new ValueStringKeys("disabled_morph_form_categories");
@@ -700,6 +704,7 @@ public class BBSSettings {
 		scrollingSensitivity = builder.getFloat("sensitivity", 3F, 0F, 10F).slider();
 		scrollingSensitivityHorizontal = builder.getFloat("sensitivity_horizontal", 3F, 0F, 10F).slider();
 		scrollingSmoothness = builder.getBoolean("smoothness", true);
+		scrollingSmoothnessIntensity = builder.getFloat("smoothness_intensity", 0.75F, 0F, 2F).slider();
 		scrollingDisableSmoothnessInEditors = builder.getBoolean("disable_smoothness_in_editors", true);
 
 		builder.category("tutorials", Icons.HELP);
@@ -827,6 +832,7 @@ public class BBSSettings {
 		editorSnapToFilmMarkers = builder.getBoolean("snap_to_film_markers", true);
 		editorRewind = builder.getBoolean("rewind", true);
 		editorStopPlaybackOnScrub = builder.getBoolean("stop_playback_on_scrub", false);
+		editorSnapToTicks = builder.getBoolean("snap_to_ticks", true);
 		editorRestartOnSeek = builder.getBoolean("restart_on_seek", false);
 		editorHorizontalClipEditor = builder.getBoolean("horizontal_clip_editor", false);
 
@@ -842,7 +848,8 @@ public class BBSSettings {
 		recordingCountdown = builder.getFloat("countdown", 1.5F, 0F, 30F);
 		recordingSwipeDamage = builder.getBoolean("swipe_damage", false);
 		recordingOverlays = builder.getBoolean("overlays", true);
-		recordingPoseTransformOverlays = builder.getInt("pose_transform_overlays", 0, 0, 42);
+		recordingPoseOverlays = builder.getInt("pose_overlays", 0, 0, 42);
+		recordingTransformOverlays = builder.getInt("transform_overlays", 0, 0, 42);
 		recordingCameraPreview = builder.getBoolean("camera_preview", true);
 		recordingTeleport = builder.getBoolean("teleport", true);
 

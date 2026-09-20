@@ -1,5 +1,8 @@
 package mchorse.bbs_mod.film;
 
+import mchorse.bbs_mod.api.client.events.FormPoseEvents;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
+
 import java.util.Map;
 import java.util.Objects;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -55,6 +58,8 @@ public class FilmMatrices
      */
     public static Pair<Matrix4f, Float> getTotalMatrix(Map<String, IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i, boolean fullMatrix, FormFrameCache frame)
     {
+        value = FormPoseEvents.ANCHOR.invoker().resolve(value);
+
         /* Stupid recursion stop, I don't think anyone would need more than that */
         if (i > 5)
         {
@@ -62,20 +67,20 @@ public class FilmMatrices
         }
 
         boolean same = value.previous == null || Objects.equals(value, value.previous);
-        boolean only = value.x <= 0F && value.previous != null;
+        boolean only = value.previous != null && (value.x == 0F || value.x == 1F);
         Pair<Matrix4f, Float> result = new Pair<>(null, 1F);
 
         if (same || only)
         {
-            Anchor anchor = same ? value : value.previous;
+            Anchor anchor = same || value.x == 1F ? value : value.previous;
             Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, anchor, defaultMatrix, transition, i, fullMatrix, frame);
 
+            result.b = matrix == defaultMatrix ? 1F : 0F;
             matrix = applyAnchorTransform(matrix, anchor);
 
             if (matrix != defaultMatrix)
             {
                 result.a = matrix;
-                result.b = 0F;
             }
         }
         else
@@ -83,14 +88,14 @@ public class FilmMatrices
             Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, value, defaultMatrix, transition, i, fullMatrix, frame);
             Matrix4f lastMatrix = getEntityMatrix(entities, cx, cy, cz, value.previous, defaultMatrix, transition, i, fullMatrix, frame);
 
+            /* Shadow opacity follows whether each endpoint resolved to the actor's own frame.
+             * Clamp opacity, but let Back/Elastic curves overshoot the spatial transition. */
+            result.b = MathUtils.clamp(Lerps.lerp(lastMatrix == defaultMatrix ? 1F : 0F, matrix == defaultMatrix ? 1F : 0F, value.x), 0F, 1F);
+
             matrix = applyAnchorTransform(matrix, value);
             lastMatrix = applyAnchorTransform(lastMatrix, value.previous);
 
-            result.a = value.x >= 1F ? matrix : Matrices.lerp(lastMatrix, matrix, value.x);
-
-            if (value.isFadeOut()) result.b = value.x;
-            else if (value.isFadeIn()) result.b = 1F - value.x;
-            else result.b = 0F;
+            result.a = Matrices.lerp(lastMatrix, matrix, value.x);
         }
 
         return result;
@@ -103,7 +108,8 @@ public class FilmMatrices
             return matrix;
         }
 
-        return matrix.mul(anchor.transform.createMatrix());
+        /* Both endpoints may share defaultMatrix when their targets are absent. */
+        return new Matrix4f(matrix).mul(anchor.transform.createMatrix());
     }
 
     public static Matrix4f getEntityMatrix(Map<String, IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i)
@@ -165,7 +171,7 @@ public class FilmMatrices
 
     /**
      * The replay's own world orientation &mdash; the frame
-     * {@link mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace#GLOBAL}
+     * {@link TransformSpace#GLOBAL}
      * aligns the gizmo to in the film viewport. It is exactly the rotation
      * {@link #getMatrixForRenderWithRotation} puts the whole actor under
      * ({@code bodyYaw} about the world Y), and nothing else: not the pose, not
@@ -383,8 +389,6 @@ public class FilmMatrices
         double cy = origin.y;
         double cz = origin.z;
 
-        /* Fresh every call: getTotalMatrix multiplies the anchor's transform onto this very matrix
-         * when the anchor has no target to compose onto. */
         Matrix4f defaultMatrix = getMatrixForRenderWithRotation(entity, cx, cy, cz, transition);
 
         if (relative)

@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.api.client.events;
 
+import mchorse.bbs_mod.ui.utils.keys.KeyCombo;
+
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.keys.KeybindSettings;
 
@@ -11,6 +13,11 @@ import mchorse.bbs_mod.ui.utils.keys.KeybindSettings;
  */
 public class RegisterKeybindsEvent
 {
+    public void register(KeyCombo combo)
+    {
+        KeybindSettings.register(combo);
+    }
+
     public void register(Class clazz)
     {
         KeybindSettings.register(clazz);

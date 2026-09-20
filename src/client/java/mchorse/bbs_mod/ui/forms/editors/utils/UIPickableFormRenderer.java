@@ -178,9 +178,9 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
         }
 
         /* Keep the gizmo the same on-screen size as in the film preview (see
-         * Gizmo#setViewportScale); set before both the visual (renderAxes) and the
+         * Gizmo#setViewportHeight); set before both the visual (renderAxes) and the
          * stencil pass below so the drawn handles and their pick hitbox match. */
-        Gizmo.INSTANCE.setViewportScale(context.menu.height / (float) this.area.h);
+        Gizmo.INSTANCE.setViewportHeight(this.area.h);
 
         this.renderAxes(context);
 

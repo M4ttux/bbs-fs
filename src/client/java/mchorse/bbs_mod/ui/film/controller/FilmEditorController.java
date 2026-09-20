@@ -1,5 +1,8 @@
 package mchorse.bbs_mod.ui.film.controller;
 
+import com.mojang.blaze3d.systems.RenderSystem;
+import org.joml.Matrix4f;
+
 import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.film.BaseFilmController;
 import mchorse.bbs_mod.film.FilmEntityRenderer;
@@ -30,6 +33,7 @@ public class FilmEditorController extends BaseFilmController
     public UIFilmController controller;
 
     private int lastTick;
+    private boolean fractionalPreview;
 
     public FilmEditorController(Film film, UIFilmController controller)
     {
@@ -127,9 +131,49 @@ public class FilmEditorController extends BaseFilmController
     protected float getTransition(IEntity entity, float transition)
     {
         boolean current = this.isCurrent(entity) && this.controller.isControlling();
-        float delta = !this.controller.isPlaying() && !current ? 0F : transition;
 
-        return delta;
+        if (current || this.controller.isPlaying())
+        {
+            return this.controller.panel.isRunning() ? this.controller.panel.getRunner().getTransition(transition) : transition;
+        }
+
+        return this.controller.panel.getRunner().getTransition(0F);
+    }
+
+    @Override
+    public void startRenderFrame(float transition)
+    {
+        boolean fractional = this.controller.panel.getRunner().getTransition(0F) != 0F;
+
+        if (this.film != null && !this.controller.isPlaying() && (fractional || this.fractionalPreview))
+        {
+            /* Seeking inside one tick does not advance the simulation. Sample the actor's
+             * movement as well as its form on every frame, without replaying actions. */
+            List<Replay> replays = this.film.replays.getList();
+
+            for (int i = 0; i < replays.size(); i++)
+            {
+                Replay replay = replays.get(i);
+                IEntity entity = this.entities.get(replay.getId());
+
+                if (entity != null && entity != this.controller.getControlled() && this.canUpdate(i, replay, entity, UpdateMode.PROPERTIES))
+                {
+                    float tick = replay.getTick(this.getTick()) + this.getTransition(entity, transition);
+
+                    replay.keyframes.apply(tick, entity);
+                    entity.setPrevX(entity.getX());
+                    entity.setPrevY(entity.getY());
+                    entity.setPrevZ(entity.getZ());
+                    entity.setPrevYaw(entity.getYaw());
+                    entity.setPrevHeadYaw(entity.getHeadYaw());
+                    entity.setPrevBodyYaw(entity.getBodyYaw());
+                    entity.setPrevPitch(entity.getPitch());
+                }
+            }
+        }
+
+        this.fractionalPreview = fractional;
+        super.startRenderFrame(transition);
     }
 
     @Override
@@ -181,8 +225,8 @@ public class FilmEditorController extends BaseFilmController
                     this.renderOnion(replay, pose.getKeyframes().indexOf(segment.b), 1, pose, onionSkin.postColor.get(), onionSkin.postFrames.get(), context, isPlaying, entity);
                     BBSProfiler.end(BBSProfiler.Timer.ONION);
 
-                    replay.keyframes.apply(ticks, entity);
                     float tick = ticks + this.getTransition(entity, context.tickCounter().getTickDelta(false));
+                    replay.keyframes.apply(isPlaying ? ticks : tick, entity);
                     Form form = entity.getForm();
                     replay.properties.applyProperties(form, tick);
 
@@ -254,7 +298,10 @@ public class FilmEditorController extends BaseFilmController
         return super.getFilmControllerContext(context, replay, entity)
             .transition(this.getTransition(entity, context.tickCounter().getTickDelta(false)))
             .gizmoTarget(target)
-            .gizmoView(this.controller.getGizmoView())
+            /* The UI camera is copied later in the frame. Use the view that is
+             * actually drawing this pass, before any actor transforms go on it. */
+            .gizmoView(new Matrix4f(RenderSystem.getModelViewMatrix()).mul(context.matrixStack().peek().getPositionMatrix()))
+            .gizmoViewportHeight(this.controller.panel.preview.getViewport().h)
             .bone2(aBone2, TransformSpace.LOCAL);
     }
 

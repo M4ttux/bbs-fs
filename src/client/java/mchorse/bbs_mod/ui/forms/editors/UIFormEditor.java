@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.ui.forms.editors;
 
+import mchorse.bbs_mod.api.client.editor.FormEditorTool;
+
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.cubic.ModelInstance;
@@ -141,6 +143,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
 
     private int lastTick;
     private int cursor;
+    private float cursorFraction;
     private boolean playing;
 
     /** Armed viewport eyedropper (see {@link #startBonePicking}); null when idle. */
@@ -333,7 +336,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
         this.statesEditor.full(this);
         this.statesEditor.setVisible(false);
         this.statesKeyframes = new UIAnimationStateEditor(this);
-        this.statesKeyframes.relative(this.statesEditor).y(1F).w(1F, -20).h(BBSSettings.editorLayoutSettings.getStateEditorSizeV()).anchorY(1F);
+        this.statesKeyframes.relative(this.statesEditor).w(1F, -20).h(1F);
 
         this.openStates = new UIIcon(Icons.MORE, (b) ->
         {
@@ -515,8 +518,22 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
         return false;
     }
 
+    private FormEditorTool getPanelTool()
+    {
+        return !this.statesEditor.isVisible() && this.editor != null
+            && this.editor.view instanceof FormEditorTool tool
+            && tool.getGizmoTransform() != null ? tool : null;
+    }
+
     public boolean startGizmo(UIContext context, int stencilIndex)
     {
+        var tool = this.getPanelTool();
+        if (tool != null)
+        {
+            UIPropTransform transform = tool.getGizmoTransform();
+            return Gizmo.INSTANCE.start(stencilIndex, context.mouseX, context.mouseY, transform, this.buildHotkeyDrag(transform));
+        }
+
         if (this.statesEditor.isVisible())
         {
             return this.statesKeyframes.startGizmo(context, stencilIndex);
@@ -681,7 +698,20 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
 
     private void plause()
     {
+        if (this.playing)
+        {
+            this.cursorFraction = BBSSettings.editorSnapToTicks.get() ? 0F : this.getSamplingTick() - this.cursor;
+        }
+
         this.playing = !this.playing;
+    }
+
+    public void stopPlaybackOnScrub()
+    {
+        if (this.playing && BBSSettings.editorStopPlaybackOnScrub.get())
+        {
+            this.plause();
+        }
     }
 
     private void toggleStateEditor()
@@ -1188,16 +1218,17 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
                     if (tick != this.lastTick)
                     {
                         this.cursor += 1;
+                        this.cursorFraction = 0F;
                     }
 
                     if (this.cursor >= state.duration.get())
                     {
                         this.playing = false;
-                        this.cursor = 0;
+                        this.setCursor(0);
                     }
                 }
 
-                state.properties.applyProperties(form, this.cursor + (this.playing ? context.getTransition() : 0));
+                state.properties.applyProperties(form, this.getCursor(context.getTransition()));
             }
         }
 
@@ -1217,6 +1248,13 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
 
     public Matrix4f getOrigin(float transition)
     {
+        var tool = this.getPanelTool();
+        if (tool != null)
+        {
+            Matrix4f matrix = tool.getGizmoOrigin(transition, tool.getGizmoTransform().getSpace());
+            if (matrix != null) return matrix;
+        }
+
         if (this.statesEditor.isVisible())
         {
             return this.statesKeyframes.getOrigin(transition);
@@ -1234,6 +1272,9 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
      *  editing panel (mirrors {@link #getOrigin(float)}'s dispatch). */
     public TransformSpace getGizmoSpace()
     {
+        var tool = this.getPanelTool();
+        if (tool != null) return tool.getGizmoTransform().getSpace();
+
         if (this.statesEditor.isVisible())
         {
             return this.statesKeyframes.getGizmoSpace();
@@ -1255,6 +1296,13 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
      */
     public Matrix4f getOriginMatrix(float transition)
     {
+        var tool = this.getPanelTool();
+        if (tool != null)
+        {
+            Matrix4f matrix = tool.getGizmoOrigin(transition, TransformSpace.LOCAL);
+            if (matrix != null) return matrix;
+        }
+
         if (this.statesEditor.isVisible())
         {
             return this.statesKeyframes.getOriginMatrix(transition);
@@ -1272,6 +1320,13 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
      *  the pair is what the drag snapshot carries as its two bone frames. */
     public Matrix4f getParentOriginMatrix(float transition)
     {
+        var tool = this.getPanelTool();
+        if (tool != null)
+        {
+            Matrix4f matrix = tool.getGizmoOrigin(transition, TransformSpace.PARENT);
+            if (matrix != null) return matrix;
+        }
+
         if (this.statesEditor.isVisible())
         {
             return this.statesKeyframes.getParentOriginMatrix(transition);
@@ -1292,12 +1347,12 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
     {
         UIContext context = this.getContext();
 
-        return this.cursor + (this.playing && context != null ? context.getTransition() : 0F);
+        return this.getCursor(context == null ? 0F : context.getTransition());
     }
 
     /**
      * Re-applies the active animation state to the previewed form at {@code tick}. Gizmo sampling
-     * (see {@link mchorse.bbs_mod.ui.utils.GizmoDrag#computeRotateAxes}) perturbs a keyframe
+     * (see {@link GizmoDrag#computeRotateAxes}) perturbs a keyframe
      * transform, which only reaches the bone matrices once the state is re-applied &mdash; the same
      * pose {@link #preFormRender} performs each frame for rendering.
      */
@@ -1317,6 +1372,12 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
     }
 
     @Override
+    public boolean isRunning()
+    {
+        return this.playing;
+    }
+
+    @Override
     public int getCursor()
     {
         return this.cursor;
@@ -1325,6 +1386,20 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
     @Override
     public void setCursor(int tick)
     {
-        this.cursor = tick;
+        this.setCursor((float) tick);
+    }
+
+    @Override
+    public float getCursor(float transition)
+    {
+        return this.cursor + (this.playing ? Math.max(this.cursorFraction, transition) : this.cursorFraction);
+    }
+
+    @Override
+    public void setCursor(float tick)
+    {
+        tick = Math.max(0F, tick);
+        this.cursor = (int) tick;
+        this.cursorFraction = tick - this.cursor;
     }
 }

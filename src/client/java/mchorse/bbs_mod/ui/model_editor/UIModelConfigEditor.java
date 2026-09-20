@@ -2,12 +2,14 @@ package mchorse.bbs_mod.ui.model_editor;
 
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.cubic.ModelInstance;
+import mchorse.bbs_mod.cubic.animation.ProceduralBone;
+import mchorse.bbs_mod.l10n.L10n;
+import mchorse.bbs_mod.cubic.data.model.CubeFace;
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.model.ArmorType;
 import mchorse.bbs_mod.cubic.model.config.ArmorSlotValue;
 import mchorse.bbs_mod.cubic.model.config.ModelConfig;
 import mchorse.bbs_mod.cubic.model.config.WeldValue;
-import mchorse.bbs_mod.cubic.weld.CubeFace;
 import mchorse.bbs_mod.cubic.weld.WeldBinding;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
@@ -27,6 +29,7 @@ import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIChoiceButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcons;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
@@ -61,6 +64,7 @@ import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -99,6 +103,7 @@ public class UIModelConfigEditor extends UIElement
         ARMOR(Icons.ARMOR_CHESTPLATE, UIKeys.MODEL_EDITOR_ARMOR),
         ITEMS(Icons.HOTBAR, UIKeys.MODEL_EDITOR_ITEMS),
         FIRST_PERSON(Icons.LOOKING, UIKeys.MODEL_EDITOR_FIRST_PERSON),
+        PROCEDURAL(Icons.PLAY, L10n.lang("bbs.ui.model_editor.procedural_tab")),
         POSES(Icons.POSE, UIKeys.MODEL_EDITOR_POSES);
 
         public final Icon icon;
@@ -120,22 +125,6 @@ public class UIModelConfigEditor extends UIElement
     private static Tab lastTab = Tab.GENERAL;
 
     private static final CubeFace[] FACES = CubeFace.values();
-
-    /* How a cube's side reads in the UI: the side picker's buttons, and the icon a weld row draws in
-     * place of the side's name. Both are indexed by {@link CubeFace}, so the order is the enum's. */
-    private static final Icon[] FACE_ICONS = {Icons.FORWARD, Icons.BACKWARD, Icons.ARROW_RIGHT, Icons.ARROW_LEFT, Icons.ARROW_UP, Icons.ARROW_DOWN};
-    private static final IKey[] FACE_LABELS = {
-        UIKeys.MODEL_EDITOR_FACE_FRONT, UIKeys.MODEL_EDITOR_FACE_BACK, UIKeys.MODEL_EDITOR_FACE_RIGHT,
-        UIKeys.MODEL_EDITOR_FACE_LEFT, UIKeys.MODEL_EDITOR_FACE_TOP, UIKeys.MODEL_EDITOR_FACE_BOTTOM
-    };
-
-    /** The icon a side is shown by; null when the name doesn't name a side (an unset face). */
-    static Icon faceIcon(String face)
-    {
-        CubeFace value = CubeFace.fromName(face);
-
-        return value == null ? null : FACE_ICONS[value.ordinal()];
-    }
 
     /* The role dots of the bone tree: rightmost, a mirror bone is set; next to it, a picking override. */
     private static final int MARKER_MIRROR = Colors.A100 | Colors.CYAN;
@@ -164,6 +153,8 @@ public class UIModelConfigEditor extends UIElement
 
     /* The bodies refilled per model or per list change. Every body made by body() is listed here. */
     private final List<UIElement> bodies = new ArrayList<>();
+    private UIElement proceduralBody;
+    private int proceduralPreview;
     private UIElement generalBody;
     private UIElement renderBody;
     private UIElement sizeBody;
@@ -229,6 +220,7 @@ public class UIModelConfigEditor extends UIElement
     {
         UIModelEditorRenderer renderer = this.modelPanel.renderer;
 
+        renderer.setProceduralPreview(lastTab == Tab.PROCEDURAL ? this.proceduralPreview : -1);
         renderer.setFirstPerson(lastTab == Tab.FIRST_PERSON);
         renderer.setEquipment(lastTab == Tab.ARMOR, lastTab == Tab.ITEMS);
         renderer.getEntity().setSneaking(lastTab == Tab.POSES && !this.defaultPose);
@@ -316,6 +308,7 @@ public class UIModelConfigEditor extends UIElement
     /** Open a page: it's the one shown, and the preview follows it. */
     private void openTab(Tab tab)
     {
+        if (tab == Tab.PROCEDURAL && this.data != null) this.fillProcedural();
         this.showPage(tab);
         this.modelPanel.refreshPreview();
     }
@@ -385,6 +378,9 @@ public class UIModelConfigEditor extends UIElement
 
         this.sections = new UISection[] {this.warningsSection, this.generalSection, this.renderSection, this.sizeSection, this.lookAtSection};
         this.page(Tab.GENERAL).add(this.sections);
+
+        this.proceduralBody = this.body();
+        this.page(Tab.PROCEDURAL).add(this.proceduralBody);
 
         /* Bones: the tree with the picked bone's settings under it — no header, it IS the page. The tree
          * takes whatever height the page has left after the rest; the ask is a floor, not the wish. */
@@ -584,6 +580,7 @@ public class UIModelConfigEditor extends UIElement
         try
         {
             this.fillGeneral();
+            this.fillProcedural();
             this.fillLookAt();
             this.fillItems();
             this.fillArmor();
@@ -655,6 +652,70 @@ public class UIModelConfigEditor extends UIElement
         page.scroll.clamp();
     }
 
+    private void fillProcedural()
+    {
+        this.proceduralBody.removeAll();
+        this.proceduralBody.add(this.toggle(UIKeys.MODEL_EDITOR_PROCEDURAL, () -> this.data.procedural, this.modelPanel::refresh));
+        this.proceduralBody.add(new UIButton(L10n.lang("bbs.ui.model_editor.procedural_detect"), (b) ->
+        {
+            Map<String, String> detected = new LinkedHashMap<>();
+            for (ProceduralBone role : ProceduralBone.values())
+            {
+                detected.put(role.id, role.detect(this.instance().getModel()));
+            }
+            this.data.proceduralBones.set(detected);
+            this.fillProcedural();
+        }));
+        this.proceduralBody.add(new UIButton(L10n.lang("bbs.ui.model_editor.procedural_legacy"), (b) ->
+        {
+            this.data.proceduralBones.set(new LinkedHashMap<>());
+            this.fillProcedural();
+        }));
+
+        for (ProceduralBone role : ProceduralBone.values())
+        {
+            UIBonePicker picker = this.bonePicker(
+                () -> role.resolve(this.instance().getModel(), this.data.proceduralBones.get()),
+                (bone) -> this.assignProceduralBone(role, bone), this::fillProcedural, UIKeys.GENERAL_NONE);
+            this.proceduralBody.add(UI.labelRow(L10n.lang("bbs.ui.model_editor.procedural_role_" + role.id), picker));
+        }
+
+        this.proceduralBody.add(UI.label(L10n.lang("bbs.ui.model_editor.procedural_preview")));
+        List<IKey> movements = List.of(
+            L10n.lang("bbs.ui.model_editor.procedural_idle"), L10n.lang("bbs.ui.model_editor.procedural_walk"),
+            L10n.lang("bbs.ui.model_editor.procedural_look"), L10n.lang("bbs.ui.model_editor.procedural_attack"),
+            L10n.lang("bbs.ui.model_editor.procedural_swim"));
+        this.proceduralBody.add(new UIChoiceButton<Integer>(List.of(0, 1, 2, 3, 4), (index) -> Icons.PLAY, movements::get)
+            .setValue(this.proceduralPreview).callback((index) ->
+            {
+                this.proceduralPreview = index;
+                this.modelPanel.syncPreview();
+            }));
+        if (this.instance().cemAnimation != null && this.data.cemAnimation.get())
+        {
+            this.proceduralBody.add(UI.label(L10n.lang("bbs.ui.model_editor.procedural_cem")));
+        }
+        this.resizePage(Tab.PROCEDURAL);
+    }
+
+    private void assignProceduralBone(ProceduralBone role, String bone)
+    {
+        Map<String, String> assignments = new LinkedHashMap<>(this.data.proceduralBones.get());
+        /* A bone has one role: explicitly release any other role currently using it. */
+        if (!bone.isEmpty())
+        {
+            for (ProceduralBone other : ProceduralBone.values())
+            {
+                if (other != role && bone.equals(other.resolve(this.instance().getModel(), assignments)))
+                {
+                    assignments.put(other.id, "");
+                }
+            }
+        }
+        assignments.put(role.id, bone);
+        this.data.proceduralBones.set(assignments);
+    }
+
     private void fillGeneral()
     {
         ModelConfig config = this.data;
@@ -678,7 +739,6 @@ public class UIModelConfigEditor extends UIElement
 
         this.renderBody.removeAll();
         this.renderBody.add(
-            this.toggle(UIKeys.MODEL_EDITOR_PROCEDURAL, () -> this.data.procedural, this.modelPanel::refresh),
             this.toggle(UIKeys.MODEL_EDITOR_CULLING, () -> this.data.culling, null),
             this.toggle(UIKeys.MODEL_EDITOR_ON_CPU, () -> this.data.onCpu, this.modelPanel::refresh)
         );
@@ -1360,6 +1420,11 @@ public class UIModelConfigEditor extends UIElement
      */
     private UIBonePicker bonePicker(Supplier<String> get, Consumer<String> set, Runnable onChange)
     {
+        return this.bonePicker(get, set, onChange, UIKeys.MODEL_EDITOR_PICK_BONE);
+    }
+
+    private UIBonePicker bonePicker(Supplier<String> get, Consumer<String> set, Runnable onChange, IKey emptyLabel)
+    {
         UIBonePicker picker = new UIBonePicker()
         {
             @Override
@@ -1378,7 +1443,7 @@ public class UIModelConfigEditor extends UIElement
         {
             set.accept(bone);
             onChange.run();
-        }, UIKeys.MODEL_EDITOR_PICK_BONE);
+        }, emptyLabel);
         picker.menu((menu) ->
         {
             if (this.instance() != null)
@@ -1401,7 +1466,7 @@ public class UIModelConfigEditor extends UIElement
 
         for (int i = 0; i < FACES.length; i++)
         {
-            icons.add(FACE_ICONS[i], FACE_LABELS[i]);
+            icons.add(ModelFaces.icon(FACES[i]), ModelFaces.label(FACES[i]));
         }
 
         CubeFace current = CubeFace.fromName(value.get());

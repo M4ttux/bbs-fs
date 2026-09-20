@@ -11,6 +11,7 @@ import mchorse.bbs_mod.ui.film.IUIClipsDelegate;
 import mchorse.bbs_mod.ui.film.UIClipsPanel;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
 import mchorse.bbs_mod.ui.film.utils.keyframes.UIFilmKeyframes;
+import mchorse.bbs_mod.ui.film.utils.shader.ShaderCurvePicker;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
@@ -42,13 +43,21 @@ public class UICurveClip extends UIClip<CurveClip>
 
     public static void offerCurveKeys(UIContext context, List<String> existing, Consumer<String> callback)
     {
+        if (!ShaderCurvePicker.open(context, existing, callback))
+        {
+            offerCurveKeyList(context, existing, callback);
+        }
+    }
+
+    public static void offerCurveKeyList(UIContext context, List<String> existing, Consumer<String> callback)
+    {
         List<Label<String>> list = new ArrayList<>();
         String language = BBSModClient.getLanguageKey();
         Map<String, String> languageMap = BBSRendering.getShadersLanguageMap(language);
 
         for (ShaderCurves.ShaderVariable value : ShaderCurves.variableMap.values())
         {
-            if (existing.contains(value.name))
+            if (existing.contains(CurveClip.SHADER_CURVES_PREFIX + value.name))
             {
                 continue;
             }
@@ -116,7 +125,7 @@ public class UICurveClip extends UIClip<CurveClip>
                 });
             }).label(UIKeys.CAMERA_PANELS_CURVE_ADD);
 
-            UIKeyframeSheet sheet = this.keyframes.view.getDopeSheet().getTrackSheet(this.getContext().mouseY);
+            UIKeyframeSheet sheet = this.keyframes.view.getDopeSheet().getSheet(this.getContext().mouseY);
 
             menu.icon(MenuVerb.REMOVE, () ->
             {

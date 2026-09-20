@@ -1,7 +1,9 @@
 package mchorse.bbs_mod.film;
 
+import mchorse.bbs_mod.api.client.events.FilmGizmoEvents;
+import mchorse.bbs_mod.api.client.events.FormPoseEvents;
+
 import com.mojang.blaze3d.systems.RenderSystem;
-import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.data.Point;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.renderer.DeathPose;
@@ -22,6 +24,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.ui.film.replays.UIReplayPropTransform;
 import mchorse.bbs_mod.ui.utils.Gizmo;
+import mchorse.bbs_mod.ui.utils.GizmoSize;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.StringUtils;
@@ -51,6 +54,8 @@ public class FilmEntityRenderer
 {
     public static void renderEntity(FilmControllerContext context)
     {
+        FormPoseEvents.ACTOR_BEFORE.invoker().prepare(context);
+
         Map<String, IEntity> entities = context.entities;
         IEntity entity = context.entity;
         Camera camera = context.camera;
@@ -176,7 +181,7 @@ public class FilmEntityRenderer
              * placed on matrices of their own and so live past the pop below. Both halves read
              * the one target, so they cannot disagree about which of the three it is. */
             if (gizmoTarget.boneOrNull() != null) renderAxes(gizmoTarget.bone(), gizmoTarget.space(), context.gizmoView, context.map, form, entity, transition, stack, gizmoFrame);
-            if (context.bone2 != null && context.map == null) renderPreviewAxes(context.bone2, context.space2, form, entity, transition, stack, gizmoFrame);
+            if (context.bone2 != null && context.map == null) renderPreviewAxes(context.bone2, context.space2, form, entity, transition, stack, gizmoFrame, context.gizmoViewportHeight);
         }
 
         stack.pop();
@@ -291,7 +296,7 @@ public class FilmEntityRenderer
     /** The replay's "axes preview" (a secondary bone): plain non-interactive axes, not the
      *  editing gizmo. Resolved and distance-scaled exactly like {@link #renderAxes}, since
      *  the whole point is that it matches the gizmo's axes. */
-    private static void renderPreviewAxes(String bone, TransformSpace space, Form form, IEntity entity, float transition, MatrixStack stack, FormFrameCache frame)
+    private static void renderPreviewAxes(String bone, TransformSpace space, Form form, IEntity entity, float transition, MatrixStack stack, FormFrameCache frame, float viewportHeight)
     {
         String mapKey = FilmMatrices.boneMapKey(bone);
         Form root = FormUtils.getRoot(form);
@@ -316,10 +321,7 @@ public class FilmEntityRenderer
         stack.push();
         MatrixStackUtils.multiply(stack, matrix);
 
-        Vector3f cameraRelative = stack.peek().getPositionMatrix().getTranslation(new Vector3f());
-        Matrix4f proj = RenderSystem.getProjectionMatrix();
-        float fov = proj.m33() == 0 ? (float) (2.0 * Math.atan(1.0 / proj.m11())) : BBSSettings.getFov();
-        float distanceScale = BBSSettings.getGizmoDistanceScale(cameraRelative.length(), fov);
+        float distanceScale = GizmoSize.getScale(new Matrix4f(RenderSystem.getModelViewMatrix()).mul(stack.peek().getPositionMatrix()), RenderSystem.getProjectionMatrix(), viewportHeight);
 
         stack.scale(distanceScale, distanceScale, distanceScale);
         Draw.coolerAxes(stack, 0.25F, 0.008F);
@@ -394,6 +396,8 @@ public class FilmEntityRenderer
      */
     private static void renderReplayGizmo(IEntity entity, double cx, double cy, double cz, float transition, TransformSpace space, Matrix4f gizmoView, StencilMap stencilMap, MatrixStack stack)
     {
+        if (FilmGizmoEvents.DRAW.invoker().draw(FilmControllerContext.instance, stencilMap, stack)) return;
+
         stack.push();
         MatrixStackUtils.multiply(stack, FilmMatrices.getMatrixForRenderWithRotation(entity, cx, cy, cz, transition));
 

@@ -6,48 +6,64 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.client.gl.GlUniform;
 import net.minecraft.client.gl.PostEffectPass;
-import net.minecraft.client.gl.PostEffectProcessor;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.gl.SimpleFramebuffer;
+import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 
 /**
- * Blurs what is on screen under an overlay panel, on top of the dimming — the way the game's
- * own menus do it from 1.21 on. Two passes of vanilla's own blur program over the main
- * framebuffer, run at the moment the first overlay of the frame is about to paint its dim:
- * everything drawn so far, world and interface alike, is what gets blurred, and the overlay
- * lands sharp on top.
- *
- * <p>The passes are added by hand rather than read from a json, so the radius is a uniform
- * set every frame from the settings, not a number baked into a file.</p>
- *
- * <p>Once per frame, with one exception: a second overlay over the first would only blur the
- * blur, but the world under a panel and the panel under an overlay are two different pictures,
- * and each gets its own pass — see {@link #applyUnder()}.</p>
+ * Dual Kawase background blur, adapted from quaIett's bbs-refreshed-addon.
+ * See assets/bbs/licenses/bbs-refreshed-addon.txt for the MIT license.
+ * Downsample with five taps, then upsample with eight taps using linear filtering.
+ * PostEffectPass on 1.21.1 requires programs in the minecraft namespace.
  */
 public class InterfaceBlur
 {
-    private static final Identifier EFFECT = Identifier.of("bbs", "shaders/post/interface_blur.json");
+    private static final String DOWN = "bbs_kawase_down";
+    private static final String UP = "bbs_kawase_up";
 
-    private static PostEffectProcessor processor;
-    private static PostEffectPass horizontal;
-    private static PostEffectPass vertical;
+    private static final int MAX_LEVELS = 5;
+    /** A level smaller than this on either side is not worth a pass (and would smear the edges). */
+    private static final int MIN_SIZE = 16;
+
+    /** Offsets the {@link #SIGMA} table was sampled at. */
+    private static final float[] OFFSETS = {0.5F, 1.0F, 1.5F, 2.0F, 2.5F, 3.0F};
+    /** Offsets past this start to show the tap pattern; a stronger blur takes one more level instead. */
+    private static final float MAX_CLEAN_OFFSET = 1.5F;
+    private static final float MIN_OFFSET = 0.25F;
+
+    /**
+     * Blur strength per level count (rows, 1..5) and offset (columns, {@link #OFFSETS}): the standard deviation
+     * along one axis of the whole chain's impulse response, in full-resolution pixels. Simulated with bilinear
+     * sampling and averaged over two impulse phases.
+     */
+    private static final float[][] SIGMA = {
+        {0.96F, 1.44F, 2.01F, 2.61F, 3.14F, 3.71F},
+        {2.14F, 3.23F, 4.50F, 5.85F, 7.04F, 8.35F},
+        {4.39F, 6.61F, 9.33F, 11.98F, 14.34F, 17.02F},
+        {8.83F, 13.31F, 18.95F, 24.10F, 28.75F, 34.08F},
+        {17.68F, 26.65F, 38.17F, 48.27F, 57.48F, 68.07F},
+    };
+
+    /** chain[0] is main (not owned); chain[i] is main downsampled i times. */
+    private static Framebuffer[] chain;
+    /** down[i]: chain[i] into chain[i + 1]; up[i]: chain[i + 1] into chain[i]. */
+    private static PostEffectPass[] down;
+    private static PostEffectPass[] up;
+    private static int levels;
     private static int width;
     private static int height;
 
-    /** Whether this frame was blurred already. */
+    /** A failed shader is reported once, rather than once per frame. */
+    private static boolean broken;
     private static boolean applied;
 
-    /** Set when the effect failed to build, so a broken shader costs one stack trace, not one per frame. */
-    private static boolean broken;
-
-    /** Called where the frame's interface rendering starts. */
     public static void beginFrame()
     {
         applied = false;
     }
 
-    /** Blur the screen as it stands, unless it was blurred this frame already or the setting is off. */
+    /** Blur once per frame, retaining the existing background and overlay settings. */
     public static void apply()
     {
         if (applied || broken || !BBSSettings.interfaceBlur.get())
@@ -56,55 +72,74 @@ public class InterfaceBlur
         }
 
         applied = true;
+        render(BBSSettings.interfaceBlurRadius.get());
+    }
 
+    /** An overlay over a dashboard panel may blur the panel separately from the world. */
+    public static void applyUnder()
+    {
+        apply();
+        applied = false;
+    }
+
+    private static void render(int radius)
+    {
         MinecraftClient mc = MinecraftClient.getInstance();
         Framebuffer main = mc.getFramebuffer();
 
-        if (processor == null || main.textureWidth != width || main.textureHeight != height)
+        if (chain == null || chain[0] != main || main.textureWidth != width || main.textureHeight != height)
         {
             if (!rebuild(mc, main))
             {
+                main.beginWrite(true);
+
                 return;
             }
         }
 
-        float radius = BBSSettings.interfaceBlurRadius.get();
+        /* BBS's box of half-width R is 2R + 1 wide: sigma^2 = ((2R + 1)^2 - 1) / 12 */
+        float target = (float) Math.sqrt(radius * (radius + 1) / 3D);
 
-        direct(horizontal, 1F, 0F, radius);
-        direct(vertical, 0F, 1F, radius);
+        int n = pickLevels(target);
+        float offset = pickOffset(n, target);
 
         int depthFunction = GL11.glGetInteger(GL11.GL_DEPTH_FUNC);
         boolean depthTest = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
         boolean depthMask = GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK);
+        int mainFilter = main.texFilter;
 
         try
         {
-            /* Blur only changes color. In particular, the final pass must neither clear the
-             * main target's depth nor write its fullscreen quad into it: subsequent GUI text
-             * and panels may enable depth testing. */
+            /* Blur only changes color: the passes clear their output, and that must not wipe main's depth */
             RenderSystem.disableDepthTest();
             RenderSystem.depthMask(false);
-
-            /* The passes replace what they draw over, they do not blend into it - and blending is
-             * on by the time a second blur runs in the same frame (the first one leaves it on for
-             * the interface). With it on, the second pass writes a fragment whose alpha is zero
-             * (see the mask below), which lands as nothing at all and leaves the buffer black. */
             RenderSystem.disableBlend();
 
-            /* Colour only: box_blur averages the whole vec4, alpha included, and the interface
-             * is drawn into a buffer whose alpha is not 1 everywhere - averaging it down turns
-             * the blurred picture dark in patches. The pre-1.21.1 blur program guarded against
-             * exactly this by summing alpha instead of averaging it; masking the channel does
-             * the same thing without a shader of our own (a pass never touches the mask). */
-            RenderSystem.colorMask(true, true, true, false);
-            processor.render(0F);
+            main.setTexFilter(GL11.GL_LINEAR);
+
+            for (int i = 0; i < n; i++)
+            {
+                run(down[i], offset);
+
+                if (i == 0)
+                {
+                    main.setTexFilter(mainFilter);
+                }
+            }
+
+            for (int i = n - 1; i >= 0; i--)
+            {
+                run(up[i], offset);
+            }
         }
         finally
         {
-            RenderSystem.colorMask(true, true, true, true);
+            if (main.texFilter != mainFilter)
+            {
+                main.setTexFilter(mainFilter);
+            }
 
-            /* PostEffectPass leaves GL_LEQUAL behind, but BBS paints its UI with GL_ALWAYS.
-             * Restore the caller's depth state as well as the target and GUI blending. */
+            /* PostEffectPass leaves GL_LEQUAL behind, but BBS paints its UI with GL_ALWAYS */
             main.beginWrite(true);
             RenderSystem.depthMask(depthMask);
             RenderSystem.depthFunc(depthFunction);
@@ -124,54 +159,116 @@ public class InterfaceBlur
         }
     }
 
-    /**
-     * The world under a panel that paints its own background over it (morphing, the texture
-     * manager). Blurred before the panel is drawn, and the frame is left open: an overlay that
-     * comes up over the panel later blurs the panel in its turn — that is a different picture,
-     * not the same one twice.
-     */
-    public static void applyUnder()
+    private static void run(PostEffectPass pass, float offset)
     {
-        apply();
-        applied = false;
-    }
+        GlUniform uniform = pass.getProgram().getUniformByName("Offset");
 
-    private static void direct(PostEffectPass pass, float x, float y, float radius)
-    {
-        GlUniform dir = pass.getProgram().getUniformByName("BlurDir");
-        GlUniform size = pass.getProgram().getUniformByName("Radius");
-
-        if (dir != null)
+        if (uniform != null)
         {
-            dir.set(x, y);
+            uniform.set(offset);
         }
 
-        if (size != null)
-        {
-            size.set(radius);
-        }
+        pass.render(0F);
     }
 
-    /**
-     * The processor holds targets of the screen's size, so a resized window means a new one.
-     * The json only names the intermediate target; the two passes are added here.
-     */
+    /** The fewest levels that reach {@code target} without pushing the offset past {@link #MAX_CLEAN_OFFSET}. */
+    private static int pickLevels(float target)
+    {
+        for (int n = 1; n < levels; n++)
+        {
+            if (sigma(n, MAX_CLEAN_OFFSET) >= target)
+            {
+                return n;
+            }
+        }
+
+        return levels;
+    }
+
+    /** Invert the (piecewise linear) sigma row of {@code n} levels; extrapolates past either end of the table. */
+    private static float pickOffset(int n, float target)
+    {
+        float[] row = SIGMA[n - 1];
+        int last = OFFSETS.length - 1;
+        int i = 0;
+
+        while (i < last - 1 && row[i + 1] < target)
+        {
+            i++;
+        }
+
+        float t = (target - row[i]) / (row[i + 1] - row[i]);
+        float offset = OFFSETS[i] + t * (OFFSETS[i + 1] - OFFSETS[i]);
+
+        return Math.max(MIN_OFFSET, Math.min(OFFSETS[last], offset));
+    }
+
+    private static float sigma(int n, float offset)
+    {
+        float[] row = SIGMA[n - 1];
+
+        for (int i = 0; i < OFFSETS.length - 1; i++)
+        {
+            if (offset <= OFFSETS[i + 1])
+            {
+                float t = (offset - OFFSETS[i]) / (OFFSETS[i + 1] - OFFSETS[i]);
+
+                return row[i] + t * (row[i + 1] - row[i]);
+            }
+        }
+
+        return row[row.length - 1];
+    }
+
+    /** The chain holds targets sized off the screen, so a resized window means a new one. */
     private static boolean rebuild(MinecraftClient mc, Framebuffer main)
     {
         close();
 
         try
         {
-            processor = new PostEffectProcessor(mc.getTextureManager(), mc.getResourceManager(), main, EFFECT);
+            int w = main.textureWidth;
+            int h = main.textureHeight;
+            int count = 0;
 
-            Framebuffer swap = processor.getSecondaryTarget("swap");
+            while (count < MAX_LEVELS && w / 2 >= MIN_SIZE && h / 2 >= MIN_SIZE)
+            {
+                w /= 2;
+                h /= 2;
+                count++;
+            }
 
-            /* Since 1.21.1 the blur program is called box_blur, and the pass takes its texture
-             * filter explicitly - vanilla's own blur effect runs box_blur with linear on. */
-            horizontal = processor.addPass("box_blur", main, swap, true);
-            vertical = processor.addPass("box_blur", swap, main, true);
-            processor.setupDimensions(main.textureWidth, main.textureHeight);
+            if (count == 0)
+            {
+                return false;
+            }
 
+            chain = new Framebuffer[count + 1];
+            down = new PostEffectPass[count];
+            up = new PostEffectPass[count];
+            chain[0] = main;
+
+            w = main.textureWidth;
+            h = main.textureHeight;
+
+            for (int i = 1; i <= count; i++)
+            {
+                w /= 2;
+                h /= 2;
+
+                Framebuffer target = new SimpleFramebuffer(w, h, false, MinecraftClient.IS_SYSTEM_MAC);
+
+                target.setTexFilter(GL11.GL_LINEAR);
+                chain[i] = target;
+            }
+
+            for (int i = 0; i < count; i++)
+            {
+                down[i] = pass(mc, DOWN, chain[i], chain[i + 1]);
+                up[i] = pass(mc, UP, chain[i + 1], chain[i]);
+            }
+
+            levels = count;
             width = main.textureWidth;
             height = main.textureHeight;
 
@@ -188,15 +285,38 @@ public class InterfaceBlur
         }
     }
 
+    private static PostEffectPass pass(MinecraftClient mc, String program, Framebuffer input, Framebuffer output) throws Exception
+    {
+        PostEffectPass pass = new PostEffectPass(mc.getResourceManager(), program, input, output, true);
+
+        pass.setProjectionMatrix(new Matrix4f().setOrtho(0F, output.textureWidth, 0F, output.textureHeight, 0.1F, 1000F));
+
+        return pass;
+    }
+
     private static void close()
     {
-        if (processor != null)
+        if (down != null)
         {
-            processor.close();
+            for (int i = 0; i < down.length; i++)
+            {
+                if (down[i] != null) down[i].close();
+                if (up[i] != null) up[i].close();
+            }
         }
 
-        processor = null;
-        horizontal = null;
-        vertical = null;
+        if (chain != null)
+        {
+            /* chain[0] is main, which belongs to the game */
+            for (int i = 1; i < chain.length; i++)
+            {
+                if (chain[i] != null) chain[i].delete();
+            }
+        }
+
+        chain = null;
+        down = null;
+        up = null;
+        levels = 0;
     }
 }

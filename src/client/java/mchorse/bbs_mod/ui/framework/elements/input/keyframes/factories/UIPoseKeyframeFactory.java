@@ -281,7 +281,7 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         }
 
         @Override
-        protected Transform getAutoKeyTransform(int tick)
+        protected Transform getAutoKeyTransform(float tick)
         {
             UIKeyframeSheet sheet = this.editor.editor.getGraph().getSheet(this.editor.keyframe);
             Keyframe<Pose> target = sheet == null ? null : sheet.ensureKeyframe(tick);
@@ -298,7 +298,7 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         @Override
         protected void reset()
         {
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.list.getCurrent(), (poseT) ->
+            this.applyToTarget((poseT) ->
             {
                 poseT.translate.set(0F, 0F, 0F);
                 poseT.scale.set(1F, 1F, 1F);

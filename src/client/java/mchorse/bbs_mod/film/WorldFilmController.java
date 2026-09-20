@@ -29,6 +29,11 @@ public class WorldFilmController extends BaseFilmController
         this.context.clips = film.camera;
     }
 
+    public CameraClipContext getContext()
+    {
+        return this.context;
+    }
+
     @Override
     public Map<String, Integer> getActors()
     {
@@ -66,12 +71,13 @@ public class WorldFilmController extends BaseFilmController
         int tick = Math.max(this.tick, 0);
         List<Clip> clips = this.context.clips.getClips(tick);
 
+        this.context.clipData.clear();
+
         if (clips.isEmpty())
         {
             return;
         }
 
-        this.context.clipData.clear();
         this.context.setup(tick, context.tickCounter().getTickDelta(false));
 
         for (Clip clip : clips)
