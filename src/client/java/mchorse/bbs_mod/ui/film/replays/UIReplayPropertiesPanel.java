@@ -49,6 +49,14 @@ public class UIReplayPropertiesPanel extends UIElement
     public UITrackpad looping;
     public UIToggle actor;
     public UIToggle actorPickup;
+    public UIToggle dropItemsOnDeath;
+    public UIElement dropVelocityGroup;
+    public UITrackpad dropVelocityMinX;
+    public UITrackpad dropVelocityMaxX;
+    public UITrackpad dropVelocityMinY;
+    public UITrackpad dropVelocityMaxY;
+    public UITrackpad dropVelocityMinZ;
+    public UITrackpad dropVelocityMaxZ;
     public UIToggle fp;
     public UIToggle relative;
     public UITrackpad relativeOffsetX;
@@ -125,6 +133,44 @@ public class UIReplayPropertiesPanel extends UIElement
         this.actor.tooltip(UIKeys.FILM_REPLAY_ACTOR_TOOLTIP);
         this.actorPickup = this.bound(new UIToggle(UIKeys.FILM_REPLAY_ACTOR_PICKUP, (b) -> this.edit((replay) -> replay.actorPickup.set(b.getValue()))), (r) -> this.actorPickup.setValue(r.actorPickup.get()));
         this.actorPickup.tooltip(UIKeys.FILM_REPLAY_ACTOR_PICKUP_TOOLTIP);
+        this.dropVelocityMinX = this.bound(new UITrackpad((v) -> this.edit((replay) -> replay.dropVelocityMinX.set(v.floatValue()))), (r) -> this.dropVelocityMinX.setValue(r.dropVelocityMinX.get()));
+        this.dropVelocityMinX.tooltip(UIKeys.FILM_REPLAY_DROP_VELOCITY_MIN_X);
+        this.dropVelocityMaxX = this.bound(new UITrackpad((v) -> this.edit((replay) -> replay.dropVelocityMaxX.set(v.floatValue()))), (r) -> this.dropVelocityMaxX.setValue(r.dropVelocityMaxX.get()));
+        this.dropVelocityMaxX.tooltip(UIKeys.FILM_REPLAY_DROP_VELOCITY_MAX_X);
+
+        this.dropVelocityMinY = this.bound(new UITrackpad((v) -> this.edit((replay) -> replay.dropVelocityMinY.set(v.floatValue()))), (r) -> this.dropVelocityMinY.setValue(r.dropVelocityMinY.get()));
+        this.dropVelocityMinY.tooltip(UIKeys.FILM_REPLAY_DROP_VELOCITY_MIN_Y);
+        this.dropVelocityMaxY = this.bound(new UITrackpad((v) -> this.edit((replay) -> replay.dropVelocityMaxY.set(v.floatValue()))), (r) -> this.dropVelocityMaxY.setValue(r.dropVelocityMaxY.get()));
+        this.dropVelocityMaxY.tooltip(UIKeys.FILM_REPLAY_DROP_VELOCITY_MAX_Y);
+
+        this.dropVelocityMinZ = this.bound(new UITrackpad((v) -> this.edit((replay) -> replay.dropVelocityMinZ.set(v.floatValue()))), (r) -> this.dropVelocityMinZ.setValue(r.dropVelocityMinZ.get()));
+        this.dropVelocityMinZ.tooltip(UIKeys.FILM_REPLAY_DROP_VELOCITY_MIN_Z);
+        this.dropVelocityMaxZ = this.bound(new UITrackpad((v) -> this.edit((replay) -> replay.dropVelocityMaxZ.set(v.floatValue()))), (r) -> this.dropVelocityMaxZ.setValue(r.dropVelocityMaxZ.get()));
+        this.dropVelocityMaxZ.tooltip(UIKeys.FILM_REPLAY_DROP_VELOCITY_MAX_Z);
+
+        this.dropVelocityGroup = UI.column(5,
+            UI.label(UIKeys.FILM_REPLAY_DROP_VELOCITY),
+            UI.row(this.dropVelocityMinX, this.dropVelocityMaxX),
+            UI.row(this.dropVelocityMinY, this.dropVelocityMaxY),
+            UI.row(this.dropVelocityMinZ, this.dropVelocityMaxZ)
+        );
+
+        this.dropItemsOnDeath = this.bound(new UIToggle(UIKeys.FILM_REPLAY_DROP_ITEMS_ON_DEATH, (b) ->
+        {
+            this.edit((replay) -> replay.dropItemsOnDeath.set(b.getValue()));
+            this.dropVelocityGroup.setVisible(b.getValue());
+            this.properties.resize();
+        }), (r) ->
+        {
+            this.dropItemsOnDeath.setValue(r.dropItemsOnDeath.get());
+            boolean visible = r.dropItemsOnDeath.get();
+            if (this.dropVelocityGroup.isVisible() != visible)
+            {
+                this.dropVelocityGroup.setVisible(visible);
+                this.properties.resize();
+            }
+        });
+        this.dropItemsOnDeath.tooltip(UIKeys.FILM_REPLAY_DROP_ITEMS_ON_DEATH_TOOLTIP);
         this.fp = new UIToggle(UIKeys.FILM_REPLAY_FP, (b) ->
         {
             if (filmPanel.getData() != null)
@@ -175,7 +221,7 @@ public class UIReplayPropertiesPanel extends UIElement
         UISection other = new UISection(UIKeys.FILM_REPLAY_SECTION_OTHER);
 
         other.fields.add(
-            this.looping, this.actor, this.actorPickup, this.fp,
+            this.looping, this.actor, this.actorPickup, this.dropItemsOnDeath, this.dropVelocityGroup, this.fp,
             this.relative, UI.row(this.relativeOffsetX, this.relativeOffsetY, this.relativeOffsetZ),
             this.axesPreview, this.pickAxesPreviewBone
         );
@@ -230,6 +276,7 @@ public class UIReplayPropertiesPanel extends UIElement
         if (replay != null)
         {
             this.pickEdit.setForm(replay.form.get());
+            this.dropVelocityGroup.setVisible(replay.dropItemsOnDeath.get());
         }
     }
 }

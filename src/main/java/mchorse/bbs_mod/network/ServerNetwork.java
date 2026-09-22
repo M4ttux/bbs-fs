@@ -555,6 +555,10 @@ public class ServerNetwork
 
                 if (actionPlayer != null)
                 {
+                    if (tick <= 0)
+                    {
+                        actionPlayer.ensureActorsAlive();
+                    }
                     actionPlayer.goTo(tick);
                     actionPlayer.playing = true;
                 }
@@ -599,6 +603,7 @@ public class ServerNetwork
                      * restart got from dying has to be done in place: blocks the film placed go
                      * away, and the walk below puts back exactly what belongs up to the cursor. */
                     actions.restoreDamage(actionPlayer.getWorld());
+                    actionPlayer.ensureActorsAlive();
                 }
 
                 if (actionPlayer != null)

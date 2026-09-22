@@ -407,6 +407,15 @@ public class UIKeys
     public static final IKey FILM_REPLAY_ACTOR_TOOLTIP = L10n.lang("bbs.ui.film.replay.actor-tooltip");
     public static final IKey FILM_REPLAY_ACTOR_PICKUP = L10n.lang("bbs.ui.film.replay.actor-pickup");
     public static final IKey FILM_REPLAY_ACTOR_PICKUP_TOOLTIP = L10n.lang("bbs.ui.film.replay.actor-pickup-tooltip");
+    public static final IKey FILM_REPLAY_DROP_ITEMS_ON_DEATH = L10n.lang("bbs.ui.film.replay.drop_items_on_death");
+    public static final IKey FILM_REPLAY_DROP_ITEMS_ON_DEATH_TOOLTIP = L10n.lang("bbs.ui.film.replay.drop_items_on_death-tooltip");
+    public static final IKey FILM_REPLAY_DROP_VELOCITY = L10n.lang("bbs.ui.film.replay.drop_velocity");
+    public static final IKey FILM_REPLAY_DROP_VELOCITY_MIN_X = L10n.lang("bbs.ui.film.replay.drop_velocity_min_x");
+    public static final IKey FILM_REPLAY_DROP_VELOCITY_MAX_X = L10n.lang("bbs.ui.film.replay.drop_velocity_max_x");
+    public static final IKey FILM_REPLAY_DROP_VELOCITY_MIN_Y = L10n.lang("bbs.ui.film.replay.drop_velocity_min_y");
+    public static final IKey FILM_REPLAY_DROP_VELOCITY_MAX_Y = L10n.lang("bbs.ui.film.replay.drop_velocity_max_y");
+    public static final IKey FILM_REPLAY_DROP_VELOCITY_MIN_Z = L10n.lang("bbs.ui.film.replay.drop_velocity_min_z");
+    public static final IKey FILM_REPLAY_DROP_VELOCITY_MAX_Z = L10n.lang("bbs.ui.film.replay.drop_velocity_max_z");
     public static final IKey FILM_REPLAY_ANIMATION_TO_POSE_GENERATE = L10n.lang("bbs.ui.film.replay.animation_to_pose.generate");
     public static final IKey FILM_REPLAY_ANIMATION_TO_POSE_LENGTH = L10n.lang("bbs.ui.film.replay.animation_to_pose.length");
     public static final IKey FILM_REPLAY_ANIMATION_TO_POSE_ONLY_KEYFRAMES = L10n.lang("bbs.ui.film.replay.animation_to_pose.only_keyframes");

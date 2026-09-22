@@ -52,6 +52,13 @@ public class Replay extends ValueGroup
     public final ValueBoolean actor = new ValueBoolean("actor", false);
     /** Whether the actor's body sweeps up items it walks over. What it takes is given back when the film stops. */
     public final ValueBoolean actorPickup = new ValueBoolean("actor_pickup", true);
+    public final ValueBoolean dropItemsOnDeath = new ValueBoolean("drop_items_on_death", false);
+    public final ValueFloat dropVelocityMinX = new ValueFloat("drop_velocity_min_x", -0.1F);
+    public final ValueFloat dropVelocityMaxX = new ValueFloat("drop_velocity_max_x", 0.1F);
+    public final ValueFloat dropVelocityMinY = new ValueFloat("drop_velocity_min_y", 0.1F);
+    public final ValueFloat dropVelocityMaxY = new ValueFloat("drop_velocity_max_y", 0.25F);
+    public final ValueFloat dropVelocityMinZ = new ValueFloat("drop_velocity_min_z", -0.1F);
+    public final ValueFloat dropVelocityMaxZ = new ValueFloat("drop_velocity_max_z", 0.1F);
     public final ValueBoolean fp = new ValueBoolean("fp", false);
     public final ValueBoolean relative = new ValueBoolean("relative", false);
     public final ValuePoint relativeOffset = new ValuePoint("relativeOffset", new Point(0, 0, 0));
@@ -80,6 +87,13 @@ public class Replay extends ValueGroup
 
         this.add(this.actor);
         this.add(this.actorPickup);
+        this.add(this.dropItemsOnDeath);
+        this.add(this.dropVelocityMinX);
+        this.add(this.dropVelocityMaxX);
+        this.add(this.dropVelocityMinY);
+        this.add(this.dropVelocityMaxY);
+        this.add(this.dropVelocityMinZ);
+        this.add(this.dropVelocityMaxZ);
         this.add(this.fp);
         this.add(this.relative);
         this.add(this.relativeOffset);

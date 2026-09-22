@@ -205,15 +205,21 @@ public class ActionPlayer
             {
                 LivingEntity kept = previous.remove(replay.getId());
 
-                /* Kept only when it is still an actor's body: a replay that just stopped being
+                /* Kept only when it is still an actor's body AND alive: a replay that just stopped being
                  * first person leaves the player behind under the same key, and the player is
-                 * nobody's to keep driving as a puppet. */
-                if (kept instanceof ActorEntity actor && !actor.isRemoved())
+                 * nobody's to keep driving as a puppet. A dead or removed actor must be replaced. */
+                if (kept instanceof ActorEntity actor && !actor.isRemoved() && !actor.isDead())
                 {
+                    actor.setHealth(actor.getMaxHealth());
                     this.actors.put(replay.getId(), actor);
                 }
                 else
                 {
+                    if (kept != null && !kept.isPlayer())
+                    {
+                        kept.discard();
+                    }
+
                     this.actors.put(replay.getId(), this.spawnActor(replay));
                 }
             }
@@ -240,6 +246,8 @@ public class ActionPlayer
         ActorEntity actor = new ActorEntity(BBSMod.ACTOR_ENTITY, this.world);
 
         actor.setReplay(this.film.getId(), replay.getId());
+        actor.setReplay(replay);
+        actor.setCurrentTick(this.tick);
         actor.setPickUpItems(replay.actorPickup.get());
         actor.setForm(FormUtils.copy(replay.form.get()));
 
@@ -347,6 +355,17 @@ public class ActionPlayer
 
     public void apply(LivingEntity actor, Replay replay, float tick, boolean ticking)
     {
+        if (actor instanceof ActorEntity actorEntity)
+        {
+            actorEntity.setCurrentTick(tick);
+            actorEntity.setReplay(replay);
+        }
+
+        if (actor.isDead())
+        {
+            return;
+        }
+
         /* Replay-local, the way the client already reads it when it draws: a looping replay wraps
          * the film's tick into its own window. The server never wrapped, so a looping replay's body
          * stood at the unwrapped tick - off in a part of the take the loop never reaches - while
@@ -570,6 +589,55 @@ public class ActionPlayer
         }
     }
 
+    public void ensureActorsAlive()
+    {
+        boolean broadcast = false;
+        List<Replay> list = this.film.replays.getList();
+
+        for (int i = 0; i < list.size(); i++)
+        {
+            if (i == this.exception)
+            {
+                continue;
+            }
+
+            Replay replay = list.get(i);
+            boolean isActor = replay.actor.get() || replay.fp.get();
+
+            if (!isActor || !replay.enabled.get())
+            {
+                continue;
+            }
+
+            if (replay.fp.get() && this.serverPlayer != null)
+            {
+                continue;
+            }
+
+            LivingEntity current = this.actors.get(replay.getId());
+
+            if (current == null || current.isRemoved() || current.isDead())
+            {
+                if (current != null && !current.isPlayer())
+                {
+                    current.discard();
+                }
+
+                this.actors.put(replay.getId(), this.spawnActor(replay));
+                broadcast = true;
+            }
+            else
+            {
+                current.setHealth(current.getMaxHealth());
+            }
+        }
+
+        if (broadcast)
+        {
+            this.broadcastActors();
+        }
+    }
+
     public void goTo(int tick)
     {
         this.goTo(this.tick, tick);
@@ -577,6 +645,11 @@ public class ActionPlayer
 
     public void goTo(int from, int tick)
     {
+        if (from > tick || tick <= 0)
+        {
+            this.ensureActorsAlive();
+        }
+
         if (from != tick)
         {
             this.tick = from;
@@ -662,5 +735,15 @@ public class ActionPlayer
     public void toggle()
     {
         this.playing = !this.playing;
+    }
+
+    public Film getFilm()
+    {
+        return this.film;
+    }
+
+    public int getTick()
+    {
+        return this.tick;
     }
 }
