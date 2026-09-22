@@ -491,6 +491,7 @@ public class UIFilmPreview extends UIElement
         }
 
         boolean needGuides = BBSSettings.editorRuleOfThirds.get()
+            || BBSSettings.editorSafeMargins.get()
             || BBSSettings.editorCenterLines.get()
             || BBSSettings.editorCrosshair.get();
         if (needGuides)
@@ -504,6 +505,33 @@ public class UIFilmPreview extends UIElement
 
                 context.batcher.box(area.x, area.y + area.h / 3 - 1, area.x + area.w, area.y + area.h / 3, guidesColor);
                 context.batcher.box(area.x, area.y + area.h - area.h / 3, area.x + area.w, area.y + area.h - area.h / 3 + 1, guidesColor);
+            }
+
+            if (BBSSettings.editorSafeMargins.get())
+            {
+                int guidesColor = BBSSettings.editorSafeMarginsColor.get();
+
+                // Action Safe - 90% (5% margin on each edge)
+                int actionMarginX = Math.round(area.w * 0.05F);
+                int actionMarginY = Math.round(area.h * 0.05F);
+                int aL = area.x + actionMarginX, aR = area.x + area.w - actionMarginX;
+                int aT = area.y + actionMarginY, aB = area.y + area.h - actionMarginY;
+
+                context.batcher.box(aL, aT, aL + 1, aB, guidesColor);
+                context.batcher.box(aR - 1, aT, aR, aB, guidesColor);
+                context.batcher.box(aL, aT, aR, aT + 1, guidesColor);
+                context.batcher.box(aL, aB - 1, aR, aB, guidesColor);
+
+                // Title Safe - 80% (10% margin on each edge)
+                int titleMarginX = Math.round(area.w * 0.10F);
+                int titleMarginY = Math.round(area.h * 0.10F);
+                int tL = area.x + titleMarginX, tR = area.x + area.w - titleMarginX;
+                int tT = area.y + titleMarginY, tB = area.y + area.h - titleMarginY;
+
+                context.batcher.box(tL, tT, tL + 1, tB, guidesColor);
+                context.batcher.box(tR - 1, tT, tR, tB, guidesColor);
+                context.batcher.box(tL, tT, tR, tT + 1, guidesColor);
+                context.batcher.box(tL, tB - 1, tR, tB, guidesColor);
             }
 
             if (BBSSettings.editorCenterLines.get())
