@@ -324,6 +324,8 @@
 	"bbs.config.timeline.timeline_grid-comment": "Когда включено, линии линейки таймлайна продлеваются по трекам на всю высоту, образуя вертикальную сетку",
 	"bbs.config.timeline.keyframe_default_interpolation": "Интерполяция по умолчанию",
 	"bbs.config.timeline.keyframe_default_interpolation-comment": "Интерполяция, присваиваемая кейфрейму, создаваемому вручную на пустом месте — там, где раньше применялась linear. Кейфреймы, создаваемые рядом с существующими, по-прежнему наследуют интерполяцию соседа. Записанные и запечённые кейфреймы не затрагиваются.",
+	"bbs.config.timeline.path_default_interpolation": "Интерполяция пути по умолчанию",
+	"bbs.config.timeline.path_default_interpolation-comment": "Интерполяция по умолчанию, используемая для новых клипов пути",
 	"bbs.config.timeline.snap_to_film_markers": "Привязка к маркерам",
 	"bbs.config.timeline.snap_to_film_markers-comment": "Когда включено, перетаскиваемый клип привязывается к маркерам фильма",
 	"bbs.config.timeline.snap_to_markers": "Привязка к тикам",

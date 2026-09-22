@@ -332,6 +332,8 @@
 	"bbs.config.timeline.timeline_grid-comment": "When enabled, the timeline ruler's lines are extended over the tracks at full height as a vertical grid",
 	"bbs.config.timeline.keyframe_default_interpolation": "Default interpolation",
 	"bbs.config.timeline.keyframe_default_interpolation-comment": "Interpolation given to a keyframe you create by hand in an empty spot, where linear was used before. Keyframes created next to existing ones still inherit their neighbour's interpolation, as before. Recorded and baked keyframes are not affected.",
+	"bbs.config.timeline.path_default_interpolation": "Default path interpolation",
+	"bbs.config.timeline.path_default_interpolation-comment": "Default interpolation used for new path clips",
 	"bbs.config.timeline.snap_to_film_markers": "Snap to markers",
 	"bbs.config.timeline.snap_to_film_markers-comment": "When enabled, dragging a clip snaps it to the film's markers",
 	"bbs.config.timeline.snap_to_markers": "Snap to ticks",

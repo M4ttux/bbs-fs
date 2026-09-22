@@ -24,6 +24,8 @@
     "bbs.config.timeline.track_width-comment": "The thickness of the keyframe track strip in the dope sheet view",
     "bbs.config.timeline.keyframe_default_shape": "Default keyframe shape",
     "bbs.config.timeline.keyframe_default_shape-comment": "Shape assigned to newly created keyframes. Existing keyframes are not affected.",
+    "bbs.config.timeline.path_default_interpolation": "Interpolación predeterminada de trayectoria",
+    "bbs.config.timeline.path_default_interpolation-comment": "Interpolación predeterminada utilizada para nuevos clips de trayectoria",
     "bbs.config.appearance.trackpad_increments": "Incrementos de panel interactivo",
     "bbs.config.appearance.trackpad_increments-comment": "Habilita los botones < y > en el campo del panel interactivo (que incrementan el valor de este)",
     "bbs.config.appearance.trackpad_scrolling": "Desplazamiento de panel interactivo",

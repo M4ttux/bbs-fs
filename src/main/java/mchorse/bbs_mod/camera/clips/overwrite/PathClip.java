@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.camera.clips.overwrite;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.clips.CameraClip;
 import mchorse.bbs_mod.camera.clips.CameraClipContext;
@@ -30,12 +31,17 @@ public class PathClip extends CameraClip
      */
     public final ValuePositions points = new ValuePositions("points");
 
-    public final Interpolation interpolationPoint = new Interpolation("interpPoint", Interpolations.MAP, Interpolations.HERMITE);
-    public final Interpolation interpolationAngle = new Interpolation("interpAngle", Interpolations.MAP, Interpolations.HERMITE);
+    public final Interpolation interpolationPoint;
+    public final Interpolation interpolationAngle;
 
     public PathClip()
     {
         super();
+
+        IInterp defaultInterp = BBSSettings.getDefaultPathInterpolation();
+
+        this.interpolationPoint = new Interpolation("interpPoint", Interpolations.MAP, defaultInterp);
+        this.interpolationAngle = new Interpolation("interpAngle", Interpolations.MAP, defaultInterp);
 
         this.add(this.points);
         this.add(this.interpolationPoint);

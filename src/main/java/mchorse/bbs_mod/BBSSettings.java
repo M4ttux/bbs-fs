@@ -192,6 +192,7 @@ public class BBSSettings {
 	public static ValueInt editorTrackWidth;
 	public static ValueKeyframeStyle keyframeDefaultStyle;
 	public static ValueString keyframeDefaultInterpolation;
+	public static ValueString pathDefaultInterpolation;
 	public static ValueBoolean keyframePreview;
 	public static ValueInt editorPreviewSizeMode;
 	public static ValueInt editorPreviewCustomWidth;
@@ -507,6 +508,22 @@ public class BBSSettings {
 		IInterp interp = Interpolations.MAP.get(keyframeDefaultInterpolation.get());
 
 		return interp == null ? Interpolations.LINEAR : interp;
+	}
+
+	/**
+	 * Default interpolation used when creating a new path clip.
+	 * Falls back to hermite before settings are registered or on an unknown key.
+	 */
+	public static IInterp getDefaultPathInterpolation()
+	{
+		if (pathDefaultInterpolation == null)
+		{
+			return Interpolations.HERMITE;
+		}
+
+		IInterp interp = Interpolations.MAP.get(pathDefaultInterpolation.get());
+
+		return interp == null ? Interpolations.HERMITE : interp;
 	}
 
 	/**
@@ -829,6 +846,7 @@ public class BBSSettings {
 		editorSeconds = builder.getBoolean("seconds", false);
 		editorTimelineGrid = builder.getBoolean("timeline_grid", true);
 		keyframeDefaultInterpolation = builder.getString("keyframe_default_interpolation", Interpolations.LINEAR.getKey());
+		pathDefaultInterpolation = builder.getString("path_default_interpolation", Interpolations.HERMITE.getKey());
 		builder.register(keyframeDefaultStyle = new ValueKeyframeStyle("keyframe_default_style"));
 		keyframePreview = builder.getBoolean("keyframe_preview", true);
 		editorTrackWidth = builder.getInt("track_width", 2, 1, 10).slider();
