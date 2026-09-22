@@ -81,6 +81,8 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         builder.vertex(matrix4f, x4, y4, z4).color(r, g, b, a).texture(0F, 0F);
     }
 
+    private float nametagAlpha = 1F;
+
     public LabelFormRenderer(LabelForm form)
     {
         super(form);
@@ -157,6 +159,14 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
 
         context.stack.push();
 
+        this.nametagAlpha = 1F;
+
+        if (this.form.nametag.get() && context.entity != null && context.entity.isSneaking())
+        {
+            context.stack.translate(0F, -0.5F, 0F);
+            this.nametagAlpha = 0.125F;
+        }
+
         if (this.form.billboard.get())
         {
             MatrixStackUtils.billboard(context.stack);
@@ -222,6 +232,9 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         /* Text is a flat fill, so the CPU mix is exactly what the overlay texture would do. */
         OverlayBlend.apply(color, this.form.overlayColor.get());
         shadowColor.mul(context.color);
+
+        shadowColor.a *= this.nametagAlpha;
+        color.a *= this.nametagAlpha;
 
         if (shadowColor.a > 0)
         {
@@ -297,6 +310,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         Color shadowColor = this.form.shadowColor.get().copy();
 
         shadowColor.mul(context.color);
+        shadowColor.a *= this.nametagAlpha;
 
         if (shadowColor.a > 0)
         {
@@ -331,6 +345,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
 
         FormColorBlend.blend(cColor, this.form.color.get());
         OverlayBlend.apply(cColor, this.form.overlayColor.get());
+        cColor.a *= this.nametagAlpha;
 
         int color = cColor.getARGBColor();
 
@@ -366,6 +381,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         Color color = this.form.background.get().copy();
 
         color.mul(context.color);
+        color.a *= this.nametagAlpha;
 
         if (color.a <= 0)
         {

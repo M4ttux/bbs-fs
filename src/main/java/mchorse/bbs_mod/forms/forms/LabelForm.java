@@ -24,6 +24,7 @@ public class LabelForm extends Form
     public final ValueInt lineHeight = new ValueInt("lineHeight", 0);
 
     public final ValueBoolean billboard = new ValueBoolean("billboard", false);
+    public final ValueBoolean nametag = new ValueBoolean("nametag", false);
     public final ValueColor color = new ValueColor("color", Color.white());
 
     public final ValueInt max = new ValueInt("max", -1);
@@ -49,6 +50,7 @@ public class LabelForm extends Form
         this.add(this.fontSize);
         this.add(this.lineHeight);
         this.add(this.billboard);
+        this.add(this.nametag);
         this.add(this.color);
         this.add(this.max);
         this.add(this.anchorX);

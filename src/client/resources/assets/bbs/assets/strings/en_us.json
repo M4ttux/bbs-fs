@@ -1134,6 +1134,8 @@
 	"bbs.ui.forms.editors.label.font_size": "Font size. It only decides how big the text is laid out - sharpness is picked automatically",
 	"bbs.ui.forms.editors.label.label": "Label",
 	"bbs.ui.forms.editors.label.line_height": "Line height. 0 takes the font's own spacing",
+	"bbs.ui.forms.editors.label.nametag": "Nametag",
+	"bbs.ui.forms.editors.label.nametag_tooltip": "When active and attached to a BodyPart with 'Use target' enabled, sneaks along with the target entity (shifts -0.5 in Y and fades out)",
 	"bbs.ui.forms.editors.label.shadow_color": "Shadow color",
 	"bbs.ui.forms.editors.label.shadow_offset": "Shadow offset",
 	"bbs.ui.forms.editors.label.title": "Label options",
