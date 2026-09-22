@@ -373,6 +373,9 @@ public class UIKeys
     public static final IKey FILM_OPEN_HISTORY = L10n.lang("bbs.ui.film.open_history");
     public static final IKey FILM_AUTO_KEYFRAME = L10n.lang("bbs.ui.film.auto_keyframe");
     public static final IKey FILM_OPTIONS = L10n.lang("bbs.ui.film.options");
+    public static final IKey FILM_QUICK_REPLAY_TITLE = L10n.lang("bbs.ui.film.quick_replay.title");
+    public static final IKey FILM_QUICK_REPLAY_EMPTY = L10n.lang("bbs.ui.film.quick_replay.empty");
+    public static final IKey FILM_QUICK_REPLAY_HINT = L10n.lang("bbs.ui.film.quick_replay.hint");
     public static final IKey FILM_TABS_NEW_TAB = L10n.lang("bbs.ui.film.tabs.new_tab");
     public static final IKey FILM_LANDING_NEW = L10n.lang("bbs.ui.film.landing.new");
     public static final IKey FILM_LANDING_LIST = L10n.lang("bbs.ui.film.landing.list");

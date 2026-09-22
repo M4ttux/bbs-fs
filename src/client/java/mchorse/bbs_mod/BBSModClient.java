@@ -93,8 +93,10 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.DashboardWarmup;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
+import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.film.replays.SelectedReplayHudRenderer;
+import mchorse.bbs_mod.ui.film.replays.UIQuickReplaySelector;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.ui.model_blocks.UIModelBlockEditorMenu;
@@ -184,6 +186,7 @@ public class BBSModClient implements ClientModInitializer
     private static KeyBinding keyTeleport;
     private static KeyBinding keyZoom;
     private static KeyBinding keyToggleReplayIndicator;
+    private static KeyBinding keyQuickReplaySelector;
 
     /* NOTE(1.21.11 port): KeyBinding categories are now registered objects (KeyBinding.Category.create);
      * create once and reuse, otherwise re-registering the same id throws "already registered". */
@@ -339,6 +342,11 @@ public class BBSModClient implements ClientModInitializer
     public static KeyBinding getKeyToggleReplayIndicator()
     {
         return keyToggleReplayIndicator;
+    }
+
+    public static KeyBinding getKeyQuickReplaySelector()
+    {
+        return keyQuickReplaySelector;
     }
 
     public static boolean isVideoExportDelayPending()
@@ -781,6 +789,7 @@ public class BBSModClient implements ClientModInitializer
         keyTeleport = this.createKey("teleport", GLFW.GLFW_KEY_Y);
         keyZoom = this.createKeyMouse("zoom", 2);
         keyToggleReplayIndicator = this.createKey("toggle_replay_indicator", GLFW.GLFW_KEY_UNKNOWN);
+        keyQuickReplaySelector = this.createKey("quick_replay_selector", GLFW.GLFW_KEY_TAB);
 
         StructureWand.register();
 
@@ -979,6 +988,7 @@ public class BBSModClient implements ClientModInitializer
             while (keyDemorph.wasPressed()) ClientNetwork.sendPlayerForm(null);
             while (keyTeleport.wasPressed()) this.keyTeleport();
             while (keyToggleReplayIndicator.wasPressed()) SelectedReplayHudRenderer.toggle();
+            while (keyQuickReplaySelector.wasPressed()) this.keyQuickReplaySelector();
 
             if (mc.player != null)
             {
@@ -1258,6 +1268,26 @@ public class BBSModClient implements ClientModInitializer
         if (panel != null)
         {
             panel.replayEditor.teleport();
+        }
+    }
+
+    private void keyQuickReplaySelector()
+    {
+        if (getDashboardIfCreated() == null)
+        {
+            return;
+        }
+
+        UIFilmPanel panel = getDashboard().getPanel(UIFilmPanel.class);
+
+        if (panel != null && panel.getData() != null)
+        {
+            Film film = panel.getData();
+
+            if (!film.replays.getList().isEmpty())
+            {
+                UIScreen.open(new UIQuickReplaySelector(film, keyQuickReplaySelector));
+            }
         }
     }
 
