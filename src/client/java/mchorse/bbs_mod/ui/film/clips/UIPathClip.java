@@ -11,10 +11,15 @@ import mchorse.bbs_mod.ui.film.clips.modules.UIAngleModule;
 import mchorse.bbs_mod.ui.film.clips.modules.UIPointModule;
 import mchorse.bbs_mod.ui.film.clips.modules.UIPointsModule;
 import mchorse.bbs_mod.ui.film.utils.UICameraUtils;
+import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.context.UIInterpolationContextMenu;
-import mchorse.bbs_mod.ui.framework.tooltips.InterpolationTooltip;import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.framework.tooltips.InterpolationTooltip;
+import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.colors.Colors;
 
 public class UIPathClip extends UIClip<PathClip>
 {
@@ -24,6 +29,8 @@ public class UIPathClip extends UIClip<PathClip>
     public UIButton interpAngle;
 
     public UIPointsModule points;
+    public UIButton removePoint;
+    public UIButton addPoint;
 
     public ValuePosition position;
 
@@ -52,6 +59,23 @@ public class UIPathClip extends UIClip<PathClip>
 
         this.points = new UIPointsModule(this.editor, this::pickPoint);
         this.points.h(20);
+
+        this.removePoint = new UIButton(IKey.raw("-"), (b) -> this.points.removePoint());
+        this.removePoint.wh(20, 20).tooltip(UIKeys.CAMERA_PANELS_POINTS_CONTEXT_REMOVE);
+
+        this.addPoint = new UIButton(IKey.raw("+"), (b) -> this.points.addPoint());
+        this.addPoint.wh(20, 20).tooltip(UIKeys.CAMERA_PANELS_POINTS_CONTEXT_ADD);
+
+        this.updateButtonColors();
+    }
+
+    private void updateButtonColors()
+    {
+        int baseColor = Colors.desaturate(BBSSettings.primaryColor.get(), 0.35F);
+        int hoverColor = Colors.mulRGB(baseColor, 0.85F);
+
+        this.removePoint.color(baseColor, hoverColor);
+        this.addPoint.color(baseColor, hoverColor);
     }
 
     @Override
@@ -59,7 +83,9 @@ public class UIPathClip extends UIClip<PathClip>
     {
         super.registerPanels();
 
-        this.panels.add(this.section(UIKeys.CAMERA_PANELS_PATH_POINTS, this.points, UI.row(this.interpPoint, this.interpAngle)));
+        UIElement pointsRow = UI.row(5, 0, 20, this.removePoint.w(20), this.points, this.addPoint.w(20));
+
+        this.panels.add(this.section(UIKeys.CAMERA_PANELS_PATH_POINTS, pointsRow, UI.row(this.interpPoint, this.interpAngle)));
         this.panels.add(this.point, this.angle);
         this.panels.context((menu) -> UICameraUtils.positionContextMenu(menu, editor, this.position));
     }
@@ -83,6 +109,11 @@ public class UIPathClip extends UIClip<PathClip>
         {
             this.editor.setCursor(this.clip.tick.get() + this.clip.getTickForPoint(index));
             this.editor.setFlight(false);
+        }
+
+        if (this.removePoint != null)
+        {
+            this.removePoint.setEnabled(this.clip.points.size() > 1);
         }
     }
 
@@ -117,5 +148,11 @@ public class UIPathClip extends UIClip<PathClip>
         this.angle.fill(this.position.getAngle());
 
         this.points.index = index;
+
+        if (this.removePoint != null)
+        {
+            this.removePoint.setEnabled(this.clip.points.size() > 1);
+            this.updateButtonColors();
+        }
     }
 }

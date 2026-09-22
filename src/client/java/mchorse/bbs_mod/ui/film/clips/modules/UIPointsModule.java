@@ -58,7 +58,7 @@ public class UIPointsModule extends UIAbstractModule
 
     public void moveBack()
     {
-        if (this.index == 0)
+        if (this.path == null || this.index == 0)
         {
             return;
         }
@@ -66,28 +66,43 @@ public class UIPointsModule extends UIAbstractModule
         this.path.points.move(this.index, this.index - 1);
 
         this.index = this.index - 1;
+
+        if (this.picker != null)
+        {
+            this.picker.accept(this.index);
+        }
     }
 
     public void moveForward()
     {
-        if (this.index >= this.path.size() - 1)
+        if (this.path == null || this.index >= this.path.size() - 1)
         {
             return;
         }
 
         this.path.points.move(this.index, this.index + 1);
 
-        this.index = this.index - 1;
+        this.index = this.index + 1;
+
+        if (this.picker != null)
+        {
+            this.picker.accept(this.index);
+        }
     }
 
     public void addPoint()
     {
+        if (this.path == null)
+        {
+            return;
+        }
+
         this.path.points.add(this.index + 1, new Position(this.editor.getCamera()));
 
         this.index = MathUtils.clamp(this.index + 1, 0, this.path.points.size() - 1);
 
         this.scroll.setSize(this.path.size());
-        this.scroll.scrollTo(this.index * this.scroll.scrollItemSize);
+        this.scroll.scrollIntoView(this.index * this.scroll.scrollItemSize);
 
         if (this.picker != null)
         {
@@ -97,7 +112,7 @@ public class UIPointsModule extends UIAbstractModule
 
     public void removePoint()
     {
-        if (this.path.points.size() == 1 && this.index >= 0)
+        if (this.path == null || this.path.points.size() <= 1 || this.index < 0 || this.index >= this.path.points.size())
         {
             return;
         }
@@ -106,7 +121,7 @@ public class UIPointsModule extends UIAbstractModule
 
         this.index = Math.max(this.index - 1, 0);
         this.scroll.setSize(this.path.size());
-        this.scroll.scrollTo(this.index * this.scroll.scrollItemSize);
+        this.scroll.scrollIntoView(this.index * this.scroll.scrollItemSize);
 
         if (this.picker != null)
         {
@@ -215,13 +230,20 @@ public class UIPointsModule extends UIAbstractModule
         context.batcher.box(x, y, x + this.area.w, y + this.area.h, Colors.A50);
         context.batcher.clip(this.area, context);
 
+        boolean isHoverArea = this.area.isInside(context);
+
         for (int i = 0; i < c; i++)
         {
             String label = String.valueOf(i);
             int xx = this.area.x + i * this.scroll.scrollItemSize - (int) this.scroll.getScroll();
             int w = context.batcher.getFont().getWidth(label);
 
-            context.batcher.box(xx, y, xx + 20, y + 20, this.index == i ? 0xffcc1170 : 0xffff2280);
+            boolean selected = (this.index == i);
+            boolean hover = isHoverArea && context.mouseX >= xx && context.mouseX < xx + 20 && context.mouseY >= y && context.mouseY < y + 20;
+
+            int color = selected ? 0xffad1457 : (hover ? 0xfff06292 : 0xfff48fb1);
+
+            context.batcher.box(xx, y, xx + 20, y + 20, color);
             context.batcher.box(xx + 19, y, xx + 20, y + 20, Colors.A12);
             context.batcher.textShadow(label, xx + 10 - w / 2, y + 6);
         }

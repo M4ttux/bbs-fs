@@ -63,6 +63,23 @@ public class Colors
         return COLOR.getARGBColor();
     }
 
+    public static int desaturate(int color, float factor)
+    {
+        float r = ((color >> 16) & 0xff) / 255F;
+        float g = ((color >> 8) & 0xff) / 255F;
+        float b = (color & 0xff) / 255F;
+        int a = color & 0xff000000;
+
+        float l = 0.299F * r + 0.587F * g + 0.114F * b;
+        float s = 1F - factor;
+
+        r = MathUtils.clamp(l + (r - l) * s, 0F, 1F);
+        g = MathUtils.clamp(l + (g - l) * s, 0F, 1F);
+        b = MathUtils.clamp(l + (b - l) * s, 0F, 1F);
+
+        return a | ((int) (r * 255) << 16) | ((int) (g * 255) << 8) | (int) (b * 255);
+    }
+
     public static int lerp(int a, int b, float x)
     {
         x = MathUtils.clamp(x, 0F, 1F);
