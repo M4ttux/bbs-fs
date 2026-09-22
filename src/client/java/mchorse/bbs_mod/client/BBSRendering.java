@@ -28,6 +28,7 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.film.FrameOverlays;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
+import mchorse.bbs_mod.ui.film.replays.SelectedReplayHudRenderer;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
@@ -819,6 +820,7 @@ public class BBSRendering
         Batcher2D batcher2D = new Batcher2D(drawContext);
 
         BBSModClient.getFilms().renderHud(batcher2D, tickDelta);
+        SelectedReplayHudRenderer.render(batcher2D, tickDelta);
         StructureWand.renderHud(batcher2D);
     }
 

@@ -26,6 +26,7 @@
     "key.bbs.record_video": "Record video",
     "key.bbs.play_film_and_record": "Play film and record",
     "key.bbs.teleport": "Teleport to current replay",
+    "key.bbs.toggle_replay_indicator": "Toggle replay indicator",
     "key.bbs.zoom": "Zoom (BBS gun)",
     "category.bbs.main": "BBS mod",
 
