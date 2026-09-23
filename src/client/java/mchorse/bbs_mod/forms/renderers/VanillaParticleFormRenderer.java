@@ -372,9 +372,12 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
             ParticleType<?> type = Registries.PARTICLE_TYPE.get(settings.particle);
             boolean bareId = !args.isEmpty() && args.charAt(0) != '{';
 
-            if (bareId && type == ParticleTypes.BLOCK)
+            if (bareId && (type == ParticleTypes.BLOCK || type == ParticleTypes.BLOCK_MARKER
+                || type == ParticleTypes.FALLING_DUST || type == ParticleTypes.DUST_PILLAR
+                || type == ParticleTypes.BLOCK_CRUMBLE))
             {
-                return new BlockStateParticleEffect(ParticleTypes.BLOCK, Registries.BLOCK.get(Identifier.of(args)).getDefaultState());
+                net.minecraft.block.BlockState state = Registries.BLOCK.get(Identifier.of(args)).getDefaultState();
+                return new BlockStateParticleEffect((ParticleType<BlockStateParticleEffect>) type, state);
             }
 
             if (bareId && type == ParticleTypes.ITEM)
@@ -382,7 +385,34 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
                 return new ItemStackParticleEffect(ParticleTypes.ITEM, new ItemStack(Registries.ITEM.get(Identifier.of(args))));
             }
 
-            StringReader reader = new StringReader(settings.particle.toString() + args);
+            if (bareId && type == ParticleTypes.DUST)
+            {
+                net.minecraft.particle.DustParticleEffect dust = parseDust(args);
+                if (dust != null)
+                {
+                    return dust;
+                }
+            }
+
+            if (bareId && type == ParticleTypes.SCULK_CHARGE)
+            {
+                try
+                {
+                    return new net.minecraft.particle.SculkChargeParticleEffect(Float.parseFloat(args));
+                }
+                catch (Exception ignored) {}
+            }
+
+            if (bareId && type == ParticleTypes.SHRIEK)
+            {
+                try
+                {
+                    return new net.minecraft.particle.ShriekParticleEffect(Integer.parseInt(args));
+                }
+                catch (Exception ignored) {}
+            }
+
+            StringReader reader = new StringReader(settings.particle.toString() + (args.isEmpty() || args.startsWith("{") ? args : " " + args));
 
             return ParticleEffectArgumentType.readParameters(reader, world.getRegistryManager());
         }
@@ -390,6 +420,35 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
         {
             return ParticleTypes.FLAME;
         }
+    }
+
+    private static net.minecraft.particle.DustParticleEffect parseDust(String args)
+    {
+        try
+        {
+            String[] parts = args.trim().split("\\s+");
+            if (parts.length >= 1 && parts[0].startsWith("#"))
+            {
+                int color = Integer.parseInt(parts[0].substring(1), 16);
+                float scale = parts.length > 1 ? Float.parseFloat(parts[1]) : 1.0F;
+                return new net.minecraft.particle.DustParticleEffect(color, scale);
+            }
+            if (parts.length >= 3)
+            {
+                float r = Float.parseFloat(parts[0]);
+                float g = Float.parseFloat(parts[1]);
+                float b = Float.parseFloat(parts[2]);
+                float scale = parts.length >= 4 ? Float.parseFloat(parts[3]) : 1.0F;
+                int ir = (int) (Math.min(Math.max(r, 0F), 1F) * 255F);
+                int ig = (int) (Math.min(Math.max(g, 0F), 1F) * 255F);
+                int ib = (int) (Math.min(Math.max(b, 0F), 1F) * 255F);
+                int color = (ir << 16) | (ig << 8) | ib;
+                return new net.minecraft.particle.DustParticleEffect(color, scale);
+            }
+        }
+        catch (Exception ignored) {}
+
+        return null;
     }
 
     private interface ParticleSink
