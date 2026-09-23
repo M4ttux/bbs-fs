@@ -28,12 +28,56 @@ public class FormCategory implements IMapSerializable
     public Icon icon = Icons.FOLDER;
 
     private final List<Form> forms = new ArrayList<>();
+    private FormCategory parent;
+    private final List<FormCategory> children = new ArrayList<>();
 
     /**
      * Bumped on every change to {@link #forms}, so a view over them (searched) can tell when
      * it's stale without comparing lists.
      */
     private int modCount;
+
+    public FormCategory getParent()
+    {
+        return this.parent;
+    }
+
+    public void setParent(FormCategory parent)
+    {
+        if (this.parent != null)
+        {
+            this.parent.children.remove(this);
+        }
+
+        this.parent = parent;
+
+        if (parent != null && !parent.children.contains(this))
+        {
+            parent.children.add(this);
+        }
+    }
+
+    public List<FormCategory> getChildren()
+    {
+        return Collections.unmodifiableList(this.children);
+    }
+
+    public int getDepth()
+    {
+        return this.parent == null ? 0 : this.parent.getDepth() + 1;
+    }
+
+    public int getTotalFormCount()
+    {
+        int count = this.forms.size();
+
+        for (FormCategory child : this.children)
+        {
+            count += child.getTotalFormCount();
+        }
+
+        return count;
+    }
 
     public FormCategory(IKey title, ValueBoolean visible)
     {

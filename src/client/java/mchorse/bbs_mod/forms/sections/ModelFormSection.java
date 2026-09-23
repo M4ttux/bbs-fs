@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.forms.sections;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.BBSMod;
@@ -68,9 +69,30 @@ public class ModelFormSection extends SubFormSection
     }
 
     @Override
+    protected IKey getCategoryTitle(String folderPath, boolean isRootSegment)
+    {
+        if (folderPath.equals(CemSourcePack.NAME))
+        {
+            return IKey.comp(Arrays.asList(this.getTitle(), IKey.constant(" ("), UIKeys.FORMS_CATEGORIES_MODELS_PACKS, IKey.constant(")")));
+        }
+
+        if (folderPath.startsWith(CemSourcePack.NAME + "/"))
+        {
+            if (isRootSegment)
+            {
+                String rest = folderPath.substring(CemSourcePack.NAME.length());
+
+                return IKey.comp(Arrays.asList(this.getTitle(), IKey.constant(" ("), UIKeys.FORMS_CATEGORIES_MODELS_PACKS, IKey.constant(rest + ")")));
+            }
+        }
+
+        return super.getCategoryTitle(folderPath, isRootSegment);
+    }
+
+    @Override
     protected FormCategory createCategory(IKey uiKey, String id)
     {
-        String folder = this.getKey(id);
+        String folder = BBSSettings.morphingFolderHierarchy.get() ? id : this.getKey(id);
 
         /* The folder a resource pack's models sit in is an id, not a word - it is what gets written
          * into saved forms - so the palette shows what it means instead of showing "cem". A model the
@@ -79,7 +101,10 @@ public class ModelFormSection extends SubFormSection
         {
             String rest = folder.substring(CemSourcePack.NAME.length());
 
-            uiKey = IKey.comp(Arrays.asList(this.getTitle(), IKey.constant(" ("), UIKeys.FORMS_CATEGORIES_MODELS_PACKS, IKey.constant(rest + ")")));
+            if (!BBSSettings.morphingFolderHierarchy.get() || !id.contains("/"))
+            {
+                uiKey = IKey.comp(Arrays.asList(this.getTitle(), IKey.constant(" ("), UIKeys.FORMS_CATEGORIES_MODELS_PACKS, IKey.constant(rest + ")")));
+            }
         }
 
         return new ModelFormCategory(uiKey, this.parent.preferences.visible("models_" + id));

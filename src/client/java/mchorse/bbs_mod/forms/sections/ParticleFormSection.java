@@ -3,6 +3,7 @@ package mchorse.bbs_mod.forms.sections;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.forms.FormCategories;
+import mchorse.bbs_mod.forms.categories.FormCategory;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ParticleForm;
 import mchorse.bbs_mod.l10n.keys.IKey;
@@ -26,6 +27,20 @@ public class ParticleFormSection extends SubFormSection
     protected Icon getIcon()
     {
         return Icons.PARTICLE;
+    }
+
+    @Override
+    protected boolean hasSectionRoot()
+    {
+        return true;
+    }
+
+    @Override
+    protected FormCategory createCategory(IKey uiKey, String id)
+    {
+        String prefId = id.isEmpty() ? "particles" : "particles_" + id;
+
+        return new FormCategory(uiKey, this.parent.preferences.visible(prefId)).icon(this.getIcon());
     }
 
     @Override

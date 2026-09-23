@@ -38,11 +38,16 @@ import mchorse.bbs_mod.ui.utils.keys.KeyCodes;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.forms.ParticleForm;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -71,6 +76,7 @@ public class UIFormList extends UIElement
     public UIIcon categoryFilter;
     public UIIcon collapseAll;
     public UIIcon expandAll;
+    public UIIcon folderHierarchy;
 
     /* Forms are matched by identity: two equal-looking forms in different categories are different picks */
     public final Selection<Form> selection = new Selection<>((a, b) -> a == b);
@@ -126,7 +132,24 @@ public class UIFormList extends UIElement
         this.expandAll = new UIIcon(Icons.EXPAND_ALL, (b) -> this.setAllExpanded(true));
         this.expandAll.tooltip(UIKeys.FORMS_LIST_EXPAND_ALL, Direction.TOP);
         this.expandAll.w(20);
-        this.bar.add(this.categoryFilter, this.collapseAll, this.expandAll, this.search, this.edit, this.close);
+        this.folderHierarchy = new UIIcon(Icons.FOLDER, this::toggleFolderHierarchy)
+        {
+            @Override
+            protected void renderSkin(UIContext context)
+            {
+                if (this.isActive())
+                {
+                    context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), Colors.A100 | BBSSettings.primaryColor.get());
+                }
+
+                super.renderSkin(context);
+            }
+        };
+        this.folderHierarchy.activeColor = Colors.WHITE;
+        this.folderHierarchy.tooltip(UIKeys.FORMS_LIST_FOLDER_HIERARCHY, Direction.TOP);
+        this.folderHierarchy.w(20);
+        this.folderHierarchy.active(BBSSettings.morphingFolderHierarchy.get());
+        this.bar.add(this.categoryFilter, this.collapseAll, this.expandAll, this.folderHierarchy, this.search, this.edit, this.close);
 
         this.add(this.forms, this.bar);
 
@@ -156,6 +179,20 @@ public class UIFormList extends UIElement
         });
     }
 
+    private void toggleFolderHierarchy(UIIcon b)
+    {
+        boolean next = !BBSSettings.morphingFolderHierarchy.get();
+
+        BBSSettings.morphingFolderHierarchy.set(next);
+        this.folderHierarchy.active(next);
+
+        Form selected = this.getSelected();
+
+        BBSModClient.getFormCategories().setup();
+        this.setupForms(BBSModClient.getFormCategories());
+        this.setSelected(selected);
+    }
+
     public void focusSearchInput()
     {
         UIContext context = this.getContext();
@@ -176,6 +213,8 @@ public class UIFormList extends UIElement
         this.categories.clear();
         this.forms.removeAll();
 
+        Map<FormCategory, UIFormCategory> categoryMap = new HashMap<>();
+
         for (FormCategory category : forms.getAllCategories())
         {
             if (BBSSettings.disabledMorphFormCategories.get().contains(category.visible.getId()))
@@ -187,10 +226,24 @@ public class UIFormList extends UIElement
 
             this.forms.add(uiCategory);
             this.categories.add(uiCategory);
+            categoryMap.put(category, uiCategory);
 
             if (uiCategory instanceof UIRecentFormCategory)
             {
                 this.recent = uiCategory;
+            }
+        }
+
+        for (UIFormCategory uiCategory : this.categories)
+        {
+            if (uiCategory.category.getParent() != null)
+            {
+                uiCategory.parentCategory = categoryMap.get(uiCategory.category.getParent());
+
+                if (uiCategory.parentCategory != null)
+                {
+                    uiCategory.parentCategory.childCategories.add(uiCategory);
+                }
             }
         }
 
@@ -299,6 +352,11 @@ public class UIFormList extends UIElement
     {
         for (UIFormCategory category : this.categories)
         {
+            if (category.isHidden())
+            {
+                continue;
+            }
+
             int top = category.area.y - this.forms.area.y;
 
             if (contentY < top || contentY >= top + category.area.h)
@@ -341,6 +399,8 @@ public class UIFormList extends UIElement
         {
             category.category.visible.set(expanded);
         }
+
+        this.forms.invalidateLayout();
     }
 
     /* Selection */
@@ -394,6 +454,36 @@ public class UIFormList extends UIElement
         for (UIFormCategory category : this.categories)
         {
             int index = category.category.getForms().indexOf(form);
+
+            if (index == -1 && form != null)
+            {
+                if (form instanceof ModelForm mf)
+                {
+                    for (int i = 0; i < category.category.getForms().size(); i++)
+                    {
+                        Form candidate = category.category.getForms().get(i);
+
+                        if (candidate instanceof ModelForm cmf && Objects.equals(mf.model.get(), cmf.model.get()))
+                        {
+                            index = i;
+                            break;
+                        }
+                    }
+                }
+                else if (form instanceof ParticleForm pf)
+                {
+                    for (int i = 0; i < category.category.getForms().size(); i++)
+                    {
+                        Form candidate = category.category.getForms().get(i);
+
+                        if (candidate instanceof ParticleForm cpf && Objects.equals(pf.effect.get(), cpf.effect.get()))
+                        {
+                            index = i;
+                            break;
+                        }
+                    }
+                }
+            }
 
             if (index == -1)
             {
@@ -701,10 +791,16 @@ public class UIFormList extends UIElement
             return;
         }
 
-        /* Categories only learn their real height once they render (until then
-         * they keep the inflated, width-0 height from setupForms), so the bounds
-         * of off-screen categories above the selection are stale. Lay them all
-         * out at the real width first so the offsets below are final. */
+        UIFormCategory parent = category.parentCategory;
+
+        while (parent != null)
+        {
+            parent.category.visible.set(true);
+            parent = parent.parentCategory;
+        }
+
+        category.category.visible.set(true);
+
         this.afterSearchLayout();
 
         int contentY = category.area.y - this.forms.area.y;

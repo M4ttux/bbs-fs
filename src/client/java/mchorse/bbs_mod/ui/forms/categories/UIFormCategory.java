@@ -65,6 +65,8 @@ public class UIFormCategory extends UIItemGrid<Form>
 {
     public UIFormList list;
     public FormCategory category;
+    public UIFormCategory parentCategory;
+    public final List<UIFormCategory> childCategories = new ArrayList<>();
 
     /** The form the list has chosen in this category — the editor's and the morph's. */
     public Form selected;
@@ -348,9 +350,47 @@ public class UIFormCategory extends UIItemGrid<Form>
         return this.getForms();
     }
 
+    public boolean hasAnyFormsMatchingSearch()
+    {
+        if (!this.getForms().isEmpty())
+        {
+            return true;
+        }
+
+        for (UIFormCategory child : this.childCategories)
+        {
+            if (child.hasAnyFormsMatchingSearch())
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public boolean isParentExpanded()
+    {
+        if (!this.search.isEmpty())
+        {
+            return true;
+        }
+
+        if (this.parentCategory != null)
+        {
+            return this.parentCategory.isExpanded() && this.parentCategory.isParentExpanded();
+        }
+
+        return true;
+    }
+
     private boolean isHiddenBySearch()
     {
-        return !this.search.isEmpty() && this.getForms().isEmpty();
+        return !this.search.isEmpty() && !this.hasAnyFormsMatchingSearch();
+    }
+
+    public boolean isHidden()
+    {
+        return this.isHiddenBySearch() || !this.isParentExpanded();
     }
 
     @Override
@@ -359,11 +399,11 @@ public class UIFormCategory extends UIItemGrid<Form>
         return this.category.visible.get();
     }
 
-    /** A category the search leaves nothing in folds away entirely, band included. */
+    /** A category that is collapsed by parent or search folds away entirely, band included. */
     @Override
     protected int contentSize()
     {
-        return this.isHiddenBySearch() ? 0 : super.contentSize();
+        return this.isHidden() ? 0 : super.contentSize();
     }
 
     /** Shift-ranges run within one category. */
@@ -392,6 +432,11 @@ public class UIFormCategory extends UIItemGrid<Form>
     public void toggle()
     {
         this.category.visible.set(!this.category.visible.get());
+
+        if (this.list != null && this.list.forms != null)
+        {
+            this.list.forms.invalidateLayout();
+        }
     }
 
     /** The forms whose cells overlap an area given relative to this category's top-left. */
@@ -399,7 +444,7 @@ public class UIFormCategory extends UIItemGrid<Form>
     {
         List<Form> hit = new ArrayList<>();
 
-        if (!this.isExpanded() || this.isHiddenBySearch())
+        if (!this.isExpanded() || this.isHidden())
         {
             return hit;
         }
@@ -471,7 +516,7 @@ public class UIFormCategory extends UIItemGrid<Form>
     @Override
     public boolean subMouseClicked(UIContext context)
     {
-        if (!this.area.isInside(context) || this.isHiddenBySearch())
+        if (!this.area.isInside(context) || this.isHidden())
         {
             return false;
         }
@@ -646,7 +691,7 @@ public class UIFormCategory extends UIItemGrid<Form>
     @Override
     public void render(UIContext context)
     {
-        if (this.isHiddenBySearch())
+        if (this.isHidden())
         {
             /* Nothing to show, but the height must still follow (down to nothing) */
             this.relayout();
@@ -733,14 +778,15 @@ public class UIFormCategory extends UIItemGrid<Form>
         int textColor = dragged ? RowStyle.textColor(lit, Colors.GRAY) : RowStyle.textColor(lit);
         int my = y + FormGridLayout.HEADER / 2;
 
-        int ix = x + UIList.ROW_PADDING;
-        int textX = x + UIList.iconRowTextX(UIList.ROW_PADDING);
+        int indent = this.category.getDepth() * 12;
+        int ix = x + UIList.ROW_PADDING + indent;
+        int textX = x + UIList.iconRowTextX(UIList.ROW_PADDING) + indent;
 
         UISection.renderArrow(context, ix + UIList.ARROW_SLOT / 2F, my, expanded, RowStyle.iconColor(lit));
         batcher.icon(this.category.icon, RowStyle.iconColor(lit), ix + UIList.ARROW_SLOT + UIList.ICON_SLOT / 2F, my, 0.5F, 0.5F);
 
         String title = this.category.getProcessedTitle();
-        String count = String.valueOf(this.category.getForms().size());
+        String count = String.valueOf(this.category.getTotalFormCount());
         int textY = y + (FormGridLayout.HEADER - font.getHeight()) / 2 + 1;
 
         batcher.textShadow(title, textX, textY, textColor);
