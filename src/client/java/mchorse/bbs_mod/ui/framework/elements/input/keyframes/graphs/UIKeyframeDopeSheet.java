@@ -1263,6 +1263,21 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             context.batcher.box(area.x, y, area.ex(), y + bh, Colors.setA(sheet.color, 0.12F));
         }
 
+        if (BBSSettings.replayGuideLines.get())
+        {
+            float opacity = BBSSettings.replayGuideOpacity.get();
+
+            if (opacity > 0F)
+            {
+                int thickness = Math.max(1, BBSSettings.replayGuideThickness.get());
+                int y1 = my - thickness / 2;
+                int y2 = y1 + thickness;
+                int guideColor = Colors.setA(sheet.color, opacity);
+
+                context.batcher.box(area.x, y1, area.ex(), y2, guideColor);
+            }
+        }
+
         builder = beginShapes();
 
         /* Keyframes sorted by tick map to ascending X, so everything left of the view is

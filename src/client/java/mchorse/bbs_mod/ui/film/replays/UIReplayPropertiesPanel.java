@@ -6,6 +6,7 @@ import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
@@ -16,6 +17,7 @@ import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
+import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIAnchorKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
@@ -64,6 +66,9 @@ public class UIReplayPropertiesPanel extends UIElement
     public UITrackpad relativeOffsetZ;
     public UIToggle axesPreview;
     public UIButton pickAxesPreviewBone;
+    public UIToggle guideLines;
+    public UISliderTrackpad guideThickness;
+    public UISliderTrackpad guideOpacity;
 
     private UIReplayList list;
 
@@ -229,9 +234,33 @@ public class UIReplayPropertiesPanel extends UIElement
         shadowSection.setExpanded(false);
         other.setExpanded(false);
 
+        this.guideLines = new UIToggle(UIKeys.FILM_REPLAY_GUIDES_ENABLED, (b) -> BBSSettings.replayGuideLines.set(b.getValue()));
+        this.guideLines.valueBinding(() -> this.guideLines.setValue(BBSSettings.replayGuideLines.get()));
+        this.guideLines.tooltip(UIKeys.FILM_REPLAY_GUIDES_ENABLED_TOOLTIP);
+
+        this.guideThickness = new UISliderTrackpad((v) -> BBSSettings.replayGuideThickness.set(v.intValue()));
+        this.guideThickness.limit(1, 10, true).integer();
+        this.guideThickness.valueBinding(() -> this.guideThickness.setValue(BBSSettings.replayGuideThickness.get()));
+        this.guideThickness.tooltip(UIKeys.FILM_REPLAY_GUIDES_THICKNESS_TOOLTIP);
+
+        this.guideOpacity = new UISliderTrackpad((v) -> BBSSettings.replayGuideOpacity.set(v.floatValue()));
+        this.guideOpacity.limit(0, 1).increment(0.01D);
+        this.guideOpacity.valueBinding(() -> this.guideOpacity.setValue(BBSSettings.replayGuideOpacity.get()));
+        this.guideOpacity.tooltip(UIKeys.FILM_REPLAY_GUIDES_OPACITY_TOOLTIP);
+
+        UISection guidesSection = new UISection(UIKeys.FILM_REPLAY_GUIDES_TITLE);
+
+        guidesSection.fields.add(
+            this.guideLines,
+            UI.labelRow(UIKeys.FILM_REPLAY_GUIDES_THICKNESS, this.guideThickness),
+            UI.labelRow(UIKeys.FILM_REPLAY_GUIDES_OPACITY, this.guideOpacity)
+        );
+        guidesSection.setExpanded(false);
+
         this.properties = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING,
             this.pickEdit, this.enabled, this.label, this.nameTag,
             shadowSection,
+            guidesSection,
             other
         );
         this.properties.relative(this).x(0).y(0).w(1F).h(1F);

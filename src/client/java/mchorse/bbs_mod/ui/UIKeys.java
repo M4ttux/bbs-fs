@@ -442,6 +442,13 @@ public class UIKeys
     public static final IKey FILM_REPLAY_FILTER_SHEETS_TITLE = L10n.lang("bbs.ui.film.replay.filter_sheets-title");
     public static final IKey FILM_REPLAY_FILTER_SHEETS_DISABLE_ALL = L10n.lang("bbs.ui.film.replay.filter_sheets-disable_all");
     public static final IKey FILM_REPLAY_FILTER_SHEETS_ENABLE_ALL = L10n.lang("bbs.ui.film.replay.filter_sheets-enable_all");
+    public static final IKey FILM_REPLAY_GUIDES_TITLE = L10n.lang("bbs.ui.film.replay.guides.title");
+    public static final IKey FILM_REPLAY_GUIDES_ENABLED = L10n.lang("bbs.ui.film.replay.guides.enabled");
+    public static final IKey FILM_REPLAY_GUIDES_ENABLED_TOOLTIP = L10n.lang("bbs.ui.film.replay.guides.enabled_tooltip");
+    public static final IKey FILM_REPLAY_GUIDES_THICKNESS = L10n.lang("bbs.ui.film.replay.guides.thickness");
+    public static final IKey FILM_REPLAY_GUIDES_THICKNESS_TOOLTIP = L10n.lang("bbs.ui.film.replay.guides.thickness_tooltip");
+    public static final IKey FILM_REPLAY_GUIDES_OPACITY = L10n.lang("bbs.ui.film.replay.guides.opacity");
+    public static final IKey FILM_REPLAY_GUIDES_OPACITY_TOOLTIP = L10n.lang("bbs.ui.film.replay.guides.opacity_tooltip");
     public static final IKey FILM_REPLAY_FP = L10n.lang("bbs.ui.film.replay.fp");
     public static final IKey FILM_REPLAY_LABEL = L10n.lang("bbs.ui.film.replay.label");
     public static final IKey FILM_REPLAY_LOOPING = L10n.lang("bbs.ui.film.replay.looping");

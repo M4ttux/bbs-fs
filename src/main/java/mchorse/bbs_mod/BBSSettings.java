@@ -190,6 +190,9 @@ public class BBSSettings {
 	public static ValueBoolean editorMinutesBackup;
 	public static ValueBoolean editorResizablePanels;
 	public static ValueInt editorTrackWidth;
+	public static ValueBoolean replayGuideLines;
+	public static ValueInt replayGuideThickness;
+	public static ValueFloat replayGuideOpacity;
 	public static ValueKeyframeStyle keyframeDefaultStyle;
 	public static ValueString keyframeDefaultInterpolation;
 	public static ValueString pathDefaultInterpolation;
@@ -850,6 +853,9 @@ public class BBSSettings {
 		builder.register(keyframeDefaultStyle = new ValueKeyframeStyle("keyframe_default_style"));
 		keyframePreview = builder.getBoolean("keyframe_preview", true);
 		editorTrackWidth = builder.getInt("track_width", 2, 1, 10).slider();
+		replayGuideLines = builder.getBoolean("replay_guide_lines", false);
+		replayGuideThickness = builder.getInt("replay_guide_thickness", 1, 1, 10).slider();
+		replayGuideOpacity = builder.getFloat("replay_guide_opacity", 0.35F, 0F, 1F).slider();
 		editorSnapToMarkers = builder.getBoolean("snap_to_markers", false);
 		editorSnapToFilmMarkers = builder.getBoolean("snap_to_film_markers", true);
 		editorRewind = builder.getBoolean("rewind", true);

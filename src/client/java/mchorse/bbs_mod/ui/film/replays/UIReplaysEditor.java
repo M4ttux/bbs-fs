@@ -39,6 +39,7 @@ import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.film.replays.overlays.UIAnimationToPoseOverlayPanel;
 import mchorse.bbs_mod.ui.film.replays.overlays.UIBakeIKOverlayPanel;
 import mchorse.bbs_mod.ui.film.replays.overlays.UIKeyframeSheetFilterOverlayPanel;
+import mchorse.bbs_mod.ui.film.replays.overlays.UIReplayGuidesOverlayPanel;
 import mchorse.bbs_mod.ui.film.utils.keyframes.UIFilmKeyframes;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -130,6 +131,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
     private boolean actionsMode;
     /* «All tracks» view: shows every category's tracks at once, bypassing the category filter. */
     private UIIcon allToggle;
+    private UIIcon guidesToggle;
     private UIIcon sectionsToggle;
     private boolean allMode;
 
@@ -328,6 +330,10 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
             this.tabButtons.put(category, button);
         }
 
+        this.guidesToggle = new UIIcon(Icons.LINE, b -> this.openGuidesSettings());
+        this.guidesToggle.tooltip(UIKeys.FILM_REPLAY_GUIDES_TITLE, Direction.RIGHT);
+        this.guidesToggle.highlight(() -> BBSSettings.replayGuideLines.get(), Direction.LEFT);
+
         this.sectionsToggle = new UIIcon(Icons.COLLAPSE_ALL, b -> this.toggleAllSections());
         this.sectionsToggle.tooltip(L10n.lang("bbs.ui.film.replays.collapse_all"), Direction.RIGHT);
 
@@ -344,7 +350,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
         TrackCategories.registerShortcuts(this.keys(), () -> TrackCategories.values().stream()
             .filter(category -> this.tabButtons.get(category).getParent() != null).toList(), this::setCategory);
 
-        this.add(this.iconBar, this.sectionsToggle, this.actionsToggle, this.replayTransform);
+        this.add(this.iconBar, this.guidesToggle, this.sectionsToggle, this.actionsToggle, this.replayTransform);
         this.partHeader.relative(this).x(CATEGORY_BAR_WIDTH).y(0).w(120).h(TimelineRulerRenderer.RULER_BLOCK_HEIGHT);
         this.partHeader.add(new UIRenderable(context ->
         {
@@ -358,6 +364,11 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
         this.partHeader.add(partName);
         this.add(this.partHeader);
         this.markContainer();
+    }
+
+    public void openGuidesSettings()
+    {
+        UIOverlay.addOverlay(this.getContext(), new UIReplayGuidesOverlayPanel(), 220, 115);
     }
 
     private void toggleAllSections()
@@ -748,6 +759,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
 
                 if (this.keyframeEditor.view.getGraph() instanceof UIKeyframeDopeSheet)
                 {
+                    menu.action(Icons.LINE, UIKeys.FILM_REPLAY_GUIDES_TITLE, this::openGuidesSettings);
                     menu.action(Icons.FILTER, UIKeys.FILM_REPLAY_FILTER_SHEETS, () ->
                     {
                         Set<String> disabledSet = BBSSettings.disabledSheets.get();
@@ -983,13 +995,15 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
         }
 
         this.partHeader.removeFromParent();
+        this.guidesToggle.removeFromParent();
         this.sectionsToggle.removeFromParent();
-        this.add(this.iconBar, this.sectionsToggle, this.actionsToggle, this.partHeader);
+        this.add(this.iconBar, this.guidesToggle, this.sectionsToggle, this.actionsToggle, this.partHeader);
     }
 
     /** Pin the actions toggle below the category buttons. */
     private void layoutActionsToggle()
     {
+        this.guidesToggle.relative(this).x(0).y(1F, -60).wh(CATEGORY_BAR_WIDTH, 20);
         this.sectionsToggle.relative(this).x(0).y(1F, -40).wh(CATEGORY_BAR_WIDTH, 20);
         this.actionsToggle.relative(this).x(0).y(1F, -20).wh(CATEGORY_BAR_WIDTH, 20);
     }
@@ -1206,13 +1220,14 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
 
         for (UIIcon button : this.iconBar.getChildren(UIIcon.class))
         {
-            if (button.isVisible() && button.area.ey() >= this.sectionsToggle.area.y)
+            if (button.isVisible() && button.area.ey() >= this.guidesToggle.area.y)
             {
                 foldingButtonFits = false;
                 break;
             }
         }
 
+        this.guidesToggle.setVisible(this.timelineVisible && notEditing && foldingButtonFits);
         this.sectionsToggle.setVisible(this.timelineVisible && notEditing && foldingButtonFits);
         this.sectionsToggle.setEnabled(sectionsAvailable);
         boolean collapseSections = sectionsAvailable && this.keyframeEditor.view.getDopeSheet().hasExpandedSections();
