@@ -759,6 +759,8 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_ARGS_TRAIL_HINT = L10n.lang("bbs.ui.forms.editors.vanilla_particle.args.trail_hint");
     public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_ARGS_VIBRATION = L10n.lang("bbs.ui.forms.editors.vanilla_particle.args.vibration");
     public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_ARGS_VIBRATION_HINT = L10n.lang("bbs.ui.forms.editors.vanilla_particle.args.vibration_hint");
+    public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_ARGS_EFFECT = L10n.lang("bbs.ui.forms.editors.vanilla_particle.args.effect");
+    public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_ARGS_EFFECT_HINT = L10n.lang("bbs.ui.forms.editors.vanilla_particle.args.effect_hint");
     public static final IKey FORMS_EDITOR_BODY_PART_GIZMO = L10n.lang("bbs.ui.forms.editor.body_part_gizmo");
     public static final IKey FORMS_EDITOR_BONE = L10n.lang("bbs.ui.forms.editor.bone");
     public static final IKey FORMS_EDITOR_CONTEXT_SETUP_FACE = L10n.lang("bbs.ui.forms.editor.context.setup_face");

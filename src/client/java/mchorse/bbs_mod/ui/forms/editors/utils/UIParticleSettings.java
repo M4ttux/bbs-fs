@@ -163,7 +163,11 @@ public class UIParticleSettings extends UIElement
         {
             return UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_ARGS_SHRIEK;
         }
-        else if (path.equals("entity_effect") || path.equals("tinted_leaves") || path.equals("flash"))
+        else if (path.equals("effect") || path.equals("instant_effect") || path.equals("entity_effect"))
+        {
+            return UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_ARGS_EFFECT;
+        }
+        else if (path.equals("tinted_leaves") || path.equals("flash"))
         {
             return UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_ARGS_COLOR;
         }
@@ -213,7 +217,11 @@ public class UIParticleSettings extends UIElement
         {
             return UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_ARGS_SHRIEK_HINT;
         }
-        else if (path.equals("entity_effect") || path.equals("tinted_leaves") || path.equals("flash"))
+        else if (path.equals("effect") || path.equals("instant_effect") || path.equals("entity_effect"))
+        {
+            return UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_ARGS_EFFECT_HINT;
+        }
+        else if (path.equals("tinted_leaves") || path.equals("flash"))
         {
             return UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_ARGS_COLOR_HINT;
         }

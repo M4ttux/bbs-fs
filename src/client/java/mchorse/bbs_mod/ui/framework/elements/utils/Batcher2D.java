@@ -18,6 +18,7 @@ import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.ScreenRect;
 import net.minecraft.client.render.VertexConsumer;
+import net.minecraft.client.texture.Sprite;
 import net.minecraft.client.texture.TextureSetup;
 import net.minecraft.util.Identifier;
 import org.joml.Matrix3x2fc;
@@ -654,6 +655,24 @@ public class Batcher2D
         }
 
         this.texturedBox(BBSModClient.getTextures().getTexture(icon.texture), color, x, y, size, size, icon.x, icon.y, icon.x + icon.w, icon.y + icon.h, icon.textureW, icon.textureH);
+    }
+
+    /**
+     * Draw a vanilla atlas {@link Sprite} stretched across the given area.
+     */
+    public void drawSprite(Sprite sprite, float x, float y, float w, float h, int color)
+    {
+        if (sprite == null || w <= 0 || h <= 0)
+        {
+            return;
+        }
+
+        if (Colors.getA(color) <= 0F)
+        {
+            color = Colors.opaque(color);
+        }
+
+        this.context.drawSpriteStretched(RenderPipelines.GUI_TEXTURED, sprite, (int) x, (int) y, (int) w, (int) h, color);
     }
 
     public void iconArea(Icon icon, float x, float y, float w, float h)

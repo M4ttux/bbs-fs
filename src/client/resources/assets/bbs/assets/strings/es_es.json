@@ -631,6 +631,8 @@
     "bbs.ui.forms.editors.vanilla_particle.args.trail_hint": "{target:[0, 64, 0], color:16711680, duration:20}",
     "bbs.ui.forms.editors.vanilla_particle.args.vibration": "Acepta posición de destino y ticks de llegada.\n\nFormato (SNBT):\n• {destination:{type:\"block\", pos:[x, y, z]}, arrival_in_ticks:20}",
     "bbs.ui.forms.editors.vanilla_particle.args.vibration_hint": "{destination:{type:\"block\", pos:[0,64,0]}, arrival_in_ticks:20}",
+    "bbs.ui.forms.editors.vanilla_particle.args.effect": "Acepta el nombre de un efecto de poción, color hexadecimal (#RRGGBB) o valores RGB.\n\nEjemplos:\n• haste\n• speed\n• poison\n• #ff5500\n• 1.0 0.5 0.0",
+    "bbs.ui.forms.editors.vanilla_particle.args.effect_hint": "haste, speed, #ff5500 o 1.0 0.5 0.0",
     "bbs.ui.forms.list.context.focus": "Búsqueda de foco",
     "bbs.ui.forms.list.edit": "Editar",
     "bbs.ui.forms.list.search": "Buscar...",

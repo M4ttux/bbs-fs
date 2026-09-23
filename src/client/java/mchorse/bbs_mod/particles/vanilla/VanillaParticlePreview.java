@@ -7,9 +7,13 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.particle.ParticleTextureData;
 import net.minecraft.client.texture.AbstractTexture;
+import net.minecraft.client.texture.AtlasManager;
 import net.minecraft.client.texture.Sprite;
 import net.minecraft.client.texture.SpriteAtlasTexture;
+import net.minecraft.entity.effect.StatusEffect;
+import net.minecraft.registry.Registries;
 import net.minecraft.resource.Resource;
+import net.minecraft.util.Atlases;
 import net.minecraft.util.Identifier;
 
 import java.io.IOException;
@@ -31,27 +35,152 @@ public class VanillaParticlePreview
 
     public static void render(UIContext context, Identifier particle, float x, float y, float size, int fallbackColor)
     {
+        render(context, particle, null, x, y, size, fallbackColor);
+    }
+
+    public static void render(UIContext context, Identifier particle, String args, float x, float y, float size, int fallbackColor)
+    {
         if (size <= 0)
         {
             return;
         }
 
+        if (particle == null)
+        {
+            context.batcher.scaledIcon(Icons.PARTICLE, fallbackColor, x, y, size);
+            return;
+        }
+
         Preview preview = PREVIEWS.computeIfAbsent(particle, VanillaParticlePreview::loadPreview).orElse(null);
-        AbstractTexture texture = preview == null ? null : MinecraftClient.getInstance().getTextureManager().getTexture(preview.atlas());
+
+        if (preview != null)
+        {
+            SpriteAtlasTexture atlas = getAtlas(preview.atlas());
+
+            if (atlas != null)
+            {
+                /* Resolve current UVs rather than keeping sprites across atlas reloads. */
+                Sprite sprite = atlas.getSprite(preview.sprite());
+
+                if (sprite != null && sprite != atlas.getMissingSprite())
+                {
+                    int color = preview.color();
+                    Integer overrideColor = parseColor(args);
+
+                    if (overrideColor != null)
+                    {
+                        color = overrideColor;
+                    }
+
+                    context.batcher.drawSprite(sprite, x, y, size, size, color);
+                    return;
+                }
+            }
+        }
+
+        /* Custom model particles and modded types without a sprite still keep their slot. */
+        context.batcher.scaledIcon(Icons.PARTICLE, fallbackColor, x, y, size);
+    }
+
+    public static Integer parseColor(String args)
+    {
+        if (args == null || args.trim().isEmpty() || args.startsWith("{"))
+        {
+            return null;
+        }
+
+        try
+        {
+            String[] parts = args.trim().split("\\s+");
+
+            StatusEffect effect = Registries.STATUS_EFFECT.get(Identifier.of(parts[0].toLowerCase()));
+
+            if (effect != null)
+            {
+                return 0xFF000000 | effect.getColor();
+            }
+
+            if (parts[0].startsWith("#") || parts[0].startsWith("0x") || parts[0].startsWith("0X"))
+            {
+                String hex = parts[0].startsWith("#") ? parts[0].substring(1) : parts[0].substring(2);
+
+                return 0xFF000000 | Integer.parseInt(hex, 16);
+            }
+
+            if (parts.length >= 3)
+            {
+                float r = Float.parseFloat(parts[0]);
+                float g = Float.parseFloat(parts[1]);
+                float b = Float.parseFloat(parts[2]);
+                int ir = (int) (Math.min(Math.max(r, 0F), 1F) * 255F);
+                int ig = (int) (Math.min(Math.max(g, 0F), 1F) * 255F);
+                int ib = (int) (Math.min(Math.max(b, 0F), 1F) * 255F);
+
+                return 0xFF000000 | (ir << 16) | (ig << 8) | ib;
+            }
+
+            return 0xFF000000 | Integer.parseInt(parts[0]);
+        }
+        catch (Exception ignored)
+        {
+        }
+
+        return null;
+    }
+
+    private static SpriteAtlasTexture getAtlas(Identifier atlasId)
+    {
+        MinecraftClient mc = MinecraftClient.getInstance();
+
+        if (mc == null)
+        {
+            return null;
+        }
+
+        AbstractTexture texture = mc.getTextureManager().getTexture(atlasId);
 
         if (texture instanceof SpriteAtlasTexture atlas)
         {
-            /* Resolve current UVs rather than keeping sprites across atlas reloads. */
-            Sprite sprite = atlas.getSprite(preview.sprite());
+            return atlas;
+        }
 
-            context.batcher.texturedBox(((net.minecraft.client.texture.GlTexture) atlas.getGlTexture()).getGlId(), preview.color(), x, y, size, size,
-                sprite.getMinU(), sprite.getMinV(), sprite.getMaxU(), sprite.getMaxV(), 1, 1);
-        }
-        else
+        try
         {
-            /* Custom model particles and modded types without a sprite still keep their slot. */
-            context.batcher.scaledIcon(Icons.PARTICLE, fallbackColor, x, y, size);
+            AtlasManager manager = mc.getAtlasManager();
+
+            if (manager != null)
+            {
+                SpriteAtlasTexture atlas = manager.getAtlasTexture(getDefinitionId(atlasId));
+
+                if (atlas != null)
+                {
+                    return atlas;
+                }
+            }
         }
+        catch (Exception ignored)
+        {
+        }
+
+        return null;
+    }
+
+    private static Identifier getDefinitionId(Identifier atlasId)
+    {
+        if (atlasId.equals(SpriteAtlasTexture.PARTICLE_ATLAS_TEXTURE))
+        {
+            return Atlases.PARTICLES;
+        }
+        else if (atlasId.equals(SpriteAtlasTexture.BLOCK_ATLAS_TEXTURE))
+        {
+            return Atlases.BLOCKS;
+        }
+        else if (atlasId.equals(SpriteAtlasTexture.ITEMS_ATLAS_TEXTURE))
+        {
+            return Atlases.ITEMS;
+        }
+
+        return atlasId;
     }
 
     private static Optional<Preview> loadPreview(Identifier particle)
@@ -64,16 +193,21 @@ public class VanillaParticlePreview
              * Argument-dependent types use a representative sample, without changing form settings. */
             String blockSprite = switch (particle.getPath())
             {
-                case "block" -> "block/stone";
+                case "block", "block_crumble", "dust_pillar" -> "block/stone";
                 case "block_marker" -> "item/barrier";
                 case "item", "item_snowball" -> "item/snowball";
                 case "item_slime" -> "item/slime_ball";
+                case "item_cobweb" -> "block/cobweb";
                 default -> null;
             };
 
             if (blockSprite != null)
             {
-                return Optional.of(new Preview(SpriteAtlasTexture.BLOCK_ATLAS_TEXTURE, Identifier.of(blockSprite), color));
+                Identifier atlasId = blockSprite.startsWith("item/")
+                    ? SpriteAtlasTexture.ITEMS_ATLAS_TEXTURE
+                    : SpriteAtlasTexture.BLOCK_ATLAS_TEXTURE;
+
+                return Optional.of(new Preview(atlasId, Identifier.of(blockSprite), color));
             }
 
             color = sampleColor(particle.getPath());
@@ -82,7 +216,7 @@ public class VanillaParticlePreview
             {
                 particle = Identifier.of("explosion");
             }
-            else if (particle.getPath().equals("gust_emitter"))
+            else if (particle.getPath().startsWith("gust_emitter"))
             {
                 particle = Identifier.of("gust");
             }

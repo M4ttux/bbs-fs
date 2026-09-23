@@ -19,10 +19,12 @@ import net.minecraft.client.render.Camera;
 import net.minecraft.command.argument.ParticleEffectArgumentType;
 import net.minecraft.item.ItemStack;
 import net.minecraft.particle.BlockStateParticleEffect;
+import net.minecraft.particle.EffectParticleEffect;
 import net.minecraft.particle.ItemStackParticleEffect;
 import net.minecraft.particle.ParticleEffect;
 import net.minecraft.particle.ParticleType;
 import net.minecraft.particle.ParticleTypes;
+import net.minecraft.particle.TintedParticleEffect;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.Identifier;
 import net.minecraft.world.World;
@@ -77,7 +79,7 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
         float x = (x1 + x2 - size) / 2F;
         float y = (y1 + y2 - size) / 2F;
 
-        VanillaParticlePreview.render(context, this.form.settings.get().particle, x, y, size, Colors.WHITE);
+        VanillaParticlePreview.render(context, this.form.settings.get().particle, this.form.settings.get().arguments, x, y, size, Colors.WHITE);
     }
 
     @Override
@@ -412,6 +414,16 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
                 catch (Exception ignored) {}
             }
 
+            if (!args.startsWith("{") && (type == ParticleTypes.EFFECT || type == ParticleTypes.INSTANT_EFFECT))
+            {
+                return parseEffect((ParticleType<EffectParticleEffect>) type, args);
+            }
+
+            if (!args.startsWith("{") && (type == ParticleTypes.ENTITY_EFFECT || type == ParticleTypes.TINTED_LEAVES || type == ParticleTypes.FLASH))
+            {
+                return parseTinted((ParticleType<TintedParticleEffect>) type, args);
+            }
+
             StringReader reader = new StringReader(settings.particle.toString() + (args.isEmpty() || args.startsWith("{") ? args : " " + args));
 
             return ParticleEffectArgumentType.readParameters(reader, world.getRegistryManager());
@@ -420,6 +432,79 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
         {
             return ParticleTypes.FLAME;
         }
+    }
+
+    private static EffectParticleEffect parseEffect(ParticleType<EffectParticleEffect> type, String args)
+    {
+        if (args == null || args.trim().isEmpty())
+        {
+            return EffectParticleEffect.of(type, 0xFFFFFFFF, 1.0F);
+        }
+
+        try
+        {
+            String[] parts = args.trim().split("\\s+");
+            float power = 1.0F;
+            Integer color = VanillaParticlePreview.parseColor(parts[0]);
+
+            if (color != null)
+            {
+                if (parts.length > 1)
+                {
+                    try
+                    {
+                        power = Float.parseFloat(parts[1]);
+                    }
+                    catch (Exception ignored) {}
+                }
+
+                return EffectParticleEffect.of(type, color, power);
+            }
+
+            if (parts.length >= 3)
+            {
+                float r = Float.parseFloat(parts[0]);
+                float g = Float.parseFloat(parts[1]);
+                float b = Float.parseFloat(parts[2]);
+                power = parts.length >= 4 ? Float.parseFloat(parts[3]) : 1.0F;
+
+                return EffectParticleEffect.of(type, r, g, b, power);
+            }
+        }
+        catch (Exception ignored) {}
+
+        return EffectParticleEffect.of(type, 0xFFFFFFFF, 1.0F);
+    }
+
+    private static TintedParticleEffect parseTinted(ParticleType<TintedParticleEffect> type, String args)
+    {
+        if (args == null || args.trim().isEmpty())
+        {
+            return TintedParticleEffect.create(type, 0xFFFFFFFF);
+        }
+
+        try
+        {
+            String[] parts = args.trim().split("\\s+");
+            Integer color = VanillaParticlePreview.parseColor(parts[0]);
+
+            if (color != null)
+            {
+                return TintedParticleEffect.create(type, color);
+            }
+
+            if (parts.length >= 3)
+            {
+                float r = Float.parseFloat(parts[0]);
+                float g = Float.parseFloat(parts[1]);
+                float b = Float.parseFloat(parts[2]);
+
+                return TintedParticleEffect.create(type, r, g, b);
+            }
+        }
+        catch (Exception ignored) {}
+
+        return TintedParticleEffect.create(type, 0xFFFFFFFF);
     }
 
     private static net.minecraft.particle.DustParticleEffect parseDust(String args)
