@@ -38,8 +38,6 @@ import mchorse.bbs_mod.ui.utils.keys.KeyCodes;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
-import mchorse.bbs_mod.forms.forms.ModelForm;
-import mchorse.bbs_mod.forms.forms.ParticleForm;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
@@ -47,7 +45,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -455,36 +452,6 @@ public class UIFormList extends UIElement
         {
             int index = category.category.getForms().indexOf(form);
 
-            if (index == -1 && form != null)
-            {
-                if (form instanceof ModelForm mf)
-                {
-                    for (int i = 0; i < category.category.getForms().size(); i++)
-                    {
-                        Form candidate = category.category.getForms().get(i);
-
-                        if (candidate instanceof ModelForm cmf && Objects.equals(mf.model.get(), cmf.model.get()))
-                        {
-                            index = i;
-                            break;
-                        }
-                    }
-                }
-                else if (form instanceof ParticleForm pf)
-                {
-                    for (int i = 0; i < category.category.getForms().size(); i++)
-                    {
-                        Form candidate = category.category.getForms().get(i);
-
-                        if (candidate instanceof ParticleForm cpf && Objects.equals(pf.effect.get(), cpf.effect.get()))
-                        {
-                            index = i;
-                            break;
-                        }
-                    }
-                }
-            }
-
             if (index == -1)
             {
                 category.selected = null;
@@ -497,12 +464,19 @@ public class UIFormList extends UIElement
             }
         }
 
-        if (!found && form != null && this.recent != null)
+        if (!found && form != null)
         {
             Form copy = FormUtils.copy(form);
 
-            this.recent.category.addForm(copy);
-            this.recent.select(copy, false);
+            if (this.recent != null)
+            {
+                this.recent.category.addForm(copy);
+                this.recent.select(copy, false);
+            }
+            else if (!this.categories.isEmpty())
+            {
+                this.categories.get(0).select(copy, false);
+            }
         }
     }
 
