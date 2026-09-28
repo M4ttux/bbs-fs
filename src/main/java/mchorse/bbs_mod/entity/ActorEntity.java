@@ -240,6 +240,12 @@ public class ActorEntity extends LivingEntity implements IEntityFormProvider
             return;
         }
 
+        /* Natural regeneration: actors representing characters heal over time when damaged */
+        if (!this.isDead() && this.getHealth() < this.getMaxHealth() && this.age % 80 == 0)
+        {
+            this.heal(1.0F);
+        }
+
         if (this.isDead() || !this.pickUpItems)
         {
             return;

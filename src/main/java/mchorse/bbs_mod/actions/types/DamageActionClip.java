@@ -23,7 +23,7 @@ public class DamageActionClip extends ActionClip
     {
         float damage = this.damage.get();
 
-        if (damage <= 0F)
+        if (damage == 0F)
         {
             return;
         }
@@ -32,9 +32,16 @@ public class DamageActionClip extends ActionClip
 
         if (actor != null)
         {
-            net.minecraft.server.world.ServerWorld world = player.getEntityWorld();
+            if (damage > 0F)
+            {
+                net.minecraft.server.world.ServerWorld world = player.getEntityWorld();
 
-            actor.damage(world, world.getDamageSources().mobAttack(player), damage);
+                actor.damage(world, world.getDamageSources().mobAttack(player), damage);
+            }
+            else
+            {
+                actor.heal(-damage);
+            }
         }
     }
 

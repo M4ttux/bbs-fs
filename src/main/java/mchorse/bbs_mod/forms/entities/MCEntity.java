@@ -347,6 +347,29 @@ public class MCEntity implements IEntity
     }
 
     @Override
+    public void setHealth(float health)
+    {
+        if (this.mcEntity instanceof LivingEntity living)
+        {
+            living.setHealth(health);
+        }
+    }
+
+    @Override
+    public void setMaxHealth(float maxHealth)
+    {
+        if (this.mcEntity instanceof LivingEntity living)
+        {
+            var maxHealthAttr = living.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.MAX_HEALTH);
+
+            if (maxHealthAttr != null)
+            {
+                maxHealthAttr.setBaseValue(maxHealth > 0F ? maxHealth : IEntity.FULL_HEALTH);
+            }
+        }
+    }
+
+    @Override
     public boolean isBurning()
     {
         return this.mcEntity.isOnFire();

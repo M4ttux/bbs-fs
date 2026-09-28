@@ -131,6 +131,12 @@ public class BodyPart extends ValueGroup
 
         this.syncWorld(target);
 
+        if (target != null)
+        {
+            this.entity.setHealth(target.getHealth());
+            this.entity.setMaxHealth(target.getMaxHealth());
+        }
+
         return this.entity;
     }
 

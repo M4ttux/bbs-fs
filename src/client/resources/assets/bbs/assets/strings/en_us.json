@@ -1164,6 +1164,7 @@
 	"bbs.ui.forms.editors.label.font_pick": "Pick font",
 	"bbs.ui.forms.editors.label.font_size": "Font size. It only decides how big the text is laid out - sharpness is picked automatically",
 	"bbs.ui.forms.editors.label.label": "Label",
+	"bbs.ui.forms.editors.label.label_tooltip": "Supports dynamic data placeholders from the local player or replay actor. Available: {hp} (decimal health), {hp_int} (whole hearts), {hp_colored} (colored hearts: green >60%, orange >30%, red <=30%), {hp_color}, {max_hp}, {hunger} (0-20 food level), {xp_level} (experience level). Formatting codes: [c] for §c, etc.",
 	"bbs.ui.forms.editors.label.line_height": "Line height. 0 takes the font's own spacing",
 	"bbs.ui.forms.editors.label.nametag": "Nametag",
 	"bbs.ui.forms.editors.label.nametag_tooltip": "When active and attached to a BodyPart with 'Use target' enabled, sneaks along with the target entity (shifts -0.5 in Y and fades out)",

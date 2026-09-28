@@ -174,6 +174,12 @@ public interface IEntity
         return FULL_HEALTH;
     }
 
+    public default void setHealth(float health)
+    {}
+
+    public default void setMaxHealth(float maxHealth)
+    {}
+
     /** On fire, as CEM's {@code is_burning}. */
     public default boolean isBurning()
     {
@@ -352,6 +358,8 @@ public interface IEntity
 
         this.setFallDistance(entity.getFallDistance());
         this.setHurtTimer(entity.getHurtTimer());
+        this.setHealth(entity.getHealth());
+        this.setMaxHealth(entity.getMaxHealth());
 
         this.setPrevX(entity.getPrevX());
         this.setPrevY(entity.getPrevY());

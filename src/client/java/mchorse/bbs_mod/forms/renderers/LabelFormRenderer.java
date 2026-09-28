@@ -107,11 +107,77 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         return lineHeight > 0 ? lineHeight : font.getLineHeight();
     }
 
+    /**
+     * Resolve dynamic data placeholders in the label text.
+     *
+     * <p>Health tokens ({@code {hp}}, {@code {hp_int}}, {@code {max_hp}}) are read from the
+     * <em>replay actor</em> ({@code entity}) when one is available so that they update in real time
+     * as the replay takes damage. Hunger and XP level have no equivalent in
+     * {@link mchorse.bbs_mod.forms.entities.IEntity}, so those always come from the local player.
+     *
+     * <p>Supported tokens:<br>
+     * {@code {hp}}              — current health (decimal, from actor),<br>
+     * {@code {hp_int}}          — current health rounded up to whole hearts (from actor),<br>
+     * {@code {hp_colored}}      — integer health with color code (&sect;2 green &gt;60%, &sect;6 orange &gt;30%, &sect;4 red &le;30%),<br>
+     * {@code {hp_color}}        — color code alone based on health ratio,<br>
+     * {@code {max_hp}}          — maximum health (decimal, from actor),<br>
+     * {@code {hunger}}          — food level (0–20, from local player),<br>
+     * {@code {xp_level}}        — experience level (from local player).
+     * </p>
+     *
+     * <p>When neither entity nor local player is available the tokens are replaced
+     * with {@code "?"} so the label still renders.</p>
+     *
+     * @param raw    the raw label string
+     * @param entity the replay actor currently being rendered, or {@code null} in UI previews
+     */
+    private String resolveDynamicText(String raw, mchorse.bbs_mod.forms.entities.IEntity entity)
+    {
+        if (raw == null || raw.isEmpty() || !raw.contains("{"))
+        {
+            return raw;
+        }
+
+        net.minecraft.client.network.ClientPlayerEntity player = MinecraftClient.getInstance().player;
+
+        /* Health — prefer the replay actor so it reflects damage taken by the actor, not the viewer. */
+        float currentHp = entity != null ? entity.getHealth() : player != null ? player.getHealth() : 20F;
+        float maxHpVal  = entity != null ? entity.getMaxHealth() : player != null ? player.getMaxHealth() : 20F;
+        float ratio     = maxHpVal > 0F ? (currentHp / maxHpVal) : (currentHp / 20F);
+
+        /* Dynamic color code: green ([2 / §2) for high health, orange ([6 / §6) for mid, red ([4 / §4) for low */
+        String colorCode = ratio > 0.6F ? "\u00A72" : ratio > 0.3F ? "\u00A76" : "\u00A74";
+
+        String hp        = entity != null ? String.valueOf(Math.ceil(entity.getHealth()))
+                         : player != null ? String.valueOf(Math.ceil(player.getHealth())) : "?";
+        String hpInt     = entity != null ? String.valueOf((int) Math.ceil(entity.getHealth()))
+                         : player != null ? String.valueOf((int) Math.ceil(player.getHealth())) : "?";
+        String maxHp     = entity != null ? String.valueOf(Math.ceil(entity.getMaxHealth()))
+                         : player != null ? String.valueOf(Math.ceil(player.getMaxHealth())) : "?";
+        String hpColored = colorCode + hpInt;
+
+        /* Hunger and XP — IEntity has no equivalent; always read from local player. */
+        String hunger  = player != null ? String.valueOf(player.getHungerManager().getFoodLevel()) : "?";
+        String xpLevel = player != null ? String.valueOf(player.experienceLevel) : "?";
+
+        return raw
+            .replace("{hp_colored}",     hpColored)
+            .replace("{hp_int_colored}", hpColored)
+            .replace("{hp_int_color}",   hpColored)
+            .replace("{hp_color_int}",   hpColored)
+            .replace("{hp_color}",       colorCode)
+            .replace("{hp}",             hp)
+            .replace("{hp_int}",         hpInt)
+            .replace("{max_hp}",         maxHp)
+            .replace("{hunger}",         hunger)
+            .replace("{xp_level}",       xpLevel);
+    }
+
     @Override
     public void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
     {
         int color = this.form.color.get().getARGBColor();
-        String text = StringUtils.processColoredText(this.form.text.get());
+        String text = StringUtils.processColoredText(this.resolveDynamicText(this.form.text.get(), null));
         /* The interface draws a unit of the layout over as many pixels as it is scaled by. */
         FontRenderer font = this.getFont((float) MinecraftClient.getInstance().getWindow().getScaleFactor());
         FontRenderer previous = context.batcher.setFont(font);
@@ -218,7 +284,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
     private void renderString(FormRenderingContext context, CustomVertexConsumerProvider consumers, FontRenderer font, int light)
     {
         TextRenderer renderer = font.getRenderer();
-        String content = StringUtils.processColoredText(this.form.text.get());
+        String content = StringUtils.processColoredText(this.resolveDynamicText(this.form.text.get(), context.entity));
         float transition = context.getTransition();
         int w = renderer.getWidth(content) - 1;
         int h = font.getHeight();
@@ -280,7 +346,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         float transition = context.getTransition();
         int w = 0;
         int h = font.getHeight();
-        String content = StringUtils.processColoredText(this.form.text.get());
+        String content = StringUtils.processColoredText(this.resolveDynamicText(this.form.text.get(), context.entity));
         List<String> lines = FontRenderer.wrap(renderer, content, this.form.max.get());
 
         if (lines.size() <= 1)

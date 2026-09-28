@@ -187,6 +187,17 @@ public abstract class BaseFilmController
                     {
                         Entity anEntity = MinecraftClient.getInstance().world.getEntityById(entityId);
 
+                        if (anEntity instanceof LivingEntity living)
+                        {
+                            /* The blow itself lands on the entity, but the body that shows it is the
+                             * replay's, so the flash has to be carried across. */
+                            entity.setHurtTimer(living.hurtTime);
+
+                            /* Sync health so label placeholders ({hp}, {max_hp}, {hp_colored}) reflect damage and regeneration. */
+                            entity.setHealth(living.getHealth());
+                            entity.setMaxHealth(living.getMaxHealth());
+                        }
+
                         if (anEntity instanceof ActorEntity actor)
                         {
                             /* Force synchronize entity angles */
@@ -210,10 +221,6 @@ public abstract class BaseFilmController
 
                             actor.updateTrackedPositionAndAngles(new Vec3d(x, y, z), yaw, pitch);
                             actor.setPosition(x, y, z);
-
-                            /* The blow itself lands on the entity, but the body that shows it is the
-                             * replay's, so the flash has to be carried across. */
-                            entity.setHurtTimer(actor.hurtTime);
 
                             replay.applyClientActions(replayTicks, new MCEntity(anEntity), this.film);
                         }

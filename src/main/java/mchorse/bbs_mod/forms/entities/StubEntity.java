@@ -32,6 +32,8 @@ public class StubEntity implements IEntity
     private float fallDistance;
     private int hurtTimer;
     private int deathTime;
+    private float health = IEntity.FULL_HEALTH;
+    private float maxHealth = IEntity.FULL_HEALTH;
 
     /** Hands every stub its own {@link #getId()}: a number that stays put for the life of the instance. */
     private static int nextId;
@@ -305,6 +307,28 @@ public class StubEntity implements IEntity
     public void setDeathTime(int deathTime)
     {
         this.deathTime = deathTime;
+    }
+
+    @Override
+    public float getHealth()
+    {
+        return this.health;
+    }
+
+    public void setHealth(float health)
+    {
+        this.health = health;
+    }
+
+    @Override
+    public float getMaxHealth()
+    {
+        return this.maxHealth;
+    }
+
+    public void setMaxHealth(float maxHealth)
+    {
+        this.maxHealth = maxHealth > 0F ? maxHealth : IEntity.FULL_HEALTH;
     }
 
     @Override
