@@ -26,6 +26,7 @@ public class LabelForm extends Form
     public final ValueBoolean billboard = new ValueBoolean("billboard", false);
     public final ValueBoolean nametag = new ValueBoolean("nametag", false);
     public final ValueColor color = new ValueColor("color", Color.white());
+    public final ValueBoolean smoothGradient = new ValueBoolean("smoothGradient", true);
 
     public final ValueInt max = new ValueInt("max", -1);
     public final ValueFloat anchorX = new ValueFloat("anchorX", 0.5F);
@@ -52,6 +53,7 @@ public class LabelForm extends Form
         this.add(this.billboard);
         this.add(this.nametag);
         this.add(this.color);
+        this.add(this.smoothGradient);
         this.add(this.max);
         this.add(this.anchorX);
         this.add(this.anchorY);

@@ -32,11 +32,19 @@ import net.minecraft.client.render.RenderSetup;
 import net.minecraft.client.render.Tessellator;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.text.MutableText;
+import net.minecraft.text.OrderedText;
+import net.minecraft.text.Style;
+import net.minecraft.text.Text;
+import net.minecraft.text.TextColor;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class LabelFormRenderer extends FormRenderer<LabelForm>
 {
@@ -160,7 +168,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         String hunger  = player != null ? String.valueOf(player.getHungerManager().getFoodLevel()) : "?";
         String xpLevel = player != null ? String.valueOf(player.experienceLevel) : "?";
 
-        return raw
+        String resolved = raw
             .replace("{hp_colored}",     hpColored)
             .replace("{hp_int_colored}", hpColored)
             .replace("{hp_int_color}",   hpColored)
@@ -171,27 +179,555 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
             .replace("{max_hp}",         maxHp)
             .replace("{hunger}",         hunger)
             .replace("{xp_level}",       xpLevel);
+
+        return applyGradients(resolved, this.form.smoothGradient.get());
+    }
+
+    private static final Pattern GRADIENT_PATTERN =
+        Pattern.compile("(?i)\\{(?:g|gradient)\\s*:\\s*(.*?)\\}");
+
+    private static final int[] MC_COLORS = new int[] {
+        0x000000, 0x0000AA, 0x00AA00, 0x00AAAA,
+        0xAA0000, 0xAA00AA, 0xFFAA00, 0xAAAAAA,
+        0x555555, 0x5555FF, 0x55FF55, 0x55FFFF,
+        0xFF5555, 0xFF55FF, 0xFFFF55, 0xFFFFFF
+    };
+
+    private static final char[] MC_COLOR_CODES = new char[] {
+        '0', '1', '2', '3', '4', '5', '6', '7',
+        '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
+    };
+
+    /**
+     * Resolves gradient tags like {@code {g: [4Hola[2}} or {@code {gradient: [4Hola[2}} or
+     * {@code {g: [4, [2, Hola}}.
+     */
+    private static String applyGradients(String raw, boolean smooth)
+    {
+        if (raw == null || raw.isEmpty() || !raw.contains("{"))
+        {
+            return raw;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        int cursor = 0;
+        Matcher m = GRADIENT_PATTERN.matcher(raw);
+
+        while (m.find())
+        {
+            sb.append(raw, cursor, m.start());
+
+            String inner = m.group(1);
+            int matchEnd = m.end();
+
+            /* When closed with double braces (e.g. {g: [4Hola[2}}), consume the extra '}' */
+            if (matchEnd < raw.length() && raw.charAt(matchEnd) == '}')
+            {
+                matchEnd++;
+            }
+
+            sb.append(processGradientTag(inner, smooth));
+            cursor = matchEnd;
+        }
+
+        sb.append(raw.substring(cursor));
+        return sb.toString();
+    }
+
+    private static String processGradientTag(String inner, boolean smooth)
+    {
+        if (inner == null) return "";
+        inner = inner.trim();
+
+        int c1 = -1;
+        int c2 = -1;
+        String text = null;
+
+        /* Comma-separated: e.g. "[4, [2, Hola" */
+        if (inner.contains(","))
+        {
+            String[] parts = inner.split(",", 3);
+            if (parts.length == 3)
+            {
+                c1 = parseColor(parts[0]);
+                c2 = parseColor(parts[1]);
+                text = parts[2].trim();
+            }
+        }
+
+        /* Enclosed format: <start_color><text><end_color>, e.g. "[4Hola[2" */
+        if (c1 == -1 || c2 == -1 || text == null)
+        {
+            int startColorEnd = findColorEnd(inner, 0);
+            if (startColorEnd > 0)
+            {
+                c1 = parseColor(inner.substring(0, startColorEnd));
+
+                int endColorStart = findColorStart(inner);
+                if (endColorStart > startColorEnd)
+                {
+                    c2 = parseColor(inner.substring(endColorStart));
+                    text = inner.substring(startColorEnd, endColorStart);
+                }
+            }
+        }
+
+        if (c1 != -1 && c2 != -1 && text != null)
+        {
+            return generateGradient(c1, c2, text, smooth);
+        }
+
+        return inner;
+    }
+
+    private static int findColorEnd(String str, int from)
+    {
+        if (from >= str.length()) return -1;
+
+        char first = str.charAt(from);
+        if (first == '[' || first == '\u00A7')
+        {
+            int next = from + 1;
+            if (next < str.length() && str.charAt(next) == '#')
+            {
+                int closeBracket = str.indexOf(']', next);
+                if (closeBracket > next && closeBracket <= next + 8)
+                {
+                    return closeBracket + 1;
+                }
+                return Math.min(str.length(), next + 7);
+            }
+            if (next < str.length())
+            {
+                if (next + 1 < str.length() && str.charAt(next + 1) == ']')
+                {
+                    return next + 2;
+                }
+                return next + 1;
+            }
+        }
+        else if (first == '#')
+        {
+            return Math.min(str.length(), from + 7);
+        }
+
+        return -1;
+    }
+
+    private static int findColorStart(String str)
+    {
+        int len = str.length();
+        if (len < 2) return -1;
+
+        int end = len;
+        while (end > 0 && (str.charAt(end - 1) == ']' || str.charAt(end - 1) == '}'))
+        {
+            end--;
+        }
+
+        for (int i = end - 1; i >= Math.max(0, end - 10); i--)
+        {
+            char ch = str.charAt(i);
+            if (ch == '[' || ch == '\u00A7' || ch == '#')
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private static int parseColor(String str)
+    {
+        if (str == null) return -1;
+        str = str.trim();
+
+        while (str.startsWith("[") || str.startsWith("\u00A7"))
+        {
+            str = str.substring(1);
+        }
+        while (str.endsWith("]") || str.endsWith("}"))
+        {
+            str = str.substring(0, str.length() - 1);
+        }
+        str = str.trim();
+        if (str.startsWith("#"))
+        {
+            str = str.substring(1);
+        }
+
+        if (str.length() == 1)
+        {
+            char c = Character.toLowerCase(str.charAt(0));
+            int idx = "0123456789abcdef".indexOf(c);
+            if (idx >= 0)
+            {
+                return MC_COLORS[idx];
+            }
+        }
+        if (str.length() == 6)
+        {
+            try
+            {
+                return Integer.parseInt(str, 16);
+            }
+            catch (Exception ignored) {}
+        }
+        if (str.length() == 3)
+        {
+            try
+            {
+                int r = Integer.parseInt(str.substring(0, 1), 16) * 17;
+                int g = Integer.parseInt(str.substring(1, 2), 16) * 17;
+                int b = Integer.parseInt(str.substring(2, 3), 16) * 17;
+                return (r << 16) | (g << 8) | b;
+            }
+            catch (Exception ignored) {}
+        }
+
+        return -1;
+    }
+
+    private static String generateGradient(int c1, int c2, String text, boolean smooth)
+    {
+        if (text == null || text.isEmpty())
+        {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        int len = text.length();
+
+        int visibleChars = 0;
+        for (int i = 0; i < len; i++)
+        {
+            if (!Character.isWhitespace(text.charAt(i)))
+            {
+                visibleChars++;
+            }
+        }
+
+        int visibleIndex = 0;
+        char lastCode = ' ';
+
+        for (int i = 0; i < len; i++)
+        {
+            char ch = text.charAt(i);
+
+            if (Character.isWhitespace(ch))
+            {
+                sb.append(ch);
+                continue;
+            }
+
+            float t = visibleChars > 1 ? (float) visibleIndex / (visibleChars - 1) : 0F;
+
+            if (smooth)
+            {
+                int rgb = interpolateRgb(c1, c2, t);
+                sb.append("\u00A7#").append(String.format("%06X", rgb & 0xFFFFFF));
+            }
+            else
+            {
+                char code = getGradientCode(c1, c2, t);
+                if (code != lastCode)
+                {
+                    sb.append('\u00A7').append(code);
+                    lastCode = code;
+                }
+            }
+
+            sb.append(ch);
+            visibleIndex++;
+        }
+
+        /* Reset formatting so subsequent text returns to the label's default color */
+        sb.append("\u00A7r");
+        return sb.toString();
+    }
+
+    private static int interpolateRgb(int c1, int c2, float t)
+    {
+        if (t <= 0F) return c1 & 0xFFFFFF;
+        if (t >= 1F) return c2 & 0xFFFFFF;
+
+        int r1 = (c1 >> 16) & 0xFF;
+        int g1 = (c1 >> 8) & 0xFF;
+        int b1 = c1 & 0xFF;
+
+        int r2 = (c2 >> 16) & 0xFF;
+        int g2 = (c2 >> 8) & 0xFF;
+        int b2 = c2 & 0xFF;
+
+        int r = Math.min(255, Math.max(0, Math.round(r1 + t * (r2 - r1))));
+        int g = Math.min(255, Math.max(0, Math.round(g1 + t * (g2 - g1))));
+        int b = Math.min(255, Math.max(0, Math.round(b1 + t * (b2 - b1))));
+
+        return (r << 16) | (g << 8) | b;
+    }
+
+    public static Text parseToText(String content)
+    {
+        if (content == null || content.isEmpty())
+        {
+            return Text.empty();
+        }
+
+        MutableText root = Text.empty();
+        Style style = Style.EMPTY;
+        StringBuilder currentChunk = new StringBuilder();
+        int len = content.length();
+
+        for (int i = 0; i < len; i++)
+        {
+            char ch = content.charAt(i);
+
+            if (ch == '\\' && i + 1 < len && content.charAt(i + 1) == '[')
+            {
+                currentChunk.append('[');
+                i++;
+                continue;
+            }
+
+            if ((ch == '\u00A7' || ch == '[') && i + 1 < len)
+            {
+                char next = content.charAt(i + 1);
+
+                /* 24-bit hex color code: §#RRGGBB or [#RRGGBB] */
+                if (next == '#' && i + 7 < len)
+                {
+                    String hex = content.substring(i + 2, i + 8);
+                    try
+                    {
+                        int rgb = Integer.parseInt(hex, 16);
+
+                        if (currentChunk.length() > 0)
+                        {
+                            root.append(Text.literal(currentChunk.toString()).setStyle(style));
+                            currentChunk.setLength(0);
+                        }
+
+                        style = style.withColor(TextColor.fromRgb(rgb));
+                        i += 7;
+                        if (i + 1 < len && content.charAt(i + 1) == ']')
+                        {
+                            i++;
+                        }
+                        continue;
+                    }
+                    catch (NumberFormatException ignored) {}
+                }
+
+                /* Legacy formatting code: §0-§f, §k-§o, §r or [0-[f, [k-[o, [r */
+                Formatting formatting = Formatting.byCode(next);
+                if (formatting != null)
+                {
+                    if (currentChunk.length() > 0)
+                    {
+                        root.append(Text.literal(currentChunk.toString()).setStyle(style));
+                        currentChunk.setLength(0);
+                    }
+
+                    if (formatting == Formatting.RESET)
+                    {
+                        style = Style.EMPTY;
+                    }
+                    else if (formatting.isColor())
+                    {
+                        style = Style.EMPTY.withColor(formatting);
+                    }
+                    else if (formatting.isModifier())
+                    {
+                        style = style.withFormatting(formatting);
+                    }
+
+                    i++;
+                    if (i + 1 < len && content.charAt(i + 1) == ']')
+                    {
+                        i++;
+                    }
+                    continue;
+                }
+            }
+
+            currentChunk.append(ch);
+        }
+
+        if (currentChunk.length() > 0)
+        {
+            root.append(Text.literal(currentChunk.toString()).setStyle(style));
+        }
+
+        return root;
+    }
+
+    private static OrderedText toShadow(OrderedText text, int shadowRgb)
+    {
+        TextColor color = TextColor.fromRgb(shadowRgb & 0xFFFFFF);
+
+        return (visitor) -> text.accept((charIndex, style, codePoint) ->
+        {
+            return visitor.accept(charIndex, style.withColor(color), codePoint);
+        });
+    }
+
+    private static char getGradientCode(int c1, int c2, float t)
+    {
+        if (t <= 0F) return getClosestMCCode(c1);
+        if (t >= 1F) return getClosestMCCode(c2);
+
+        int r1 = (c1 >> 16) & 0xFF;
+        int g1 = (c1 >> 8) & 0xFF;
+        int b1 = c1 & 0xFF;
+
+        int r2 = (c2 >> 16) & 0xFF;
+        int g2 = (c2 >> 8) & 0xFF;
+        int b2 = c2 & 0xFF;
+
+        float[] hsv1 = rgbToHsv(r1, g1, b1);
+        float[] hsv2 = rgbToHsv(r2, g2, b2);
+
+        int rgb;
+        if (hsv1[1] > 0.15F && hsv2[1] > 0.15F)
+        {
+            float h1 = hsv1[0];
+            float h2 = hsv2[0];
+            float diff = h2 - h1;
+
+            if (diff > 0.5F) diff -= 1.0F;
+            else if (diff < -0.5F) diff += 1.0F;
+
+            float h = (h1 + t * diff) % 1.0F;
+            if (h < 0F) h += 1.0F;
+
+            float s = hsv1[1] + t * (hsv2[1] - hsv1[1]);
+            float v = hsv1[2] + t * (hsv2[2] - hsv1[2]);
+
+            rgb = hsvToRgb(h, s, v);
+        }
+        else
+        {
+            int r = (int) (r1 + t * (r2 - r1));
+            int g = (int) (g1 + t * (g2 - g1));
+            int b = (int) (b1 + t * (b2 - b1));
+            rgb = (r << 16) | (g << 8) | b;
+        }
+
+        return getClosestMCCode(rgb);
+    }
+
+    private static char getClosestMCCode(int rgb)
+    {
+        int r = (rgb >> 16) & 0xFF;
+        int g = (rgb >> 8) & 0xFF;
+        int b = rgb & 0xFF;
+
+        int bestIndex = 0;
+        long bestDist = Long.MAX_VALUE;
+
+        for (int i = 0; i < MC_COLORS.length; i++)
+        {
+            int cr = (MC_COLORS[i] >> 16) & 0xFF;
+            int cg = (MC_COLORS[i] >> 8) & 0xFF;
+            int cb = MC_COLORS[i] & 0xFF;
+
+            int rmean = (r + cr) / 2;
+            int dr = r - cr;
+            int dg = g - cg;
+            int db = b - cb;
+            long dist = (((512 + rmean) * dr * dr) >> 8) + 4L * dg * dg + (((767 - rmean) * db * db) >> 8);
+
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                bestIndex = i;
+            }
+        }
+
+        return MC_COLOR_CODES[bestIndex];
+    }
+
+    private static float[] rgbToHsv(int r, int g, int b)
+    {
+        float rf = r / 255F;
+        float gf = g / 255F;
+        float bf = b / 255F;
+
+        float max = Math.max(rf, Math.max(gf, bf));
+        float min = Math.min(rf, Math.min(gf, bf));
+        float delta = max - min;
+
+        float h = 0F;
+        float s = max == 0F ? 0F : delta / max;
+        float v = max;
+
+        if (delta != 0F)
+        {
+            if (max == rf)
+            {
+                h = ((gf - bf) / delta) % 6F;
+            }
+            else if (max == gf)
+            {
+                h = ((bf - rf) / delta) + 2F;
+            }
+            else
+            {
+                h = ((rf - gf) / delta) + 4F;
+            }
+            h /= 6F;
+            if (h < 0F) h += 1F;
+        }
+
+        return new float[] {h, s, v};
+    }
+
+    private static int hsvToRgb(float h, float s, float v)
+    {
+        float r = v, g = v, b = v;
+
+        if (s > 0F)
+        {
+            h = (h % 1F) * 6F;
+            int i = (int) h;
+            float f = h - i;
+            float p = v * (1F - s);
+            float q = v * (1F - s * f);
+            float t = v * (1F - s * (1F - f));
+
+            switch (i)
+            {
+                case 0: r = v; g = t; b = p; break;
+                case 1: r = q; g = v; b = p; break;
+                case 2: r = p; g = v; b = t; break;
+                case 3: r = p; g = q; b = v; break;
+                case 4: r = t; g = p; b = v; break;
+                default: r = v; g = p; b = q; break;
+            }
+        }
+
+        return (((int) (r * 255F + 0.5F)) << 16) | (((int) (g * 255F + 0.5F)) << 8) | ((int) (b * 255F + 0.5F));
     }
 
     @Override
     public void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
     {
         int color = this.form.color.get().getARGBColor();
-        String text = StringUtils.processColoredText(this.resolveDynamicText(this.form.text.get(), null));
+        Text text = parseToText(this.resolveDynamicText(this.form.text.get(), null));
         /* The interface draws a unit of the layout over as many pixels as it is scaled by. */
         FontRenderer font = this.getFont((float) MinecraftClient.getInstance().getWindow().getScaleFactor());
         FontRenderer previous = context.batcher.setFont(font);
 
         try
         {
-            List<String> wrap = font.wrap(text, x2 - x1 - 4);
+            List<OrderedText> wrap = font.wrap(text, x2 - x1 - 4);
 
             int th = font.getHeight();
             int lineHeight = th + 4;
-            int h = th + (wrap.size() - 1) * lineHeight;
+            int h = th + Math.max(0, wrap.size() - 1) * lineHeight;
             int y = (y2 + y1) / 2 - h / 2;
 
-            for (String s : wrap)
+            for (OrderedText s : wrap)
             {
                 context.batcher.textShadow(s, x1 + 2, y, color);
 
@@ -284,9 +820,10 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
     private void renderString(FormRenderingContext context, CustomVertexConsumerProvider consumers, FontRenderer font, int light)
     {
         TextRenderer renderer = font.getRenderer();
-        String content = StringUtils.processColoredText(this.resolveDynamicText(this.form.text.get(), context.entity));
+        Text text = parseToText(this.resolveDynamicText(this.form.text.get(), context.entity));
+        OrderedText ordered = text.asOrderedText();
         float transition = context.getTransition();
-        int w = renderer.getWidth(content) - 1;
+        int w = renderer.getWidth(ordered) - 1;
         int h = font.getHeight();
         int x = (int) (-w * this.form.anchorX.get());
         int y = (int) (-h * this.form.anchorY.get());
@@ -307,7 +844,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
             context.stack.push();
             context.stack.translate(0F, 0F, -0.1F);
             renderer.draw(
-                content,
+                toShadow(ordered, shadowColor.getRGBColor()),
                 x + this.form.shadowX.get(),
                 y + this.form.shadowY.get(),
                 shadowColor.getARGBColor(), false,
@@ -321,7 +858,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         }
 
         renderer.draw(
-            content,
+            ordered,
             x,
             y,
             color.getARGBColor(), false,
@@ -346,8 +883,8 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         float transition = context.getTransition();
         int w = 0;
         int h = font.getHeight();
-        String content = StringUtils.processColoredText(this.resolveDynamicText(this.form.text.get(), context.entity));
-        List<String> lines = FontRenderer.wrap(renderer, content, this.form.max.get());
+        Text text = parseToText(this.resolveDynamicText(this.form.text.get(), context.entity));
+        List<OrderedText> lines = renderer.wrapLines(text, this.form.max.get());
 
         if (lines.size() <= 1)
         {
@@ -356,12 +893,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
             return;
         }
 
-        for (int i = 0; i < lines.size(); i++)
-        {
-            lines.set(i, lines.get(i).trim());
-        }
-
-        for (String line : lines)
+        for (OrderedText line : lines)
         {
             w = Math.max(renderer.getWidth(line) - 1, w);
             h += lineHeight;
@@ -383,12 +915,12 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
             context.stack.push();
             context.stack.translate(0F, 0F, -0.1F);
 
-            for (String line : lines)
+            for (OrderedText line : lines)
             {
                 int x2 = x + (this.form.anchorLines.get() ? (int) ((w - renderer.getWidth(line)) * this.form.anchorX.get()) : 0);
 
                 renderer.draw(
-                    line,
+                    toShadow(line, shadowColor.getRGBColor()),
                     x2 + this.form.shadowX.get(),
                     y2 + this.form.shadowY.get(),
                     shadowColor.getARGBColor(), false,
@@ -415,7 +947,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
 
         int color = cColor.getARGBColor();
 
-        for (String line : lines)
+        for (OrderedText line : lines)
         {
             int x2 = x + (this.form.anchorLines.get() ? (int) ((w - renderer.getWidth(line)) * this.form.anchorX.get()) : 0);
 

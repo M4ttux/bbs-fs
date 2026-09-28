@@ -20,6 +20,7 @@ import net.minecraft.client.gui.ScreenRect;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.texture.Sprite;
 import net.minecraft.client.texture.TextureSetup;
+import net.minecraft.text.OrderedText;
 import net.minecraft.util.Identifier;
 import org.joml.Matrix3x2fc;
 
@@ -900,6 +901,48 @@ public class Batcher2D
     private void drawTextDirect(String label, float x, float y, int color, boolean shadow)
     {
 
+        if (Colors.getA(color) <= 0F)
+        {
+            color = Colors.opaque(color);
+        }
+
+        BBSProfiler.count(BBSProfiler.Section.UI_DRAW_CALLS);
+        this.context.drawText(this.font.getRenderer(), label, (int) x, (int) y, color, shadow);
+    }
+
+    public void text(OrderedText label, float x, float y, int color)
+    {
+        this.text(label, x, y, color, false);
+    }
+
+    public void text(OrderedText label, float x, float y)
+    {
+        this.text(label, x, y, Colors.WHITE, false);
+    }
+
+    public void textShadow(OrderedText label, float x, float y)
+    {
+        this.text(label, x, y, Colors.WHITE, true);
+    }
+
+    public void textShadow(OrderedText label, float x, float y, int color)
+    {
+        this.text(label, x, y, color, true);
+    }
+
+    public void text(OrderedText label, float x, float y, int color, boolean shadow)
+    {
+        if (BBSSettings.lightSurfaces())
+        {
+            shadow = false;
+            color = darkenWhite(color);
+        }
+
+        this.drawTextDirect(label, x, y, color, shadow);
+    }
+
+    private void drawTextDirect(OrderedText label, float x, float y, int color, boolean shadow)
+    {
         if (Colors.getA(color) <= 0F)
         {
             color = Colors.opaque(color);

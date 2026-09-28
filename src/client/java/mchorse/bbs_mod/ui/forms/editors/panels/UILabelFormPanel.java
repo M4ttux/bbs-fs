@@ -68,6 +68,7 @@ public class UILabelFormPanel extends UIFormPanel<LabelForm>
             UIValues.textbox(10000, () -> this.form.text).tooltip(UIKeys.FORMS_EDITORS_LABEL_LABEL_TOOLTIP),
             UIValues.toggle(UIKeys.FORMS_EDITORS_BILLBOARD_TITLE, () -> this.form.billboard),
             UIValues.toggle(UIKeys.FORMS_EDITORS_LABEL_NAMETAG, () -> this.form.nametag).tooltip(UIKeys.FORMS_EDITORS_LABEL_NAMETAG_TOOLTIP),
+            UIValues.toggle(UIKeys.FORMS_EDITORS_LABEL_SMOOTH_GRADIENT, () -> this.form.smoothGradient).tooltip(UIKeys.FORMS_EDITORS_LABEL_SMOOTH_GRADIENT_TOOLTIP),
             this.color,
             max
         );

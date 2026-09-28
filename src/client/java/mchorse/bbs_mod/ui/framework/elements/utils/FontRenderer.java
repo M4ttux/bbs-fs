@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.framework.elements.utils;
 
 import net.minecraft.client.font.TextRenderer;
+import net.minecraft.text.OrderedText;
 import net.minecraft.text.Style;
 import net.minecraft.text.Text;
 
@@ -122,6 +123,11 @@ public class FontRenderer
     public List<String> wrap(String string, int width)
     {
         return wrap(this.renderer, string, width);
+    }
+
+    public List<OrderedText> wrap(Text text, int width)
+    {
+        return this.renderer.wrapLines(text, width);
     }
 
     public String limitToWidth(String str, int width)

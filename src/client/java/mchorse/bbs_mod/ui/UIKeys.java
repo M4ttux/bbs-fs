@@ -600,6 +600,8 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_LABEL_NAMETAG_TOOLTIP = L10n.lang("bbs.ui.forms.editors.label.nametag_tooltip");
     public static final IKey FORMS_EDITORS_LABEL_SHADOW_COLOR = L10n.lang("bbs.ui.forms.editors.label.shadow_color");
     public static final IKey FORMS_EDITORS_LABEL_SHADOW_OFFSET = L10n.lang("bbs.ui.forms.editors.label.shadow_offset");
+    public static final IKey FORMS_EDITORS_LABEL_SMOOTH_GRADIENT = L10n.lang("bbs.ui.forms.editors.label.smooth_gradient");
+    public static final IKey FORMS_EDITORS_LABEL_SMOOTH_GRADIENT_TOOLTIP = L10n.lang("bbs.ui.forms.editors.label.smooth_gradient_tooltip");
     public static final IKey FORMS_EDITORS_LABEL_TITLE = L10n.lang("bbs.ui.forms.editors.label.title");
     public static final IKey FORMS_EDITORS_MOB_ID = L10n.lang("bbs.ui.forms.editors.mob.mob_id");
     public static final IKey FORMS_EDITORS_MOB_NBT = L10n.lang("bbs.ui.forms.editors.mob.nbt");
