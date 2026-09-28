@@ -5,7 +5,7 @@ import mchorse.bbs_mod.cubic.model.ArmorType;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -48,7 +48,7 @@ public class ArmorSlotsValue extends ValueGroup
 
     public Map<ArmorType, ArmorSlot> toMap()
     {
-        Map<ArmorType, ArmorSlot> map = new HashMap<>();
+        Map<ArmorType, ArmorSlot> map = new LinkedHashMap<>();
 
         for (ArmorType type : ArmorType.values())
         {

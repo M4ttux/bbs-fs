@@ -5,6 +5,8 @@ import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.renderer.DeathPose;
 import mchorse.bbs_mod.cubic.render.vanilla.ArmorRenderer;
 import mchorse.bbs_mod.entity.ActorEntity;
+import mchorse.bbs_mod.ui.dashboard.UIDashboard;
+import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
@@ -93,9 +95,28 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity, ActorEntity
         /* A film running on this client draws its own actors, from their keyframes — drawing them
          * here as well would be a second body, a frame behind the first. This is for everyone else:
          * a player who happens to be standing in someone else's scene still sees the cast. */
-        if (entity != null && BBSModClient.getFilms().isActorDrawn(entity.getId()))
+        if (entity != null)
         {
-            return;
+            if (BBSModClient.getFilms().isActorDrawn(entity.getId()))
+            {
+                return;
+            }
+
+            if (!entity.getFilmId().isEmpty())
+            {
+                if (BBSModClient.getFilms().has(entity.getFilmId()))
+                {
+                    return;
+                }
+
+                UIDashboard dashboard = BBSModClient.getDashboardIfCreated();
+                UIFilmPanel panel = dashboard == null ? null : dashboard.getPanel(UIFilmPanel.class);
+
+                if (panel != null && panel.getData() != null && entity.getFilmId().equals(panel.getData().getId()))
+                {
+                    return;
+                }
+            }
         }
 
         super.render(state, matrices, queue, cameraState);

@@ -26,6 +26,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.equipment.EquipmentAsset;
 import net.minecraft.item.equipment.trim.ArmorTrim;
 import net.minecraft.registry.RegistryKey;
+import net.minecraft.util.Atlases;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Vec3d;
 
@@ -152,7 +153,7 @@ public class ArmorRenderer
 
         if (trim != null)
         {
-            this.renderTrim(part, assetId, matrices, vertexConsumers, light, trim, innerModel);
+            this.renderTrim(part, assetId, matrices, vertexConsumers, light, trim, layerType);
         }
 
         if (itemStack.hasGlint())
@@ -277,15 +278,42 @@ public class ArmorRenderer
         return new Color((rgb >> 16 & 255) / 255F, (rgb >> 8 & 255) / 255F, (rgb & 255) / 255F, 1F);
     }
 
-    private void renderTrim(ModelPart part, RegistryKey<EquipmentAsset> assetId, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, ArmorTrim trim, boolean leggings)
+    private void renderTrim(ModelPart part, RegistryKey<EquipmentAsset> assetId, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, ArmorTrim trim, EquipmentModel.LayerType layerType)
     {
         /* 1.21.4+: the trim texture id comes off the trim itself and the atlas lives in
          * AtlasManager (BakedModelManager.getAtlas is gone). */
-        SpriteAtlasTexture atlas = MinecraftClient.getInstance().getAtlasManager().getAtlasTexture(TexturedRenderLayers.ARMOR_TRIMS_ATLAS_TEXTURE);
-        Sprite sprite = atlas.getSprite(trim.getTextureId(leggings ? "leggings" : "armor", assetId));
-        VertexConsumer vertexConsumer = sprite.getTextureSpecificVertexConsumer(vertexConsumers.getBuffer(TexturedRenderLayers.getArmorTrims(trim.pattern().value().decal())));
+        SpriteAtlasTexture atlas;
 
+        try
+        {
+            atlas = MinecraftClient.getInstance().getAtlasManager().getAtlasTexture(Atlases.ARMOR_TRIMS);
+        }
+        catch (Exception e)
+        {
+            return;
+        }
+
+        if (atlas == null)
+        {
+            return;
+        }
+
+        Sprite sprite = atlas.getSprite(trim.getTextureId(layerType.getTrimsDirectory(), assetId));
+
+        if (sprite == null)
+        {
+            return;
+        }
+
+        /* TexturedRenderLayers.getArmorTrims(false) uses ARMOR_CUTOUT_NO_CULL with LEQUAL depth test.
+         * To prevent coplanar z-fighting between the base armor and the trim, we apply a micro-scale
+         * (0.1% dilation) so the trim renders cleanly in front of the base armor geometry. */
+        VertexConsumer vertexConsumer = sprite.getTextureSpecificVertexConsumer(vertexConsumers.getBuffer(TexturedRenderLayers.getArmorTrims(false)));
+
+        matrices.push();
+        matrices.scale(1.001F, 1.001F, 1.001F);
         part.render(matrices, vertexConsumer, light, OverlayTexture.DEFAULT_UV);
+        matrices.pop();
     }
 
     private void renderGlint(ModelPart part, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light)

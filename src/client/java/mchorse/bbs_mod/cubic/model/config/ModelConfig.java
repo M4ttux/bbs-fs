@@ -24,6 +24,7 @@ import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -72,7 +73,7 @@ public class ModelConfig extends ValueGroup
     private final List<ModelWeld> weldsCache = new ArrayList<>();
     private final List<ArmorSlot> itemsMainCache = new ArrayList<>();
     private final List<ArmorSlot> itemsOffCache = new ArrayList<>();
-    private final Map<ArmorType, ArmorSlot> armorSlotsCache = new HashMap<>();
+    private final Map<ArmorType, ArmorSlot> armorSlotsCache = new LinkedHashMap<>();
     private View viewCache;
     private ArmorSlot fpMainCache;
     private ArmorSlot fpOffhandCache;
