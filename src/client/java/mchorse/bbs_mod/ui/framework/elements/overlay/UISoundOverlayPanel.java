@@ -2,6 +2,7 @@ package mchorse.bbs_mod.ui.framework.elements.overlay;
 
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.audio.AudioCacheManager;
 import mchorse.bbs_mod.audio.AudioReader;
 import mchorse.bbs_mod.audio.ColorCode;
@@ -46,6 +47,7 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
     private final UIIcon folderButton;
     private final UIIcon addButton;
     private final UIIcon likeButton;
+    private final UIIcon settingsButton;
 
     private UISearchList<String> vanillaSounds;
     private UIVanillaSoundList vanillaSoundList;
@@ -190,7 +192,18 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
         this.likeButton.tooltip(UIKeys.OVERLAYS_SOUNDS_LIKE_MODE);
         this.likeButton.highlight(() -> this.currentMode == ViewMode.LIKE, Direction.LEFT);
 
-        this.icons.add(this.folderButton, this.addButton, this.likeButton);
+        this.settingsButton = new UIIcon(Icons.GEAR, (b) ->
+        {
+            UIContext ctx = this.getContext();
+
+            if (ctx != null)
+            {
+                ctx.replaceContextMenu(new UISoundSettingsContextMenu(this.player));
+            }
+        });
+        this.settingsButton.tooltip(UIKeys.OVERLAYS_SOUNDS_SETTINGS);
+
+        this.icons.add(this.folderButton, this.addButton, this.likeButton, this.settingsButton);
 
         this.callback(this::pickAudio);
 
@@ -437,8 +450,13 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
 
                 if (newPlayer != null)
                 {
+                    newPlayer.setVolume(BBSSettings.audioOverlayVolume.get());
                     BBSModClient.getSounds().deleteSounds();
-                    newPlayer.play();
+
+                    if (BBSSettings.audioOverlayAutoplay.get())
+                    {
+                        newPlayer.play();
+                    }
                 }
             }
         }

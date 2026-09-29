@@ -233,6 +233,8 @@ public class BBSSettings {
 	public static ValueBoolean shaderCurvesEnabled;
 	public static ValueBoolean translucencyQueue;
 
+	public static ValueBoolean audioOverlayAutoplay;
+	public static ValueFloat audioOverlayVolume;
 	public static ValueBoolean audioWaveformVisibleInPreview;
 	public static ValueBoolean audioWaveformVisibleInKeyframes;
 	public static ValueInt audioWaveformDensity;
@@ -910,6 +912,8 @@ public class BBSSettings {
 		videoArgumentsMux = builder.getString("arguments_mux", DEFAULT_MUX_FFMPEG_ARGUMENTS);
 
 		builder.category("audio", Icons.SOUND);
+		audioOverlayAutoplay = builder.getBoolean("overlay_autoplay", true);
+		audioOverlayVolume = builder.getFloat("overlay_volume", 1F, 0F, 1F).slider();
 		audioWaveformVisibleInPreview = builder.getBoolean("waveform_visible_preview", true);
 		audioWaveformVisibleInKeyframes = builder.getBoolean("waveform_visible_keyframes", true);
 		audioWaveformDensity = builder.getInt("waveform_density", 20, 10, 100).slider();

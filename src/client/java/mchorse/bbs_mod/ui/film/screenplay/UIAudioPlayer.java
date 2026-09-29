@@ -76,6 +76,7 @@ public class UIAudioPlayer extends UIElement implements IUITreeEventListener
         this.player = new SoundPlayer(this.buffer);
 
         this.player.setRelative(true);
+        this.player.setVolume(BBSSettings.audioOverlayVolume.get());
         this.player.stop();
     }
 
@@ -89,6 +90,7 @@ public class UIAudioPlayer extends UIElement implements IUITreeEventListener
             }
             else
             {
+                this.player.setVolume(BBSSettings.audioOverlayVolume.get());
                 this.player.play();
             }
 
