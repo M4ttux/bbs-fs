@@ -39,6 +39,7 @@ import mchorse.bbs_mod.forms.renderers.VanillaParticleFormRenderer;
 import mchorse.bbs_mod.forms.renderers.VideoFormRenderer;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.TexturedRenderLayers;
 import net.minecraft.client.render.model.ModelBaker;
 import net.minecraft.client.util.BufferAllocator;
@@ -90,9 +91,11 @@ public class FormUtilsClient
         assignAllocator(layers, TexturedRenderLayers.getSign());
         assignAllocator(layers, TexturedRenderLayers.getHangingSign());
         assignAllocator(layers, TexturedRenderLayers.getChest());
-        /* TODO(1.21.11 render): the glint layers (armor/item/entity/direct) and the water mask are no
-         * longer RenderLayer factories — 1.21.5+ draws glint as a post-process. Pre-assigning an
-         * allocator for them was only an optimisation, so dropping them costs nothing but the pre-sizing. */
+        assignAllocator(layers, RenderLayers.armorEntityGlint());
+        assignAllocator(layers, RenderLayers.glint());
+        assignAllocator(layers, RenderLayers.glintTranslucent());
+        assignAllocator(layers, RenderLayers.entityGlint());
+        assignAllocator(layers, RenderLayers.waterMask());
 
         for (RenderLayer layer : ModelBaker.BLOCK_DESTRUCTION_RENDER_LAYERS)
         {
