@@ -150,15 +150,21 @@ public class ArmorRenderer
         }
 
         ArmorTrim trim = itemStack.get(DataComponentTypes.TRIM);
+        boolean hasTrim = false;
 
         if (trim != null)
         {
-            this.renderTrim(part, assetId, matrices, vertexConsumers, light, trim, layerType);
+            hasTrim = this.renderTrim(part, assetId, matrices, vertexConsumers, light, trim, layerType);
         }
 
         if (itemStack.hasGlint())
         {
             this.renderGlint(part, matrices, vertexConsumers, light);
+
+            if (hasTrim)
+            {
+                this.renderTrimGlint(part, matrices, vertexConsumers, light);
+            }
         }
     }
 
@@ -278,7 +284,7 @@ public class ArmorRenderer
         return new Color((rgb >> 16 & 255) / 255F, (rgb >> 8 & 255) / 255F, (rgb & 255) / 255F, 1F);
     }
 
-    private void renderTrim(ModelPart part, RegistryKey<EquipmentAsset> assetId, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, ArmorTrim trim, EquipmentModel.LayerType layerType)
+    private boolean renderTrim(ModelPart part, RegistryKey<EquipmentAsset> assetId, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, ArmorTrim trim, EquipmentModel.LayerType layerType)
     {
         /* 1.21.4+: the trim texture id comes off the trim itself and the atlas lives in
          * AtlasManager (BakedModelManager.getAtlas is gone). */
@@ -290,19 +296,19 @@ public class ArmorRenderer
         }
         catch (Exception e)
         {
-            return;
+            return false;
         }
 
         if (atlas == null)
         {
-            return;
+            return false;
         }
 
         Sprite sprite = atlas.getSprite(trim.getTextureId(layerType.getTrimsDirectory(), assetId));
 
         if (sprite == null)
         {
-            return;
+            return false;
         }
 
         /* TexturedRenderLayers.getArmorTrims(false) uses ARMOR_CUTOUT_NO_CULL with LEQUAL depth test.
@@ -313,6 +319,16 @@ public class ArmorRenderer
         matrices.push();
         matrices.scale(1.001F, 1.001F, 1.001F);
         part.render(matrices, vertexConsumer, light, OverlayTexture.DEFAULT_UV);
+        matrices.pop();
+
+        return true;
+    }
+
+    private void renderTrimGlint(ModelPart part, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light)
+    {
+        matrices.push();
+        matrices.scale(1.001F, 1.001F, 1.001F);
+        part.render(matrices, vertexConsumers.getBuffer(RenderLayers.armorEntityGlint()), light, OverlayTexture.DEFAULT_UV);
         matrices.pop();
     }
 

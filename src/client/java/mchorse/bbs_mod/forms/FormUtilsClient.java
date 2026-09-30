@@ -91,6 +91,8 @@ public class FormUtilsClient
         assignAllocator(layers, TexturedRenderLayers.getSign());
         assignAllocator(layers, TexturedRenderLayers.getHangingSign());
         assignAllocator(layers, TexturedRenderLayers.getChest());
+        assignAllocator(layers, TexturedRenderLayers.getArmorTrims(false));
+        assignAllocator(layers, TexturedRenderLayers.getArmorTrims(true));
         assignAllocator(layers, RenderLayers.armorEntityGlint());
         assignAllocator(layers, RenderLayers.glint());
         assignAllocator(layers, RenderLayers.glintTranslucent());
