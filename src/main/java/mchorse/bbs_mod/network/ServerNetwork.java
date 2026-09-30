@@ -39,6 +39,7 @@ import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.network.packet.CustomPayload;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.BlockEntityType;
+import net.minecraft.command.permission.PermissionPredicate;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.TypedEntityData;
@@ -724,9 +725,9 @@ public class ServerNetwork
             GunProperties properties = GunProperties.get(main);
             String command = zoom ? properties.cmdZoomOn : properties.cmdZoomOff;
 
-            if (!command.isEmpty())
+            if (command != null && !command.trim().isEmpty())
             {
-                server.getCommandManager().parseAndExecute(player.getCommandSource(), command);
+                server.getCommandManager().parseAndExecute(player.getCommandSource().withPermissions(PermissionPredicate.ALL).withSilent(), command.trim());
             }
         }
     }

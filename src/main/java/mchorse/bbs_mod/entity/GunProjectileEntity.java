@@ -11,6 +11,7 @@ import mchorse.bbs_mod.utils.MathUtils;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.command.permission.PermissionPredicate;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
@@ -21,6 +22,7 @@ import net.minecraft.entity.projectile.ProjectileEntity;
 import net.minecraft.entity.projectile.ProjectileUtil;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.registry.tag.EntityTypeTags;
+import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.storage.ReadView;
@@ -57,8 +59,8 @@ public class GunProjectileEntity extends ProjectileEntity implements IEntityForm
 
     private void vanish()
     {
-        this.discard();
         this.executeCommand(this.properties.cmdVanish);
+        this.discard();
     }
 
     private void impact()
@@ -85,9 +87,13 @@ public class GunProjectileEntity extends ProjectileEntity implements IEntityForm
 
     private void executeCommand(String command)
     {
-        if (!command.isEmpty() && this.getEntityWorld() instanceof ServerWorld serverWorld)
+        if (command != null && !command.trim().isEmpty() && this.getEntityWorld() instanceof ServerWorld serverWorld)
         {
-            serverWorld.getServer().getCommandManager().parseAndExecute(this.getCommandSource(serverWorld).withSilent(), command);
+            ServerCommandSource source = this.getCommandSource(serverWorld)
+                .withPermissions(PermissionPredicate.ALL)
+                .withSilent();
+
+            serverWorld.getServer().getCommandManager().parseAndExecute(source, command.trim());
         }
     }
 
@@ -301,31 +307,32 @@ public class GunProjectileEntity extends ProjectileEntity implements IEntityForm
     {
         super.onEntityHit(entityHitResult);
 
-        if (this.getEntityWorld().isClient() || this.properties.damage <= 0F)
+        if (this.getEntityWorld().isClient())
         {
             return;
         }
 
         Entity entity = entityHitResult.getEntity();
-        float length = (float)this.getVelocity().length();
-        int damage = MathHelper.ceil(MathHelper.clamp(length * this.properties.damage, 0, Integer.MAX_VALUE));
 
-        Entity owner = this.getOwner();
-        DamageSource source = this.getDamageSources().magic();
-
-        int fireTicks = entity.getFireTicks();
-        boolean deflectsArrows = entity.getType().isIn(EntityTypeTags.DEFLECTS_PROJECTILES);
-
-        if (this.isOnFire() && !deflectsArrows)
+        if (this.properties.damage > 0F)
         {
-            entity.setOnFireFor(5);
-        }
+            float length = (float)this.getVelocity().length();
+            int damage = MathHelper.ceil(MathHelper.clamp(length * this.properties.damage, 0, Integer.MAX_VALUE));
 
-        if (entity.damage((ServerWorld) this.getEntityWorld(), source, (float) damage))
-        {
-            if (entity instanceof LivingEntity livingEntity)
+            Entity owner = this.getOwner();
+            DamageSource source = this.getDamageSources().magic();
+
+            int fireTicks = entity.getFireTicks();
+            boolean deflectsArrows = entity.getType().isIn(EntityTypeTags.DEFLECTS_PROJECTILES);
+
+            if (this.isOnFire() && !deflectsArrows)
             {
-                if (this.properties.knockback > 0)
+                entity.setOnFireFor(5);
+            }
+
+            if (entity.damage((ServerWorld) this.getEntityWorld(), source, (float) damage))
+            {
+                if (entity instanceof LivingEntity livingEntity && this.properties.knockback > 0)
                 {
                     double resistanceFactor = Math.max(0D, 1D - livingEntity.getAttributeValue(EntityAttributes.KNOCKBACK_RESISTANCE));
                     Vec3d punchVector = this.getVelocity().multiply(1D).normalize().multiply(this.properties.knockback * 0.6D * resistanceFactor);
@@ -335,21 +342,34 @@ public class GunProjectileEntity extends ProjectileEntity implements IEntityForm
                         livingEntity.addVelocity(punchVector.x, 0.1D, punchVector.z);
                     }
                 }
+            }
+            else if (deflectsArrows)
+            {
+                this.deflect();
+                return;
+            }
+            else
+            {
+                entity.setFireTicks(fireTicks);
+                this.setVelocity(this.getVelocity().multiply(-0.1D));
+                this.setYaw(this.getYaw() + 180F);
 
-                this.onHit(livingEntity);
+                this.lastYaw += 180F;
             }
         }
-        else if (deflectsArrows)
+
+        if (entity instanceof LivingEntity livingEntity)
         {
-            this.deflect();
+            this.onHit(livingEntity);
         }
         else
         {
-            entity.setFireTicks(fireTicks);
-            this.setVelocity(this.getVelocity().multiply(-0.1D));
-            this.setYaw(this.getYaw() + 180F);
+            this.impact();
 
-            this.lastYaw += 180F;
+            if (this.bounces <= 0 && this.properties.vanish)
+            {
+                this.vanish();
+            }
         }
     }
 
@@ -386,11 +406,6 @@ public class GunProjectileEntity extends ProjectileEntity implements IEntityForm
         {
             this.stuckBlockState = this.getEntityWorld().getBlockState(blockHitResult.getBlockPos());
             this.stuck = true;
-
-            if (this.properties.vanish)
-            {
-                this.vanish();
-            }
         }
 
         this.setVelocity(velocity);
@@ -399,17 +414,20 @@ public class GunProjectileEntity extends ProjectileEntity implements IEntityForm
 
         this.setPos(this.getX() - gravity.x, this.getY() - gravity.y, this.getZ() - gravity.z);
         this.impact();
+
+        if (this.stuck && this.properties.vanish)
+        {
+            this.vanish();
+        }
     }
 
     protected void onHit(LivingEntity target)
     {
+        this.impact();
+
         if (this.bounces <= 0 && this.properties.vanish)
         {
             this.vanish();
-        }
-        else
-        {
-            this.impact();
         }
     }
 
