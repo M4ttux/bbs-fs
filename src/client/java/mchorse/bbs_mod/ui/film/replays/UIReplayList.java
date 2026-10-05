@@ -178,6 +178,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
                 if (this.getSelectedReplays().size() > 1)
                 {
                     menu.action(Icons.MATERIAL, UIKeys.SCENE_REPLAYS_CONTEXT_RANDOM_TEXTURES, this::openRandomTexturesOverlay);
+                    menu.action(Icons.FONT, UIKeys.SCENE_REPLAYS_CONTEXT_RANDOM_NAMES, this::applyRandomNames);
                 }
 
                 if (data != null)
@@ -1381,6 +1382,26 @@ public class UIReplayList extends UIList<ReplayListEntry>
         }).confirmLabel(UIKeys.SCENE_REPLAYS_RANDOM_TEXTURES_APPLY);
 
         UIOverlay.addOverlay(this.getContext(), panel, 320, 0.8F);
+    }
+
+    private void applyRandomNames()
+    {
+        List<Replay> selected = new ArrayList<>(this.getSelectedReplays());
+
+        if (selected.size() < 2)
+        {
+            return;
+        }
+
+        RandomNamesHelper.applyRandomNames(selected, this.getContext(), () ->
+        {
+            this.updateFilmEditor();
+
+            if (this.panel != null && this.panel.replayEditor != null)
+            {
+                this.panel.replayEditor.setReplay(this.panel.replayEditor.getReplay());
+            }
+        });
     }
 
     private void applyRandomTextures(Link folder, List<Replay> replays, UIContext context)

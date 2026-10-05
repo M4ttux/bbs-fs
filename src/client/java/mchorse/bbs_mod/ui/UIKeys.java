@@ -1409,6 +1409,11 @@ public class UIKeys
     public static final IKey SCENE_REPLAYS_RANDOM_TEXTURES_DESCRIPTION = L10n.lang("bbs.ui.scene.replays.random_textures.description");
     public static final IKey SCENE_REPLAYS_RANDOM_TEXTURES_APPLY = L10n.lang("bbs.ui.scene.replays.random_textures.apply");
     public static final IKey SCENE_REPLAYS_RANDOM_TEXTURES_ERROR = L10n.lang("bbs.ui.scene.replays.random_textures.error");
+    public static final IKey SCENE_REPLAYS_CONTEXT_RANDOM_NAMES = L10n.lang("bbs.ui.scene.replays.context.random_names");
+    public static final IKey SCENE_REPLAYS_RANDOM_NAMES_SUCCESS = L10n.lang("bbs.ui.scene.replays.random_names.success");
+    public static final IKey SCENE_REPLAYS_RANDOM_NAMES_NO_LABELS = L10n.lang("bbs.ui.scene.replays.random_names.no_labels");
+    public static final IKey SCENE_REPLAYS_RANDOM_NAMES_EMPTY_POOL = L10n.lang("bbs.ui.scene.replays.random_names.empty_pool");
+    public static final IKey SCENE_REPLAYS_RANDOM_NAMES_FILE_ERROR = L10n.lang("bbs.ui.scene.replays.random_names.file_error");
     public static final IKey SELECTORS_CONTEXT_ADD = L10n.lang("bbs.ui.selectors.context.add");
     public static final IKey SELECTORS_CONTEXT_REMOVE = L10n.lang("bbs.ui.selectors.context.remove");
     public static final IKey SELECTORS_ENTITY_ID = L10n.lang("bbs.ui.selectors.entity_id");
