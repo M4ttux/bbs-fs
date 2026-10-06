@@ -1683,16 +1683,35 @@ public class UIReplayList extends UIList<ReplayListEntry>
     private void fromModelBlock()
     {
         /* The same list the model block panel shows, so a block is picked here by the
-         * face it wears there instead of by a line of coordinates. */
+         * face it wears there instead of by a line of coordinates. Multiple blocks can
+         * be picked with Ctrl+click or Shift+click; each becomes its own replay. */
         UIModelBlockEntityList list = new UIModelBlockEntityList(null);
+        list.multi();
         UISearchList<ModelBlockEntity> search = new UISearchList<>(list);
         UIConfirmOverlayPanel panel = new UIConfirmOverlayPanel(UIKeys.SCENE_REPLAYS_CONTEXT_FROM_MODEL_BLOCK_TITLE, UIKeys.SCENE_REPLAYS_CONTEXT_FROM_MODEL_BLOCK_DESCRIPTION, (b) ->
         {
-            ModelBlockEntity modelBlock = b ? list.getCurrentFirst() : null;
-
-            if (modelBlock != null)
+            if (!b)
             {
-                this.fromModelBlock(modelBlock);
+                return;
+            }
+
+            List<ModelBlockEntity> selected = list.getCurrent();
+
+            if (selected.isEmpty())
+            {
+                return;
+            }
+
+            Replay last = null;
+
+            for (ModelBlockEntity modelBlock : selected)
+            {
+                last = ReplayFactory.fromModelBlock(this.panel.getData(), modelBlock);
+            }
+
+            if (last != null)
+            {
+                this.showNewReplay(last);
             }
         });
 
@@ -1706,11 +1725,6 @@ public class UIReplayList extends UIList<ReplayListEntry>
         panel.content.add(search);
 
         UIOverlay.addOverlay(this.getContext(), panel, 240, 300);
-    }
-
-    private void fromModelBlock(ModelBlockEntity modelBlock)
-    {
-        this.showNewReplay(ReplayFactory.fromModelBlock(this.panel.getData(), modelBlock));
     }
 
     /**
