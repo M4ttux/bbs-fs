@@ -3,6 +3,7 @@ package mchorse.bbs_mod.forms.renderers;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.render.picker.PickingReplay;
+import mchorse.bbs_mod.client.renderer.MorphRenderer;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
 import mchorse.bbs_mod.forms.FormRenderCapture;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
@@ -477,6 +478,9 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             });
         }
 
+        boolean prevRenderingMobForm = MorphRenderer.isRenderingMobForm();
+        MorphRenderer.setRenderingMobForm(true);
+
         try
         {
             manager.render(state, QueueDispatch.cameraState(), 0D, 0D, 0D, stack, QueueDispatch.queue());
@@ -485,6 +489,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         }
         finally
         {
+            MorphRenderer.setRenderingMobForm(prevRenderingMobForm);
             consumers.setLayerMapper(null);
             mob.pop();
         }

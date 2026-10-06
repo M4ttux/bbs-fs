@@ -62,6 +62,18 @@ public class MorphRenderer
      * the morph appeared in front of the camera as well.</p>
      */
     private static boolean guiPass;
+    private static boolean isRenderingQueued;
+    private static boolean isRenderingMobForm;
+
+    public static boolean isRenderingMobForm()
+    {
+        return isRenderingMobForm;
+    }
+
+    public static void setRenderingMobForm(boolean rendering)
+    {
+        isRenderingMobForm = rendering;
+    }
 
     /** See {@link #guiPass}. Set by {@code EntityGuiElementRendererMixin} around that one draw. */
     public static void setGuiPass(boolean pass)
@@ -69,11 +81,21 @@ public class MorphRenderer
         guiPass = pass;
     }
 
+    public static boolean isGuiPass()
+    {
+        return guiPass;
+    }
+
     /**
      * Collect a player morph for deferred rendering. Returns true to suppress the vanilla render.
      */
     public static boolean collectPlayer(AbstractClientPlayerEntity player, MatrixStack matrices, int light, int overlay, float tickDelta, LivingEntityRenderState state)
     {
+        if (isRenderingQueued || isRenderingMobForm)
+        {
+            return false;
+        }
+
         if (hidePlayer)
         {
             if (FormUtilsClient.getCurrentForm() instanceof MobForm form && !form.isPlayer())
@@ -103,6 +125,11 @@ public class MorphRenderer
      */
     public static boolean collectLivingEntity(LivingEntity livingEntity, MatrixStack matrices, int light, int overlay, float tickDelta, LivingEntityRenderState state)
     {
+        if (isRenderingQueued || isRenderingMobForm)
+        {
+            return false;
+        }
+
         if (!(livingEntity instanceof ISelectorOwnerProvider))
         {
             return false;
@@ -284,6 +311,10 @@ public class MorphRenderer
 
     private static void queue(Form form, IEntity entity, int light, int overlay, float tickDelta, int deathTime)
     {
+        if (isRenderingQueued || isRenderingMobForm)
+        {
+            return;
+        }
         /* One entry per entity per drain: the collect hooks fire from the entity submission phase,
          * which can run more than once before AFTER_ENTITIES drains the queue (an extra render pass —
          * e.g. a shader mod's shadow pass — submits entities too). Without the dedup the same morph
@@ -323,10 +354,14 @@ public class MorphRenderer
      */
     public static void renderQueued(WorldRenderContext context)
     {
-        if (QUEUE.isEmpty())
+        if (QUEUE.isEmpty() || isRenderingQueued)
         {
             return;
         }
+
+        List<Queued> toRender = new ArrayList<>(QUEUE);
+        QUEUE.clear();
+        isRenderingQueued = true;
 
         Camera camera = MinecraftClient.getInstance().gameRenderer.getCamera();
         double cx = camera.getCameraPos().x;
@@ -336,7 +371,7 @@ public class MorphRenderer
 
         try
         {
-            for (Queued queued : QUEUE)
+            for (Queued queued : toRender)
             {
                 Matrix4f target = FilmMatrices.getMatrixForRenderWithRotation(queued.entity, cx, cy, cz, queued.tickDelta);
 
@@ -356,8 +391,7 @@ public class MorphRenderer
         }
         finally
         {
-            /* Always drain: a throw mid-loop must not leave stale entries replaying next frame. */
-            QUEUE.clear();
+            isRenderingQueued = false;
         }
     }
 

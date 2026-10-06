@@ -10,6 +10,7 @@ import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.textures.TextureFormat;
+import mchorse.bbs_mod.client.renderer.MorphRenderer;
 import mchorse.bbs_mod.forms.renderers.FormRenderer;
 import mchorse.bbs_mod.graphics.ModelPreviewRenderer;
 import net.minecraft.client.gl.RenderPipelines;
@@ -130,8 +131,10 @@ public class BbsFormGuiElementRenderer extends SpecialGuiElementRenderer<BbsForm
         RenderSystem.setShaderLights(this.lights());
 
         boolean prevActive = ModelPreviewRenderer.ACTIVE;
+        boolean prevGuiPass = MorphRenderer.isGuiPass();
 
         ModelPreviewRenderer.ACTIVE = true;
+        MorphRenderer.setGuiPass(true);
 
         try
         {
@@ -148,6 +151,7 @@ public class BbsFormGuiElementRenderer extends SpecialGuiElementRenderer<BbsForm
         }
         finally
         {
+            MorphRenderer.setGuiPass(prevGuiPass);
             ModelPreviewRenderer.TEXTURE = null;
             ModelPreviewRenderer.ACTIVE = prevActive;
 
