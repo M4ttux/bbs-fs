@@ -433,6 +433,22 @@ public class ModelManager implements IWatchDogListener
 
         String modelPath = link.path.substring(MODELS_PREFIX.length());
 
+        if (link.path.contains("/animations/") || link.path.contains("/shapes/"))
+        {
+            int idx = modelPath.indexOf("/animations/");
+
+            if (idx == -1)
+            {
+                idx = modelPath.indexOf("/shapes/");
+            }
+
+            if (idx != -1)
+            {
+                this.forget(modelPath.substring(0, idx));
+                return;
+            }
+        }
+
         if (this.isRelodable(link))
         {
             /* A model is the folder the file sits in. */

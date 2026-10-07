@@ -59,25 +59,97 @@ public class InternalAssetsSourcePack implements ISourcePack
     @Override
     public boolean hasAsset(Link link)
     {
+        File devFile = this.getDevFile(link);
+
+        if (devFile != null && devFile.exists())
+        {
+            return true;
+        }
+
         return this.clazz.getClassLoader().getResource(this.internalPrefix + "/" + link.path) != null;
     }
 
     @Override
     public InputStream getAsset(Link link) throws IOException
     {
+        File devFile = this.getDevFile(link);
+
+        if (devFile != null && devFile.exists())
+        {
+            return new java.io.FileInputStream(devFile);
+        }
+
         return this.clazz.getClassLoader().getResourceAsStream(this.internalPrefix + "/" + link.path);
     }
 
     @Override
     public File getFile(Link link)
     {
+        File devFile = this.getDevFile(link);
+
+        if (devFile != null && devFile.exists())
+        {
+            return devFile;
+        }
+
         return null;
     }
 
     @Override
     public Link getLink(File file)
     {
+        if (FabricLoader.getInstance().isDevelopmentEnvironment())
+        {
+            File devFolder = this.getDevFolder();
+
+            if (devFolder != null)
+            {
+                String filePath = file.getAbsolutePath().replace('\\', '/');
+                String folderPath = new File(devFolder, this.internalPrefix).getAbsolutePath().replace('\\', '/');
+
+                if (filePath.startsWith(folderPath + "/"))
+                {
+                    return Link.assets(filePath.substring(folderPath.length() + 1));
+                }
+            }
+        }
+
         return null;
+    }
+
+    private File getDevFile(Link link)
+    {
+        if (FabricLoader.getInstance().isDevelopmentEnvironment())
+        {
+            File folder = this.getDevFolder();
+
+            if (folder != null)
+            {
+                File f = new File(folder, this.internalPrefix + "/" + link.path);
+
+                if (f.exists())
+                {
+                    return f;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private File getDevFolder()
+    {
+        try
+        {
+            URL url = this.clazz.getProtectionDomain().getCodeSource().getLocation();
+            File file = Paths.get(url.toURI()).toFile();
+
+            return this.getResourcesFolder(file);
+        }
+        catch (Exception e)
+        {
+            return null;
+        }
     }
 
     @Override
@@ -174,10 +246,26 @@ public class InternalAssetsSourcePack implements ISourcePack
         }
 
         /* In development environment, the assets are separate from classes, and for this
-         * reason for the files to be found, I have to use this ugly workaround. Also, I
-         * don't think it works outside of IntelliJ, so RIP... */
+         * reason for the files to be found, prefer the live source directory src/client/resources */
         if (FabricLoader.getInstance().isDevelopmentEnvironment())
         {
+            File projectRoot = file;
+
+            while (projectRoot != null && !new File(projectRoot, "src/client/resources").exists())
+            {
+                projectRoot = projectRoot.getParentFile();
+            }
+
+            if (projectRoot != null)
+            {
+                File clientRes = new File(projectRoot, "src/client/resources");
+
+                if (new File(clientRes, this.internalPrefix).exists())
+                {
+                    return clientRes;
+                }
+            }
+
             File resources = new File(file.getParentFile().getParentFile().getParentFile(), "resources/client/");
 
             if (resources.isDirectory())

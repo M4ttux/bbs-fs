@@ -342,3 +342,9 @@ tasks.register('addonApiCheck') {
     dependsOn 'runAddonApiCheck'
 }
 tasks.named('check') { dependsOn 'addonApiCheck' }
+
+tasks.register('runAnimationTest', JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath + sourceSets.client.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.cubic.AnimationLoadingTest'
+}
+

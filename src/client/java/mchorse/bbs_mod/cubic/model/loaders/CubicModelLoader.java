@@ -1,5 +1,8 @@
 package mchorse.bbs_mod.cubic.model.loaders;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import mchorse.bbs_mod.cubic.CubicLoader;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.data.animation.Animation;
@@ -8,7 +11,9 @@ import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelData;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.data.model.ModelMesh;
+import mchorse.bbs_mod.cubic.geo.GeoAnimationParser;
 import mchorse.bbs_mod.cubic.model.ModelManager;
+import mchorse.bbs_mod.data.DataToString;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.obj.MeshOBJ;
@@ -18,6 +23,7 @@ import mchorse.bbs_mod.obj.OBJParser;
 import mchorse.bbs_mod.resources.AssetProvider;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.utils.CollectionUtils;
+import mchorse.bbs_mod.utils.IOUtils;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.resources.LinkUtils;
 
@@ -132,10 +138,8 @@ public class CubicModelLoader implements IModelLoader
             }
         }
 
-        for (Animation animation : this.tryLoadingExternalAnimations(models, config).getAll())
-        {
-            newModel.animations.add(animation);
-        }
+        this.tryLoadingFolderAnimations(models, links, modelBBS, newModel.animations);
+        this.tryLoadingConfigAnimations(models, config, newModel.animations);
 
         newModel.applyConfig(config);
 
@@ -313,15 +317,50 @@ public class CubicModelLoader implements IModelLoader
     }
 
     /**
+     * Auto-detect and load external animation files located in the model folder
+     */
+    private void tryLoadingFolderAnimations(ModelManager models, Collection<Link> links, Link modelBBS, Animations target)
+    {
+        for (Link link : links)
+        {
+            if (link.equals(modelBBS))
+            {
+                continue;
+            }
+
+            if (link.path.endsWith("/config.json") || link.path.equals("config.json") || link.path.endsWith(".geo.json"))
+            {
+                continue;
+            }
+
+            if (link.path.endsWith(".png") || link.path.endsWith(".obj") || link.path.endsWith(".mtl")
+                || link.path.endsWith(".bobj") || link.path.endsWith(".jem") || link.path.endsWith(".jpm")
+                || link.path.endsWith(".vox"))
+            {
+                continue;
+            }
+
+            if (link.path.contains("/shapes/") || link.path.contains("/materials/"))
+            {
+                continue;
+            }
+
+            if (link.path.endsWith(".animation.json") || link.path.endsWith(".bbs.json")
+                || link.path.contains("/animations/") || link.path.endsWith(".json"))
+            {
+                this.loadAnimationsFromFile(models, link, target);
+            }
+        }
+    }
+
+    /**
      * Loading external animations mentioned in the config
      */
-    private Animations tryLoadingExternalAnimations(ModelManager models, MapType config)
+    private void tryLoadingConfigAnimations(ModelManager models, MapType config, Animations target)
     {
-        Animations animations = new Animations(models.parser);
-
         if (config == null)
         {
-            return animations;
+            return;
         }
 
         for (BaseType type : config.getList("animations"))
@@ -330,30 +369,141 @@ public class CubicModelLoader implements IModelLoader
             {
                 Link animationFile = Link.create(type.asString());
 
-                try (InputStream asset = models.provider.getAsset(animationFile))
-                {
-                    CubicLoader loader = new CubicLoader();
-                    CubicLoader.LoadingInfo info = loader.load(models.parser, asset, type.asString());
+                this.loadAnimationsFromFile(models, animationFile, target);
+            }
+        }
+    }
 
-                    if (info.animations != null)
+    /**
+     * Load animations from a specific file (supports Bedrock and BBS animation formats)
+     */
+    private void loadAnimationsFromFile(ModelManager models, Link link, Animations target)
+    {
+        try (InputStream stream = models.provider.getAsset(link))
+        {
+            if (stream == null)
+            {
+                return;
+            }
+
+            String content = IOUtils.readText(stream);
+            JsonElement rootElement;
+
+            try
+            {
+                rootElement = JsonParser.parseString(content);
+            }
+            catch (Exception e)
+            {
+                return;
+            }
+
+            if (!rootElement.isJsonObject())
+            {
+                return;
+            }
+
+            JsonObject root = rootElement.getAsJsonObject();
+            boolean isBedrock = link.path.endsWith(".animation.json") || root.has("format_version");
+
+            String baseFileName = StringUtils.fileName(StringUtils.removeExtension(link.path));
+
+            if (baseFileName.endsWith(".animation"))
+            {
+                baseFileName = StringUtils.removeExtension(baseFileName);
+            }
+
+            if (root.has("animations") && root.get("animations").isJsonObject())
+            {
+                JsonObject animationsObj = root.getAsJsonObject("animations");
+
+                for (String key : animationsObj.keySet())
+                {
+                    JsonElement animElement = animationsObj.get(key);
+
+                    if (!animElement.isJsonObject())
                     {
-                        for (Animation animation : info.animations.getAll())
+                        continue;
+                    }
+
+                    JsonObject animObj = animElement.getAsJsonObject();
+
+                    if (isBedrock || animObj.has("bones") || animObj.has("animation_length"))
+                    {
+                        try
                         {
-                            animations.add(animation);
+                            Animation animation = GeoAnimationParser.parse(models.parser, key, animObj);
+
+                            target.add(animation);
+
+                            if (animationsObj.size() == 1 && !baseFileName.isEmpty())
+                            {
+                                target.addAlias(baseFileName, animation);
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            System.err.println("Failed to parse Bedrock animation: " + key + " in " + link);
+                        }
+                    }
+                    else if (animObj.has("groups") || animObj.has("length") || animObj.has("duration"))
+                    {
+                        try
+                        {
+                            MapType map = (MapType) DataToString.fromString(animObj.toString());
+                            Animation animation = new Animation(key, models.parser);
+
+                            animation.fromData(map);
+                            target.add(animation);
+
+                            if (animationsObj.size() == 1 && !baseFileName.isEmpty())
+                            {
+                                target.addAlias(baseFileName, animation);
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            System.err.println("Failed to parse BBS animation: " + key + " in " + link);
                         }
                     }
                 }
-                catch (FileNotFoundException e)
+            }
+            else if (root.has("groups") || root.has("length") || root.has("duration"))
+            {
+                try
                 {
-                    return new Animations(models.parser);
+                    MapType map = (MapType) DataToString.fromString(root.toString());
+                    Animation animation = new Animation(baseFileName, models.parser);
+
+                    animation.fromData(map);
+                    target.add(animation);
                 }
                 catch (Exception e)
                 {
-                    e.printStackTrace();
+                    System.err.println("Failed to parse BBS animation from " + link);
+                }
+            }
+            else if (root.has("bones") || root.has("animation_length"))
+            {
+                try
+                {
+                    Animation animation = GeoAnimationParser.parse(models.parser, baseFileName, root);
+
+                    target.add(animation);
+                }
+                catch (Exception e)
+                {
+                    System.err.println("Failed to parse Bedrock animation from " + link);
                 }
             }
         }
-
-        return animations;
+        catch (FileNotFoundException e)
+        {
+            /* Ignore missing files */
+        }
+        catch (Exception e)
+        {
+            System.err.println("Failed to load animation file: " + link);
+        }
     }
 }

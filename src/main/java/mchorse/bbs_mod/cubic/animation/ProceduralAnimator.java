@@ -18,7 +18,9 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 
 public class ProceduralAnimator implements IAnimator
@@ -35,6 +37,7 @@ public class ProceduralAnimator implements IAnimator
 
     public ActionPlayback basePre;
     public ActionPlayback basePost;
+    public List<ActionPlayback> actions = new ArrayList<>();
 
     private IModelInstance model;
 
@@ -51,6 +54,11 @@ public class ProceduralAnimator implements IAnimator
 
         this.basePre = this.createAction(this.basePre, actions.getConfig("base_pre"), true);
         this.basePost = this.createAction(this.basePost, actions.getConfig("base_post"), true);
+
+        if (!fade)
+        {
+            this.actions.clear();
+        }
     }
 
     /**
@@ -109,20 +117,61 @@ public class ProceduralAnimator implements IAnimator
         {
             this.basePost.update();
         }
+
+        /* Update secondary actions */
+        Iterator<ActionPlayback> it = this.actions.iterator();
+
+        while (it.hasNext())
+        {
+            ActionPlayback action = it.next();
+
+            action.update();
+
+            if (action.finishedFading() && action.isFadingModeOut())
+            {
+                action.stopFade();
+                it.remove();
+            }
+        }
+    }
+
+    public void addAction(ActionPlayback action)
+    {
+        this.addAction(action, true);
+    }
+
+    public void addAction(ActionPlayback action, boolean rewind)
+    {
+        if (action == null)
+        {
+            return;
+        }
+
+        if (this.actions.contains(action))
+        {
+            if (rewind)
+            {
+                action.rewind();
+            }
+
+            return;
+        }
+
+        action.rewind();
+        action.fadeIn();
+        this.actions.add(action);
     }
 
     @Override
     public void applyActions(IEntity target, IModelInstance armature, float transition)
     {
-        if (target == null)
-        {
-            return;
-        }
-
         if (this.basePre != null)
         {
             this.basePre.apply(target, armature.getModel(), transition, 1F, false);
         }
+
+        if (target != null)
+        {
 
         IModel model = armature.getModel();
         java.util.Map<String, String> assignments = armature.getProceduralBones();
@@ -161,8 +210,6 @@ public class ProceduralAnimator implements IAnimator
             coefficient = (float) (target.getVelocity().lengthSquared() / 0.2D);
             coefficient = Math.max(1F, coefficient * coefficient * coefficient);
         }
-
-        model.resetPose();
 
         if (target.isSneaking())
         {
@@ -580,10 +627,23 @@ public class ProceduralAnimator implements IAnimator
                 );
             }
         }
+    }
 
         if (this.basePost != null)
         {
             this.basePost.postApply(target, armature.getModel(), transition);
+        }
+
+        for (ActionPlayback action : this.actions)
+        {
+            if (action.isFading())
+            {
+                action.apply(target, armature.getModel(), transition, action.getFadeFactor(transition), true);
+            }
+            else
+            {
+                action.apply(target, armature.getModel(), transition, 1F, true);
+            }
         }
     }
 
@@ -690,7 +750,19 @@ public class ProceduralAnimator implements IAnimator
 
     @Override
     public void playAnimation(String name)
-    {}
+    {
+        if (this.model == null || this.model.getAnimations() == null)
+        {
+            return;
+        }
+
+        Animation animation = this.model.getAnimations().get(name);
+
+        if (animation != null)
+        {
+            this.addAction(new ActionPlayback(animation, new ActionConfig(), false, -1));
+        }
+    }
 
     protected float lerpAngle(float a, float b, float magnitude)
     {
