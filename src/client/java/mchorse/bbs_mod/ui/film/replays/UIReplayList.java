@@ -29,6 +29,8 @@ import mchorse.bbs_mod.forms.structure.StructureManager;
 import mchorse.bbs_mod.forms.structure.StructureSelection;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
+import mchorse.bbs_mod.ui.film.replays.kits.RandomKitHelper;
+import mchorse.bbs_mod.ui.film.replays.kits.UIRandomKitOverlayPanel;
 import mchorse.bbs_mod.ui.forms.UIFormPalette;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -68,6 +70,7 @@ import org.joml.Vector3d;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -97,6 +100,9 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
     /** The folder a press went down on, waiting to see whether the press turns into a drag. */
     private String pressedFolder;
+
+    /** Remembers fold states of random kit overlay sections between openings. */
+    public final Map<String, Boolean> kitFolds = new HashMap<>();
 
     public UIReplayList(Consumer<List<Replay>> callback, Consumer<Form> formConsumer, UIFilmPanel panel)
     {
@@ -180,6 +186,8 @@ public class UIReplayList extends UIList<ReplayListEntry>
                     menu.action(Icons.MATERIAL, UIKeys.SCENE_REPLAYS_CONTEXT_RANDOM_TEXTURES, this::openRandomTexturesOverlay);
                     menu.action(Icons.FONT, UIKeys.SCENE_REPLAYS_CONTEXT_RANDOM_NAMES, this::applyRandomNames);
                 }
+
+                menu.action(Icons.ARMOR_CHESTPLATE, UIKeys.SCENE_REPLAYS_CONTEXT_RANDOM_KITS, this::openRandomKitOverlay);
 
                 if (data != null)
                 {
@@ -1402,6 +1410,33 @@ public class UIReplayList extends UIList<ReplayListEntry>
                 this.panel.replayEditor.setReplay(this.panel.replayEditor.getReplay());
             }
         });
+    }
+
+    private void openRandomKitOverlay()
+    {
+        List<Replay> selected = new ArrayList<>(this.getSelectedReplays());
+
+        if (selected.isEmpty())
+        {
+            return;
+        }
+
+        Film film = this.panel != null ? this.panel.getData() : null;
+
+        UIRandomKitOverlayPanel panel = new UIRandomKitOverlayPanel(selected, film, this.kitFolds, (config) ->
+        {
+            RandomKitHelper.applyRandomKits(selected, film, config, this.getContext(), () ->
+            {
+                this.updateFilmEditor();
+
+                if (this.panel != null && this.panel.replayEditor != null)
+                {
+                    this.panel.replayEditor.setReplay(this.panel.replayEditor.getReplay());
+                }
+            });
+        });
+
+        UIOverlay.addOverlay(this.getContext(), panel, 420, 0.85F);
     }
 
     private void applyRandomTextures(Link folder, List<Replay> replays, UIContext context)
