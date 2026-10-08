@@ -1,4 +1,5 @@
 {
+    "bbs.ui.film.controller.motion_path.cameras": "Mostrar trayectorias de cámaras",
     "bbs.config.timeline.keyframe_panel_position": "Posición del panel de propiedades de keyframes",
     "bbs.config.timeline.keyframe_panel_position-comment": "Ubica el panel abajo, a la derecha, arriba o a la izquierda de la línea de tiempo integrada. Los paneles acoplados por separado usan el diseño del espacio de trabajo.",
     "bbs.config.timeline.keyframe_panel_position.bottom": "Abajo",

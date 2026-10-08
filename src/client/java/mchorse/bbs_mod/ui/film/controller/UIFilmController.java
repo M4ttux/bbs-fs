@@ -968,6 +968,10 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
             BBSProfiler.begin(BBSProfiler.Timer.MOTION_PATH);
             MotionPath.render(context, motionPath, this, replay, target, replay == null ? 0F : replay.getTick(this.getTick()));
+            if (motionPath.cameras.get() && this.panel.getData() != null)
+            {
+                MotionPath.renderCameras(context, motionPath, this.panel.getData().camera, this.panel.getRunner().getPosition(), this.getEntities(), this.getTick());
+            }
             BBSProfiler.end(BBSProfiler.Timer.MOTION_PATH);
         }
 

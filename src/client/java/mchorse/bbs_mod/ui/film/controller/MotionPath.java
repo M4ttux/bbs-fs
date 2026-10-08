@@ -1,6 +1,14 @@
 package mchorse.bbs_mod.ui.film.controller;
 
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.camera.clips.CameraClip;
+import mchorse.bbs_mod.camera.clips.CameraClipContext;
+import mchorse.bbs_mod.camera.clips.overwrite.IdleClip;
+import mchorse.bbs_mod.camera.clips.overwrite.KeyframeClip;
+import mchorse.bbs_mod.camera.clips.overwrite.PathClip;
+import mchorse.bbs_mod.camera.data.Position;
+import mchorse.bbs_mod.utils.clips.Clip;
+import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.cubic.animation.ActionConfig;
 import mchorse.bbs_mod.cubic.animation.ActionsConfig;
 import mchorse.bbs_mod.film.FilmMatrices;
@@ -32,6 +40,7 @@ import org.joml.Vector3d;
 import org.joml.Vector3f;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
 
@@ -104,6 +113,121 @@ public class MotionPath
         }
 
         draw(context, config, trajectory, currentTick);
+    }
+
+    /** Sample a separate copy of the camera work: modifiers may retain evaluation state,
+     * so sampling must never touch the clips used by the live preview. Each interval keeps
+     * its own active stack, including its endpoint, instead of drawing a line across cuts. */
+    public static void renderCameras(WorldRenderContext context, ValueMotionPath config, Clips work,
+        Position seed, Map<String, IEntity> entities, float currentTick)
+    {
+        Clips scratch = new Clips("motion_path_camera", work.getFactory());
+        TreeSet<Integer> boundaries = new TreeSet<>();
+        TreeSet<Float> markers = new TreeSet<>();
+
+        for (Clip clip : work.get())
+        {
+            if (!(clip instanceof CameraClip) || !clip.enabled.get()
+                || clip instanceof mchorse.bbs_mod.camera.clips.misc.AudioClip
+                || clip instanceof mchorse.bbs_mod.camera.clips.misc.VideoClip
+                || clip instanceof mchorse.bbs_mod.camera.clips.misc.ImageClip
+                || clip instanceof mchorse.bbs_mod.camera.clips.misc.SubtitleClip
+                || clip instanceof mchorse.bbs_mod.camera.clips.misc.CurveClip)
+            {
+                continue;
+            }
+
+            scratch.addClip(clip.copy());
+            if (!clip.isGlobal())
+            {
+                boundaries.add(clip.tick.get());
+                boundaries.add(clip.tick.get() + clip.duration.get());
+            }
+
+            if (clip instanceof KeyframeClip keyframes)
+            {
+                for (KeyframeChannel<?> channel : keyframes.channels)
+                {
+                    for (Keyframe<?> keyframe : channel.getKeyframes())
+                    {
+                        markers.add(clip.tick.get() + keyframe.getTick());
+                    }
+                }
+            }
+            else if (clip instanceof PathClip path)
+            {
+                for (int i = 0; i < path.size(); i++)
+                {
+                    markers.add(clip.tick.get() + clip.duration.get() * i / (float) Math.max(1, path.size() - 1));
+                }
+            }
+            else if (clip instanceof IdleClip)
+            {
+                markers.add((float) clip.tick.get());
+                markers.add((float) (clip.tick.get() + clip.duration.get()));
+            }
+        }
+
+        Integer previous = null;
+        for (int end : boundaries)
+        {
+            if (previous != null)
+            {
+                int start = previous;
+                List<Clip> active = scratch.getClips(start);
+                boolean hasPosition = active.stream().anyMatch(clip -> clip instanceof IdleClip
+                    || clip instanceof PathClip || clip instanceof KeyframeClip);
+
+                if (hasPosition)
+                {
+                    draw(context, config, new CameraTrajectory(scratch, active, seed, entities, start, end, markers), currentTick);
+                }
+            }
+            previous = end;
+        }
+    }
+
+    private static final class CameraTrajectory implements Trajectory
+    {
+        private final CameraClipContext context = new CameraClipContext();
+        private final Position seed;
+        private final Position position = new Position();
+        private final List<Clip> active;
+        private final float first;
+        private final float last;
+        private final TreeSet<Float> markers;
+
+        private CameraTrajectory(Clips clips, List<Clip> active, Position seed, Map<String, IEntity> entities,
+            float first, float last, TreeSet<Float> markers)
+        {
+            this.context.clips = clips;
+            this.context.entities.putAll(entities);
+            this.context.playing = false;
+            this.seed = seed.copy();
+            this.active = active;
+            this.first = first;
+            this.last = last;
+            this.markers = markers;
+        }
+
+        public float first() { return this.first; }
+        public float last() { return this.last; }
+        public TreeSet<Float> keyframeTicks() { return this.markers; }
+
+        public void worldAt(float tick, Vector3d out)
+        {
+            this.position.set(this.seed);
+            int whole = (int) Math.floor(tick);
+            this.context.clipData.clear();
+            this.context.setup(whole, tick - whole);
+
+            for (Clip clip : this.active)
+            {
+                this.context.apply(clip, this.position);
+            }
+
+            out.set(this.position.point.x, this.position.point.y, this.position.point.z);
+        }
     }
 
     /* Drawing */

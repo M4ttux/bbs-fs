@@ -13,6 +13,7 @@ import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 public class ValueMotionPath extends ValueGroup
 {
     public final ValueBoolean enabled = new ValueBoolean("enabled", false);
+    public final ValueBoolean cameras = new ValueBoolean("cameras", false);
 
     /* The interpolated curve */
     public final ValueInt color = new ValueInt("color", 0xff45c8ff);
@@ -48,6 +49,7 @@ public class ValueMotionPath extends ValueGroup
         super(id);
 
         this.add(this.enabled);
+        this.add(this.cameras);
         this.add(this.color);
         this.add(this.width);
         this.add(this.frames);

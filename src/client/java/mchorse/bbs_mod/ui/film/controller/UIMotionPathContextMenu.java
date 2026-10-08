@@ -6,6 +6,7 @@ import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.context.UIContextMenu;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
@@ -20,6 +21,7 @@ public class UIMotionPathContextMenu extends UIContextMenu
     public UIIcon pin;
     public UIIcon gradient;
     public UIIcon around;
+    public UIToggle cameras;
 
     public UIColor color;
     public UISliderTrackpad width;
@@ -62,6 +64,8 @@ public class UIMotionPathContextMenu extends UIContextMenu
         this.around.highlight(this.motionPath.aroundCurrent::get, Direction.BOTTOM);
         this.around.tooltip(UIKeys.FILM_CONTROLLER_MOTION_PATH_AROUND);
 
+        this.cameras = new UIToggle(UIKeys.FILM_CONTROLLER_MOTION_PATH_CAMERAS, this.motionPath.cameras.get(), (b) -> this.motionPath.cameras.set(b.getValue()));
+
         this.color = new UIColor((c) -> this.motionPath.color.set(c));
         this.color.setColor(this.motionPath.color.get());
         this.width = new UISliderTrackpad((v) -> this.motionPath.width.set(v.floatValue()));
@@ -98,6 +102,7 @@ public class UIMotionPathContextMenu extends UIContextMenu
 
         this.column = UI.column(4, 8,
             UI.row(this.enable, this.pin, this.gradient, this.around),
+            this.cameras,
             UI.label(UIKeys.FILM_CONTROLLER_MOTION_PATH_LINE), UI.row(this.color, this.width),
             UI.label(UIKeys.FILM_CONTROLLER_MOTION_PATH_GRADIENT), UI.row(this.pastColor, this.futureColor),
             UI.label(UIKeys.FILM_CONTROLLER_MOTION_PATH_FRAMES), UI.row(this.frames, this.frameSize),
