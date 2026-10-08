@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.ui.framework.elements.input.keyframes;
 
+import mchorse.bbs_mod.BBSSettings;
+
 import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.camera.clips.overwrite.KeyframeClip;
 import mchorse.bbs_mod.film.replays.tracks.TrackId;
@@ -58,6 +60,57 @@ public class UIKeyframeEditor extends UITimelinePanel
     protected UIElement getTimeline()
     {
         return this.view;
+    }
+
+    @Override
+    protected void afterResizeApplied()
+    {
+        super.afterResizeApplied();
+
+        if (this.target != null)
+        {
+            return;
+        }
+
+        this.view.resetFlex().full(this);
+
+        if (this.editor == null || !this.propertiesVisible)
+        {
+            return;
+        }
+
+        String position = BBSSettings.keyframePanelPosition == null ? "right" : BBSSettings.keyframePanelPosition.get();
+        boolean horizontal = position.equals("top") || position.equals("bottom");
+        int size = Math.min(140, Math.max(0, (horizontal ? this.area.h : this.area.w) / 2));
+
+        this.editor.resetFlex().relative(this).x(0).y(0).w(1F).h(1F);
+
+        switch (position)
+        {
+            case "bottom":
+                this.editor.y(1F, -size).h(size);
+                this.view.h(1F, -size);
+                break;
+            case "top":
+                this.editor.h(size);
+                this.view.y(size).h(1F, -size);
+                break;
+            case "left":
+                this.editor.w(size);
+                this.view.x(size).w(1F, -size);
+                break;
+            default:
+                this.editor.x(1F, -size).w(size);
+                this.view.w(1F, -size);
+                break;
+        }
+    }
+
+    @Override
+    public void setPropertiesVisible(boolean visible)
+    {
+        super.setPropertiesVisible(visible);
+        this.resize();
     }
 
     public UIKeyframeEditor target(UIElement target)

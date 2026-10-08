@@ -196,6 +196,7 @@ public class BBSSettings {
 	public static ValueFloat replayGuideOpacity;
 	public static ValueKeyframeStyle keyframeDefaultStyle;
 	public static ValueString keyframeDefaultInterpolation;
+	public static ValueString keyframePanelPosition;
 	public static ValueString pathDefaultInterpolation;
 	public static ValueBoolean keyframePreview;
 	public static ValueInt editorPreviewSizeMode;
@@ -854,6 +855,7 @@ public class BBSSettings {
 		editorSeconds = builder.getBoolean("seconds", false);
 		editorTimelineGrid = builder.getBoolean("timeline_grid", true);
 		keyframeDefaultInterpolation = builder.getString("keyframe_default_interpolation", Interpolations.LINEAR.getKey());
+		keyframePanelPosition = builder.getString("keyframe_panel_position", "right");
 		pathDefaultInterpolation = builder.getString("path_default_interpolation", Interpolations.HERMITE.getKey());
 		builder.register(keyframeDefaultStyle = new ValueKeyframeStyle("keyframe_default_style"));
 		keyframePreview = builder.getBoolean("keyframe_preview", true);

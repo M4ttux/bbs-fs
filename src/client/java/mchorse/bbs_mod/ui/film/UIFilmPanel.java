@@ -848,10 +848,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     }
 
     /**
-     * Applies the preview or export size to BBSRendering. When the camera editor is
-     * visible, uses export resolution so the preview matches export proportions.
-     * Otherwise uses the UI preview area size. Called when the user finishes resizing
-     * the preview, when the panel is laid out, and when switching to/from camera editor.
+     * Applies the configured preview size to BBSRendering. Automatic resolution fits
+     * the video proportions inside the preview in every editor, so switching editors
+     * does not change the camera projection. Called after layout and editor changes.
      */
     private void applyPreviewSizeToBBS()
     {
@@ -879,24 +878,14 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         {
             float scale = BBSSettings.editorPreviewResolutionScale.get();
 
-            if (this.cameraEditor.isVisible())
-            {
-                int previewW = Math.max(2, this.preview.area.w);
-                int previewH = Math.max(2, this.preview.area.h);
-                int exportW = Math.max(2, BBSSettings.videoWidth.get());
-                int exportH = Math.max(2, BBSSettings.videoHeight.get());
-                Vector2i resized = Vectors.resize(exportW / (float) exportH, previewW, previewH);
+            int previewW = Math.max(2, this.preview.area.w);
+            int previewH = Math.max(2, this.preview.area.h);
+            int exportW = Math.max(2, BBSSettings.videoWidth.get());
+            int exportH = Math.max(2, BBSSettings.videoHeight.get());
+            Vector2i resized = Vectors.resize(exportW / (float) exportH, previewW, previewH);
 
-                w = Math.max(2, (int) (resized.x * scale));
-                h = Math.max(2, (int) (resized.y * scale));
-            }
-            else
-            {
-                int previewW = this.preview.area.w;
-                int previewH = this.preview.area.h;
-                w = Math.max(2, (int) (previewW * scale));
-                h = Math.max(2, (int) (previewH * scale));
-            }
+            w = Math.max(2, (int) (resized.x * scale));
+            h = Math.max(2, (int) (resized.y * scale));
         }
 
         if (w % 2 != 0) w++;

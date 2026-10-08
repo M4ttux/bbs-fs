@@ -4,6 +4,7 @@ import java.util.function.Supplier;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.l10n.L10n;
 import mchorse.bbs_mod.settings.value.ValueKeyCombo;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.core.ValueLink;
@@ -171,6 +172,26 @@ public class UIValueMap
 
         register(ValueString.class, (value, ui) ->
         {
+            if (value == BBSSettings.keyframePanelPosition)
+            {
+                List<String> positions = Arrays.asList("bottom", "right", "top", "left");
+                UICirculate button = new UICirculate((b) -> value.set(positions.get(b.getValue())));
+
+                for (String position : positions)
+                {
+                    button.addLabel(L10n.lang("bbs.config.timeline.keyframe_panel_position." + position));
+                }
+
+                button.valueBinding(() ->
+                {
+                    int selected = positions.indexOf(value.get());
+                    button.setValue(selected < 0 ? 1 : selected);
+                });
+                button.w(90);
+
+                return Arrays.asList(UIValueFactory.column(button, value));
+            }
+
             if (value == BBSSettings.keyframeDefaultInterpolation || value == BBSSettings.pathDefaultInterpolation)
             {
                 Supplier<IInterp> getter = value == BBSSettings.pathDefaultInterpolation

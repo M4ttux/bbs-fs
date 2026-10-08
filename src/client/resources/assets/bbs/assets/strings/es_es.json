@@ -1,4 +1,10 @@
 {
+    "bbs.config.timeline.keyframe_panel_position": "Posición del panel de propiedades de keyframes",
+    "bbs.config.timeline.keyframe_panel_position-comment": "Ubica el panel abajo, a la derecha, arriba o a la izquierda de la línea de tiempo integrada. Los paneles acoplados por separado usan el diseño del espacio de trabajo.",
+    "bbs.config.timeline.keyframe_panel_position.bottom": "Abajo",
+    "bbs.config.timeline.keyframe_panel_position.right": "Derecha",
+    "bbs.config.timeline.keyframe_panel_position.top": "Arriba",
+    "bbs.config.timeline.keyframe_panel_position.left": "Izquierda",
     "bbs.config.appearance.axes_scale": "Escala de ejes",
     "bbs.config.appearance.axes_scale-comment": "Determina el tamaño de los ejes, si los ejes son demasiado grandes, puedes ajustarlos a tu gusto",
     "bbs.config.appearance.click_sound": "Sonidos de click",
