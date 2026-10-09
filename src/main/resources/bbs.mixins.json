@@ -9,6 +9,7 @@
         "ServerPlayNetworkHandlerMixin",
         "BlockItemMixin",
         "ServerWorldMixin",
+        "TntGriefingMixin",
         "ItemStackMixin",
         "WorldChunkMixin",
         "LivingEntityMixin",

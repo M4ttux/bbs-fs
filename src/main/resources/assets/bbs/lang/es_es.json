@@ -14,5 +14,7 @@
     "key.bbs.teleport": "Teletransportarse a la reproducción actual",
     "key.bbs.toggle_replay_indicator": "Alternar indicador de replay",
     "key.bbs.quick_replay_selector": "Selector rápido de replays",
-    "category.bbs.main": "BBS mod"
+    "category.bbs.main": "BBS mod",
+    "gamerule.bbs.tnt_griefing": "Daño del TNT a bloques",
+    "gamerule.bbs.tnt_griefing.description": "Si las explosiones de TNT destruyen bloques. Si es falso, el TNT explota pero deja los bloques intactos."
 }

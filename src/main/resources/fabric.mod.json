@@ -36,7 +36,8 @@
     "environment": "*",
     "entrypoints": {
         "main": [
-            "mchorse.bbs_mod.BBSMod"
+            "mchorse.bbs_mod.BBSMod",
+            "mchorse.bbs_mod.tntrule.TntRuleInit"
         ],
         "client": [
             "mchorse.bbs_mod.BBSModClient"

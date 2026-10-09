@@ -31,5 +31,7 @@
     "key.bbs.zoom": "Zoom (BBS gun)",
     "category.bbs.main": "BBS mod",
 
-    "gamerule.bbsEditing": "BBS mod's editing permission"
+    "gamerule.bbsEditing": "BBS mod's editing permission",
+    "gamerule.bbs.tnt_griefing": "TNT griefing",
+    "gamerule.bbs.tnt_griefing.description": "Whether TNT explosions destroy blocks. If false, TNT still explodes but leaves blocks intact."
 }
