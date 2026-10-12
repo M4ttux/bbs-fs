@@ -64,7 +64,77 @@ public final class AddonApiCheck implements net.fabricmc.loader.api.entrypoint.P
         lifecycle();
         categories();
         clipSpacing();
+        afterEffectsCamera();
         System.out.println("AddonApiCheck: " + checks + " checks passed");
+    }
+
+    private static void afterEffectsCamera() throws Exception
+    {
+        var folder = java.nio.file.Path.of("..", "ae-camera-checks");
+        java.nio.file.Files.createDirectories(folder);
+        var target = folder.resolve("camera.jsx");
+        float fov = (float) Math.toRadians(70);
+        double focal = 720D / (2D * Math.tan(fov / 2D));
+        for (int yaw : new int[] {0, 90, -150})
+        {
+            for (int pitch : new int[] {-90, -35, 0, 90})
+            {
+                for (int roll : new int[] {-90, 0, 45})
+                {
+                    float y = (float) Math.toRadians(yaw + 180);
+                    float p = (float) Math.toRadians(pitch);
+                    float r = (float) Math.toRadians(roll);
+                    var projection = new Matrix4f().perspective(fov, 1280F / 720F, 0.01F, 300F).rotateZ(r);
+                    var sample = mchorse.bbs_mod.utils.AfterEffectsCameraExport.Sample.fromMinecraft(
+                        30_000_000.25, 65.5, -30_000_000.75, yaw, pitch, roll, projection, 720);
+                    require(Math.abs(sample.zoom() - focal) < 0.001, "Roll must not change exported camera zoom");
+                    var minecraft = new Matrix4f().rotateZ(r).rotateX(p).rotateY(y);
+                    var aeWorld = new Matrix4f().rotateY(y).rotateX(-p).rotateZ(r);
+                    var point = new org.joml.Vector3f(2.5F, 1.25F, -8F);
+                    var nativePoint = minecraft.transformDirection(new org.joml.Vector3f(point));
+                    var aePoint = aeWorld.invert().transformDirection(new org.joml.Vector3f(point.x, -point.y, -point.z));
+                    require(aePoint.distance(nativePoint.x, -nativePoint.y, -nativePoint.z) < 0.00001,
+                        "AE yaw/pitch/roll rig must reproduce Minecraft view, including vertical pitch");
+                }
+            }
+        }
+        try (var export = new mchorse.bbs_mod.utils.AfterEffectsCameraExport(target,
+            "Test \"camera\"\\name", 1280, 720, 60, 0))
+        {
+            export.add(new mchorse.bbs_mod.utils.AfterEffectsCameraExport.Sample(30_000_000.25, 65.5, -30_000_000.75, 180, 0, 25, focal));
+            export.add(new mchorse.bbs_mod.utils.AfterEffectsCameraExport.Sample(30_000_001.25, 65.5, -30_000_000.75, 190, -10, 30, focal * 2));
+            require(export.getFrameCount() == 2, "Each emitted frame must have one camera key");
+        }
+        String script = java.nio.file.Files.readString(target);
+        int start = script.indexOf("var frames=") + "var frames=".length();
+        var frames = com.google.gson.JsonParser.parseString(script.substring(start, script.indexOf(";", start))).getAsJsonArray();
+        require(frames.size() == 2 && frames.get(0).getAsJsonArray().get(0).getAsDouble() == 0.25,
+            "Large Minecraft coordinates must use a precise local origin");
+        require(frames.get(1).getAsJsonArray().get(0).getAsDouble() == 1.25,
+            "Camera movement must retain its block scale");
+        require(script.contains("ADBE Rotate Z") && script.contains("ADBE Camera Zoom") && script.contains("NO_AUTO_ORIENT"),
+            "The JSX must animate roll and zoom with auto-orientation disabled");
+        var blurFile = folder.resolve("blur.jsx");
+        try (var export = new mchorse.bbs_mod.utils.AfterEffectsCameraExport(blurFile, "Blur", 1280, 720, 60, 2))
+        {
+            for (int i = 0; i < 9; i++)
+                export.add(new mchorse.bbs_mod.utils.AfterEffectsCameraExport.Sample(10 + i, 0, 0, 0, 0, 0, focal));
+            require(export.getFrameCount() == 2, "Motion blur must emit only complete groups, matching framestep");
+        }
+        script = java.nio.file.Files.readString(blurFile);
+        start = script.indexOf("var frames=") + "var frames=".length();
+        frames = com.google.gson.JsonParser.parseString(script.substring(start, script.indexOf(";", start))).getAsJsonArray();
+        require(frames.get(0).getAsJsonArray().get(0).getAsDouble() == 0.5
+            && frames.get(1).getAsJsonArray().get(0).getAsDouble() == 4.5,
+            "Blurred camera keys must use the midpoint of each blend group");
+        String previous = java.nio.file.Files.readString(target);
+        try (var empty = new mchorse.bbs_mod.utils.AfterEffectsCameraExport(target, "Empty", 1280, 720, 60, 0)) {}
+        require(previous.equals(java.nio.file.Files.readString(target)), "An empty or warmup-only recording must not overwrite a camera export");
+        var aborted = new mchorse.bbs_mod.utils.AfterEffectsCameraExport(target, "Abort", 1280, 720, 60, 0);
+        aborted.add(new mchorse.bbs_mod.utils.AfterEffectsCameraExport.Sample(0, 0, 0, 0, 0, 0, focal));
+        aborted.abort();
+        aborted.close();
+        require(previous.equals(java.nio.file.Files.readString(target)), "Failed camera exports must preserve previous complete files");
     }
 
     private static void clipSpacing()

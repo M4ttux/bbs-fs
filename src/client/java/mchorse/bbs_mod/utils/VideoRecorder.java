@@ -46,6 +46,9 @@ public class VideoRecorder
     private int textureWidth;
     private int textureHeight;
     private int counter;
+    private AfterEffectsCameraExport cameraExport;
+    private AfterEffectsCameraExport.Sample currentCamera;
+    private final AfterEffectsCameraExport.Sample[] pboCameras = new AfterEffectsCameraExport.Sample[2];
 
     public int serverTicks;
     public int lastServerTicks;
@@ -82,6 +85,8 @@ public class VideoRecorder
         }
 
         this.counter = 0;
+        this.currentCamera = null;
+        java.util.Arrays.fill(this.pboCameras, null);
         this.reportedOversizedFrame = false;
         this.textureId = textureId;
         this.textureWidth = width;
@@ -228,6 +233,19 @@ public class VideoRecorder
             this.channel = Channels.newChannel(os);
             this.recording = true;
 
+            if (BBSSettings.videoExportAfterEffectsCamera.get())
+            {
+                try
+                {
+                    this.cameraExport = new AfterEffectsCameraExport(path.resolve(movieName + ".jsx"), movieName,
+                        width, height, BBSSettings.videoFrameRate.get(), motionBlur);
+                }
+                catch (Exception failure)
+                {
+                    LOGGER.error("Could not start After Effects camera export (perspective, 1-99 FPS required)", failure);
+                }
+            }
+
             UIUtils.playClick(2F);
         }
         catch (Exception e)
@@ -307,6 +325,15 @@ public class VideoRecorder
 
         this.recording = false;
 
+        if (this.cameraExport != null)
+        {
+            try { this.cameraExport.close(); }
+            catch (Exception failure) { LOGGER.error("Could not finish After Effects camera export", failure); }
+            this.cameraExport = null;
+        }
+        this.currentCamera = null;
+        java.util.Arrays.fill(this.pboCameras, null);
+
         if (finishEffects)
         {
             this.playFinishEffects();
@@ -345,6 +372,23 @@ public class VideoRecorder
             return;
         }
 
+        if (this.cameraExport != null)
+        {
+            try
+            {
+                var nativeCamera = MinecraftClient.getInstance().gameRenderer.getCamera();
+                var position = nativeCamera.getCameraPos();
+                var controller = BBSModClient.getCameraController();
+                this.currentCamera = AfterEffectsCameraExport.Sample.fromMinecraft(position.x, position.y, position.z,
+                    nativeCamera.getYaw(), nativeCamera.getPitch(), controller.getCurrent() == null ? 0 : controller.getRoll(),
+                    BBSRendering.getWorldProjection(), this.textureHeight);
+            }
+            catch (Exception failure)
+            {
+                this.failCameraExport(failure);
+            }
+        }
+
         if (OS.CURRENT == OS.MACOS)
         {
             this.recordFrameDirect();
@@ -355,6 +399,26 @@ public class VideoRecorder
         }
 
         this.counter += 1;
+    }
+
+    /** Metadata follows a complete encoder write, including the PBO's one-frame latency. */
+    private void writeVideoFrame(ByteBuffer pixels, AfterEffectsCameraExport.Sample camera) throws IOException
+    {
+        while (pixels.hasRemaining()) this.channel.write(pixels);
+        if (this.cameraExport != null && camera != null)
+        {
+            try { this.cameraExport.add(camera); }
+            catch (Exception failure) { this.failCameraExport(failure); }
+        }
+    }
+
+    private void failCameraExport(Exception failure)
+    {
+        LOGGER.error("After Effects camera export disabled for this recording; video capture continues", failure);
+        try { this.cameraExport.abort(); }
+        catch (IOException cleanup) { failure.addSuppressed(cleanup); }
+        this.cameraExport = null;
+        this.currentCamera = null;
     }
 
     /**
@@ -446,6 +510,7 @@ public class VideoRecorder
                 if (fits)
                 {
                     GL30.glGetTexImage(GL30.GL_TEXTURE_2D, 0, GL30.GL_BGR, GL30.GL_UNSIGNED_BYTE, 0);
+                    this.pboCameras[pbo] = this.currentCamera;
                 }
 
                 this.restoreAfterReadBack(previousTexture);
@@ -465,7 +530,7 @@ public class VideoRecorder
 
                 if (mappedBuffer != null && this.counter != 0)
                 {
-                    this.channel.write(mappedBuffer);
+                    this.writeVideoFrame(mappedBuffer, this.pboCameras[nextPbo]);
                 }
 
                 GL30.glUnmapBuffer(GL30.GL_PIXEL_PACK_BUFFER);
@@ -509,7 +574,7 @@ public class VideoRecorder
 
         try
         {
-            this.channel.write(this.buffer);
+            this.writeVideoFrame(this.buffer, this.currentCamera);
         }
         catch (Exception e)
         {

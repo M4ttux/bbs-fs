@@ -453,6 +453,8 @@
 	"bbs.config.video.filename_format": "Filename format",
 	"bbs.config.video.filename_format-comment": "File name template for the exported video. Words in curly braces are substituted:\n{name} - film name,\n{date} - date,\n{time} - time,\n{datetime} - date and time,\n{width} - width,\n{height} - height,\n{fps} - fps,\n{duration} - length in seconds",
 	"bbs.config.video.audio": "Export audio",
+    "bbs.config.video.after_effects_camera": "Export After Effects camera (.jsx)",
+    "bbs.config.video.after_effects_camera-comment": "Writes a JSX beside the video with the recorded camera's position, yaw, pitch, roll and zoom. Run it in After Effects through File > Scripts > Run Script File. Adds the camera rig to the active composition, or creates one if none is active; 1 block = 100 AE units. Perspective only, up to 99 FPS, standard encoder timing. With motion blur, uses each blended frame's temporal midpoint. No geometry or depth is exported.",
 	"bbs.config.video.audio-comment": "This option exports audio clips as audio and then pieces it together with the recorded video (Minecraft sounds are controlled by the separate option below)",
 	"bbs.config.video.minecraft_sounds": "Export Minecraft sounds",
 	"bbs.config.video.minecraft_sounds-comment": "When enabled, Minecraft sounds heard during the recording (footsteps, digging, mobs, weather, etc.) are captured and mixed into the exported video's audio track. Background music and UI clicks are ignored. The master volume doesn't affect the capture (rendering muted is fine), but sound categories set to 0% in Minecraft's sound settings are not captured.",

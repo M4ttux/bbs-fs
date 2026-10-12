@@ -169,6 +169,8 @@
     "bbs.config.video.log": "Log del encoder",
     "bbs.config.video.log-comment": "Si está deshabilitado, no generará el registro en la carpeta de exportación de video (en su lugar, irá a la configuración/video.log del mod BBS)",
     "bbs.config.video.title": "Grabación de vídeo",
+    "bbs.config.video.after_effects_camera": "Exportar cámara para After Effects (.jsx)",
+    "bbs.config.video.after_effects_camera-comment": "Genera un JSX junto al video con posición, yaw, pitch, roll y zoom de la cámara grabada. Ejecutalo en After Effects desde Archivo > Secuencias de comandos > Ejecutar archivo de secuencia de comandos. Agrega el rig de cámara a la composición activa, o crea una si no hay ninguna activa; 1 bloque = 100 unidades AE. Solo perspectiva, hasta 99 FPS y tiempos estándar del encoder. Con motion blur usa el instante central de cada fotograma combinado. No exporta geometría ni profundidad.",
     "bbs.config.video.tooltip": "Esta categoría proporciona opciones para grabar videos en el editor de películas",
     "bbs.keystrokes_position.bottom_left": "Abajo izquierda",
     "bbs.keystrokes_position.bottom_right": "Abajo derecha",

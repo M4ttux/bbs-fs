@@ -131,6 +131,7 @@ public class BBSSettings {
 	public static ValueString videoExportPath;
 	public static ValueString videoExportFilenameFormat;
 	public static ValueBoolean videoExportAudio;
+	public static ValueBoolean videoExportAfterEffectsCamera;
 	public static ValueBoolean videoExportMinecraftSounds;
 	public static ValueBoolean videoMuteAudioWhileRender;
 	public static ValueInt videoMotionBlur;
@@ -900,6 +901,7 @@ public class BBSSettings {
 		videoExportPath = builder.getString("export_path", "");
 		videoExportFilenameFormat = builder.getString("filename_format", "{datetime}");
 		videoExportAudio = builder.getBoolean("audio", false);
+		videoExportAfterEffectsCamera = builder.getBoolean("after_effects_camera", false);
 		videoExportMinecraftSounds = builder.getBoolean("minecraft_sounds", false);
 		videoMuteAudioWhileRender = builder.getBoolean("mute_audio_while_render", false);
 		videoMotionBlur = builder.getInt("motion_blur", 0, 0, 6);

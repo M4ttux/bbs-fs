@@ -417,7 +417,7 @@ public abstract class VideoExportSession
     {
         rest = rest.toLowerCase();
 
-        return rest.equals("wav") || rest.equals("log") || rest.endsWith(".log") || rest.startsWith("tmp.");
+        return rest.equals("wav") || rest.equals("jsx") || rest.equals("log") || rest.endsWith(".log") || rest.startsWith("tmp.");
     }
 
     private void reset()
