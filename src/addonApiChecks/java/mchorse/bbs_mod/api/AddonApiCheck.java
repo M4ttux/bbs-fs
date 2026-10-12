@@ -63,7 +63,43 @@ public final class AddonApiCheck implements net.fabricmc.loader.api.entrypoint.P
         transforms();
         lifecycle();
         categories();
+        clipSpacing();
         System.out.println("AddonApiCheck: " + checks + " checks passed");
+    }
+
+    private static void clipSpacing()
+    {
+        var first = new mchorse.bbs_mod.actions.types.SwipeActionClip();
+        var aligned = new mchorse.bbs_mod.actions.types.SwipeActionClip();
+        var second = new mchorse.bbs_mod.actions.types.SwipeActionClip();
+        var third = new mchorse.bbs_mod.actions.types.SwipeActionClip();
+        first.tick.set(10);
+        aligned.tick.set(10);
+        aligned.layer.set(2);
+        aligned.duration.set(3);
+        second.tick.set(16);
+        third.tick.set(22);
+        var selected = List.<mchorse.bbs_mod.utils.clips.Clip>of(third, aligned, second, first);
+        var plan = mchorse.bbs_mod.utils.clips.ClipSpacing.plan(selected, 2);
+        for (var position : plan) position.clip().tick.set(position.tick());
+        require(first.tick.get() == 10 && aligned.tick.get() == 10, "The first group must stay fixed across layers");
+        require(second.tick.get() == 15 && third.tick.get() == 18, "Irregular gaps must normalize after the longest clip in each group");
+        require(aligned.layer.get() == 2 && aligned.duration.get() == 3, "Spacing must preserve layers and durations");
+        plan = mchorse.bbs_mod.utils.clips.ClipSpacing.plan(selected, 0);
+        for (var position : plan) position.clip().tick.set(position.tick());
+        require(second.tick.get() == 13 && third.tick.get() == 14, "Zero spacing must close all gaps");
+        require(mchorse.bbs_mod.utils.clips.ClipSpacing.plan(List.of(), 0).isEmpty(), "Empty selections must be safe");
+        require(mchorse.bbs_mod.utils.clips.ClipSpacing.plan(List.of(first), 5).getFirst().tick() == 10,
+            "A single clip must not move");
+        try
+        {
+            mchorse.bbs_mod.utils.clips.ClipSpacing.plan(selected, Integer.MAX_VALUE);
+            throw new AssertionError("Overflow must be rejected");
+        }
+        catch (IllegalArgumentException expected)
+        {
+            require(second.tick.get() == 13 && third.tick.get() == 14, "Invalid spacing must not partially move clips");
+        }
     }
 
     private static void categories() throws Exception

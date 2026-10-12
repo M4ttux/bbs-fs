@@ -191,6 +191,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.replayEditor = new UIReplaysEditor(this);
         this.replayEditor.full(this.main).setVisible(false);
         this.actionEditor = new UIClipsPanel(this, BBSMod.getFactoryActionClips()).target(this.editArea);
+        this.actionEditor.clips.enableSpacing();
         this.actionEditor.setVisible(false);
         this.replayEditor.attachActionTimeline(this.actionEditor);
 

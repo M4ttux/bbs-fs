@@ -19,6 +19,7 @@ import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.resources.Link;
+import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.clips.renderer.IUIClipRenderer;
@@ -42,6 +43,7 @@ import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
 import mchorse.bbs_mod.ui.utils.renderers.TimelineRulerRenderer;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.clips.Clip;
+import mchorse.bbs_mod.utils.clips.ClipSpacing;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.profiler.BBSProfiler;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -116,6 +118,12 @@ public class UIClips extends UITimelineCanvas
     private UICopyPasteController copyPasteController;
 
     private int layerHeight = 20;
+    private boolean spacingEnabled;
+
+    public void enableSpacing()
+    {
+        this.spacingEnabled = true;
+    }
 
     public UIClips(IUIClipsDelegate delegate, IFactory<Clip, ClipFactoryData> factory)
     {
@@ -166,8 +174,19 @@ public class UIClips extends UITimelineCanvas
                 menu.action(Icons.CUT, UIKeys.CAMERA_TIMELINE_CONTEXT_CUT, this::cut);
                 menu.action(Icons.MOVE_TO, UIKeys.CAMERA_TIMELINE_CONTEXT_SHIFT, this::shiftToCursor);
                 menu.action(Icons.SHIFT_TO, UIKeys.CAMERA_TIMELINE_CONTEXT_SHIFT_DURATION, this::shiftDurationToCursor);
+                if (this.spacingEnabled && this.getClipsFromSelection().stream().map(clip -> clip.tick.get()).distinct().count() > 1)
+                {
+                    menu.action(Icons.EXCHANGE, UIKeys.ACTION_TIMELINE_SPACING, this::showSpacing);
+                }
             }
 
+            if (this.spacingEnabled)
+            {
+                if (!this.clips.get().isEmpty())
+                {
+                    menu.action(Icons.CURSOR, UIKeys.ACTION_TIMELINE_SELECT_ALL_TYPE, this::showSelectActionType);
+                }
+            }
             menu.action(Icons.EXCHANGE, UIKeys.CAMERA_TIMELINE_CONTEXT_REORGANIZE, () -> this.clips.sortLayers());
         });
 
@@ -641,8 +660,40 @@ public class UIClips extends UITimelineCanvas
     }
 
     /**
-     * Move duration of currently selected clip(s) to cursor.
+     * Normalize gaps between selected start-time groups, keeping the first group fixed.
      */
+    private void showSpacing()
+    {
+        List<Clip> selection = this.getClipsFromSelection();
+        Clips target = this.clips;
+        UIOverlay.addOverlay(this.getContext(), new UIClipSpacingOverlay(gap ->
+        {
+            if (this.clips != target) return;
+
+            List<ClipSpacing.Position> positions;
+            try
+            {
+                positions = ClipSpacing.plan(selection, gap);
+            }
+            catch (IllegalArgumentException failure)
+            {
+                this.getContext().notifyError(UIKeys.ACTION_TIMELINE_SPACING_RANGE);
+                return;
+            }
+
+            if (positions.stream().noneMatch(position -> position.clip().tick.get() != position.tick())) return;
+
+            this.delegate.markLastUndoNoMerging();
+            BaseValue.edit(target, value ->
+            {
+                for (var position : positions) position.clip().tick.set(position.tick());
+            });
+            this.delegate.markLastUndoNoMerging();
+            this.delegate.fillData();
+        }), 260, 135);
+    }
+
+    /** Move duration of currently selected clip(s) to cursor. */
     private void shiftDurationToCursor()
     {
         List<Clip> clips = this.getClipsFromSelection();
@@ -744,6 +795,29 @@ public class UIClips extends UITimelineCanvas
         int layer = this.fromLayerY(this.getContext().mouseY);
 
         return layer < 0 && clip != null ? clip.layer.get() : layer;
+    }
+
+    private void showSelectActionType()
+    {
+        List<Link> types = this.clips.get().stream()
+            .map(clip -> this.factory.getType(clip))
+            .distinct()
+            .sorted(java.util.Comparator.comparing(Link::toString))
+            .toList();
+
+        UIChoiceMenu.of(types)
+            .icon(type ->
+            {
+                ClipFactoryData data = this.factory.getData(type);
+                return data == null ? Icons.NONE : data.icon;
+            })
+            .label(type -> UIKeys.C_CLIP.get(type))
+            .color(type ->
+            {
+                ClipFactoryData data = this.factory.getData(type);
+                return data == null ? Colors.WHITE & Colors.RGB : data.color;
+            })
+            .open(this.getContext(), type -> this.selectWhere(clip -> type.equals(this.factory.getType(clip))));
     }
 
     private void selectAll()

@@ -220,6 +220,11 @@ public class UIKeys
     public static final IKey CAMERA_TIMELINE_CONTEXT_REORGANIZE = L10n.lang("bbs.ui.camera.timeline.context.reorganize");
     public static final IKey CAMERA_TIMELINE_CONTEXT_SHIFT = L10n.lang("bbs.ui.camera.timeline.context.shift");
     public static final IKey CAMERA_TIMELINE_CONTEXT_SHIFT_DURATION = L10n.lang("bbs.ui.camera.timeline.context.shift_duration");
+    public static final IKey ACTION_TIMELINE_SPACING = L10n.lang("bbs.ui.action.timeline.spacing");
+    public static final IKey ACTION_TIMELINE_SELECT_ALL_TYPE = L10n.lang("bbs.ui.action.timeline.select_all_type");
+    public static final IKey ACTION_TIMELINE_SPACING_TICKS = L10n.lang("bbs.ui.action.timeline.spacing_ticks");
+    public static final IKey ACTION_TIMELINE_SPACING_HINT = L10n.lang("bbs.ui.action.timeline.spacing_hint");
+    public static final IKey ACTION_TIMELINE_SPACING_RANGE = L10n.lang("bbs.ui.action.timeline.spacing_range");
     public static final IKey CAMERA_TIMELINE_INCOMPATIBLE_PASTE = L10n.lang("bbs.ui.camera.timeline.incompatible_paste");
     public static final IKey CAMERA_TIMELINE_KEYS_CLIPS = L10n.lang("bbs.ui.camera.timeline.keys.clips");
     public static final IKey CAMERA_TIMELINE_KEYS_ENABLED = L10n.lang("bbs.ui.camera.timeline.keys.enabled");
